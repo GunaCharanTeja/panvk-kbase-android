@@ -24,6 +24,8 @@
 - `bcn/` — complete BC1-BC7 compatibility contract and evidence self-check.
   Advertisement is rejected unless every required format, operation, edge case,
   and stress case has `PASS` evidence.
+- `dxvk/` — DXVK-only profile, Vulkan semantic, and DXVK Native validation.
+  Kept separate from historical combined `dxvk-vkd3d/` evidence.
 
 Fault safety for all: hard timeout, small allocations, tiny images, single
 queue first, bounded frames, one change per run.

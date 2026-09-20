@@ -1,0 +1,422 @@
+{
+  "schemaVersion": 1,
+  "phase": "DX1",
+  "scope": "DXVK_ONLY",
+  "capabilities": "validation/g615-v11-csf/consumer-capabilities.json",
+  "device": {
+    "apiVersion": 4211051,
+    "deviceID": 3097694256,
+    "driverVersion": 109060195,
+    "name": "Mali-G615 MC6",
+    "vendorID": 5045
+  },
+  "versions": {
+    "1.10.3": {
+      "sourceKind": "source-derived",
+      "sourceFile": "validation/requirements/dxvk-1.10.3.json",
+      "repository": "https://github.com/doitsujin/dxvk",
+      "tag": "v1.10.3",
+      "tagCommit": "57740c6ac9c62f3f26c4b5237d7edf3c40797941",
+      "tiers": {
+        "D3D9": {
+          "status": "FAIL",
+          "passCount": 6,
+          "failCount": 6,
+          "blockers": [
+            "geometryShader",
+            "fillModeNonSolid",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "multiViewport"
+          ]
+        },
+        "D3D10_10_1": {
+          "status": "FAIL",
+          "passCount": 6,
+          "failCount": 9,
+          "blockers": [
+            "geometryShader",
+            "fillModeNonSolid",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "multiViewport",
+            "transformFeedback",
+            "geometryStreams",
+            "VK_EXT_transform_feedback"
+          ]
+        },
+        "D3D11_FL11_0": {
+          "status": "FAIL",
+          "passCount": 9,
+          "failCount": 10,
+          "blockers": [
+            "geometryShader",
+            "fillModeNonSolid",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "multiViewport",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader",
+            "VK_EXT_transform_feedback"
+          ]
+        }
+      }
+    },
+    "2.7.1": {
+      "sourceKind": "official-profile",
+      "sourceFile": "validation/g615-v11-csf/profiles/dxvk-2.7.1.json",
+      "provenance": {
+        "url": "https://raw.githubusercontent.com/doitsujin/dxvk/v2.7.1/VP_DXVK_requirements.json",
+        "tag": "v2.7.1",
+        "originalSha256": "1e219227adeba497e387fbad72847fef4d064667ede946f720d8e8a67bea6edf",
+        "normalizedSha256": "57e0a0e69aa2cb9515b8b9c65dabe9105fe2ff47de137cc6e33fce1696ed456c",
+        "normalization": {
+          "kind": "remove-trailing-commas-only",
+          "originalSha256": "1e219227adeba497e387fbad72847fef4d064667ede946f720d8e8a67bea6edf",
+          "normalizedSha256": "57e0a0e69aa2cb9515b8b9c65dabe9105fe2ff47de137cc6e33fce1696ed456c"
+        },
+        "importedAt": "2026-09-19T19:53:26.264651+00:00"
+      },
+      "common": {
+        "status": "PASS",
+        "passCount": 9,
+        "failCount": 0,
+        "blockers": []
+      },
+      "profiles": {
+        "VP_DXVK_d3d9_baseline": {
+          "status": "FAIL",
+          "passCount": 56,
+          "failCount": 5,
+          "blockers": [
+            "geometryShader",
+            "fillModeNonSolid",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC"
+          ],
+          "label": "DXVK D3D9 Baseline profile",
+          "classification": "BASELINE"
+        },
+        "VP_DXVK_d3d9_optimal": {
+          "status": "FAIL",
+          "passCount": 56,
+          "failCount": 5,
+          "blockers": [
+            "geometryShader",
+            "fillModeNonSolid",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC"
+          ],
+          "label": "DXVK D3D9 Optimal profile",
+          "classification": "OPTIMAL",
+          "optionalFailCount": 12
+        },
+        "VP_DXVK_d3d10_level_10_1_baseline": {
+          "status": "FAIL",
+          "passCount": 58,
+          "failCount": 9,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams"
+          ],
+          "label": "DXVK D3D10 Level 10.1 Baseline profile",
+          "classification": "BASELINE"
+        },
+        "VP_DXVK_d3d11_level_11_0_baseline": {
+          "status": "FAIL",
+          "passCount": 61,
+          "failCount": 10,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader"
+          ],
+          "label": "DXVK D3D11 Level 11.0 Baseline profile",
+          "classification": "BASELINE"
+        },
+        "VP_DXVK_d3d11_level_11_1_baseline": {
+          "status": "FAIL",
+          "passCount": 62,
+          "failCount": 11,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader",
+            "vertexPipelineStoresAndAtomics"
+          ],
+          "label": "DXVK D3D11 Level 11.1 Baseline profile",
+          "classification": "BASELINE"
+        },
+        "VP_DXVK_d3d11_level_11_1_optimal": {
+          "status": "FAIL",
+          "passCount": 62,
+          "failCount": 11,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader",
+            "vertexPipelineStoresAndAtomics"
+          ],
+          "label": "DXVK D3D11 Level 11.1 Optimal profile",
+          "classification": "OPTIMAL",
+          "optionalFailCount": 14
+        },
+        "VP_DXVK_d3d11_level_12_0_optimal": {
+          "status": "FAIL",
+          "passCount": 63,
+          "failCount": 20,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader",
+            "vertexPipelineStoresAndAtomics",
+            "shaderResourceResidency",
+            "shaderResourceMinLod",
+            "sparseBinding",
+            "sparseResidencyBuffer",
+            "sparseResidencyAliased",
+            "sparseResidencyImage2D",
+            "residencyStandard2DBlockShape",
+            "residencyAlignedMipSize",
+            "residencyNonResidentStrict"
+          ],
+          "label": "DXVK D3D11 Level 12.0 Optimal profile",
+          "classification": "OPTIMAL",
+          "optionalFailCount": 14
+        }
+      }
+    },
+    "3.1.1": {
+      "sourceKind": "official-profile",
+      "sourceFile": "validation/g615-v11-csf/profiles/dxvk-3.1.1.json",
+      "provenance": {
+        "url": "https://raw.githubusercontent.com/doitsujin/dxvk/v3.1.1/VP_DXVK_requirements.json",
+        "tag": "v3.1.1",
+        "originalSha256": "d490930920a24fb9ac4a0585c68042929acd7e700e04d0a032c79d9fddf1c462",
+        "normalizedSha256": "d490930920a24fb9ac4a0585c68042929acd7e700e04d0a032c79d9fddf1c462",
+        "normalization": null,
+        "importedAt": "2026-09-19T19:53:26.249696+00:00"
+      },
+      "common": {
+        "status": "PASS",
+        "passCount": 24,
+        "failCount": 0,
+        "blockers": []
+      },
+      "profiles": {
+        "VP_DXVK_d3d9_baseline": {
+          "status": "FAIL",
+          "passCount": 71,
+          "failCount": 5,
+          "blockers": [
+            "geometryShader",
+            "fillModeNonSolid",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC"
+          ],
+          "label": "DXVK D3D9 Baseline profile",
+          "classification": "BASELINE"
+        },
+        "VP_DXVK_d3d9_optimal": {
+          "status": "FAIL",
+          "passCount": 71,
+          "failCount": 5,
+          "blockers": [
+            "geometryShader",
+            "fillModeNonSolid",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC"
+          ],
+          "label": "DXVK D3D9 Optimal profile",
+          "classification": "OPTIMAL",
+          "optionalFailCount": 19
+        },
+        "VP_DXVK_d3d10_level_10_1_baseline": {
+          "status": "FAIL",
+          "passCount": 69,
+          "failCount": 9,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams"
+          ],
+          "label": "DXVK D3D10 Level 10.1 Baseline profile",
+          "classification": "BASELINE"
+        },
+        "VP_DXVK_d3d11_level_11_0_baseline": {
+          "status": "FAIL",
+          "passCount": 71,
+          "failCount": 10,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader"
+          ],
+          "label": "DXVK D3D11 Level 11.0 Baseline profile",
+          "classification": "BASELINE"
+        },
+        "VP_DXVK_d3d11_level_11_1_baseline": {
+          "status": "FAIL",
+          "passCount": 72,
+          "failCount": 11,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader",
+            "vertexPipelineStoresAndAtomics"
+          ],
+          "label": "DXVK D3D11 Level 11.1 Baseline profile",
+          "classification": "BASELINE"
+        },
+        "VP_DXVK_d3d11_level_11_1_optimal": {
+          "status": "FAIL",
+          "passCount": 72,
+          "failCount": 11,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader",
+            "vertexPipelineStoresAndAtomics"
+          ],
+          "label": "DXVK D3D11 Level 11.1 Optimal profile",
+          "classification": "OPTIMAL",
+          "optionalFailCount": 20
+        },
+        "VP_DXVK_d3d11_level_12_0_optimal": {
+          "status": "FAIL",
+          "passCount": 73,
+          "failCount": 20,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader",
+            "vertexPipelineStoresAndAtomics",
+            "shaderResourceResidency",
+            "shaderResourceMinLod",
+            "sparseBinding",
+            "sparseResidencyBuffer",
+            "sparseResidencyAliased",
+            "sparseResidencyImage2D",
+            "residencyStandard2DBlockShape",
+            "residencyAlignedMipSize",
+            "residencyNonResidentStrict"
+          ],
+          "label": "DXVK D3D11 Level 12.0 Optimal profile",
+          "classification": "OPTIMAL",
+          "optionalFailCount": 20
+        },
+        "VP_DXVK_d3d11_level_12_1_optimal": {
+          "status": "FAIL",
+          "passCount": 74,
+          "failCount": 24,
+          "blockers": [
+            "VK_EXT_transform_feedback",
+            "fillModeNonSolid",
+            "geometryShader",
+            "multiViewport",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
+            "transformFeedback",
+            "geometryStreams",
+            "tessellationShader",
+            "vertexPipelineStoresAndAtomics",
+            "shaderResourceResidency",
+            "shaderResourceMinLod",
+            "sparseBinding",
+            "sparseResidencyBuffer",
+            "sparseResidencyAliased",
+            "sparseResidencyImage2D",
+            "residencyStandard2DBlockShape",
+            "residencyAlignedMipSize",
+            "residencyNonResidentStrict",
+            "VK_EXT_fragment_shader_interlock",
+            "fragmentShaderPixelInterlock",
+            "degenerateTrianglesRasterized",
+            "fullyCoveredFragmentShaderInputVariable"
+          ],
+          "label": "DXVK D3D11 Level 12.1 Optimal profile",
+          "classification": "OPTIMAL",
+          "optionalFailCount": 20
+        }
+      }
+    }
+  }
+}
