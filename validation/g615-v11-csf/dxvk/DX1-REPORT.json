@@ -22,6 +22,7 @@
           "status": "FAIL",
           "passCount": 6,
           "failCount": 6,
+          "unknownCount": 0,
           "blockers": [
             "geometryShader",
             "fillModeNonSolid",
@@ -29,12 +30,14 @@
             "shaderCullDistance",
             "textureCompressionBC",
             "multiViewport"
-          ]
+          ],
+          "unknown": []
         },
         "D3D10_10_1": {
           "status": "FAIL",
           "passCount": 6,
           "failCount": 9,
+          "unknownCount": 0,
           "blockers": [
             "geometryShader",
             "fillModeNonSolid",
@@ -45,12 +48,14 @@
             "transformFeedback",
             "geometryStreams",
             "VK_EXT_transform_feedback"
-          ]
+          ],
+          "unknown": []
         },
         "D3D11_FL11_0": {
           "status": "FAIL",
           "passCount": 9,
           "failCount": 10,
+          "unknownCount": 0,
           "blockers": [
             "geometryShader",
             "fillModeNonSolid",
@@ -62,7 +67,8 @@
             "geometryStreams",
             "tessellationShader",
             "VK_EXT_transform_feedback"
-          ]
+          ],
+          "unknown": []
         }
       }
     },
@@ -85,13 +91,16 @@
         "status": "PASS",
         "passCount": 9,
         "failCount": 0,
-        "blockers": []
+        "unknownCount": 0,
+        "blockers": [],
+        "unknown": []
       },
       "profiles": {
         "VP_DXVK_d3d9_baseline": {
           "status": "FAIL",
           "passCount": 56,
           "failCount": 5,
+          "unknownCount": 0,
           "blockers": [
             "geometryShader",
             "fillModeNonSolid",
@@ -99,28 +108,43 @@
             "shaderCullDistance",
             "textureCompressionBC"
           ],
+          "unknown": [],
           "label": "DXVK D3D9 Baseline profile",
           "classification": "BASELINE"
         },
         "VP_DXVK_d3d9_optimal": {
           "status": "FAIL",
-          "passCount": 56,
-          "failCount": 5,
+          "passCount": 88,
+          "failCount": 13,
+          "unknownCount": 3,
           "blockers": [
+            "VK_EXT_pageable_device_local_memory",
+            "smoothLines",
             "geometryShader",
             "fillModeNonSolid",
             "shaderClipDistance",
             "shaderCullDistance",
-            "textureCompressionBC"
+            "textureCompressionBC",
+            "VK_EXT_memory_priority",
+            "depthBounds",
+            "vertexPipelineStoresAndAtomics",
+            "pipelineStatisticsQuery",
+            "leastRepresentableValueForceUnormRepresentation",
+            "floatRepresentation"
+          ],
+          "unknown": [
+            "pageableDeviceLocalMemory",
+            "swapchainMaintenance1",
+            "memoryPriority"
           ],
           "label": "DXVK D3D9 Optimal profile",
-          "classification": "OPTIMAL",
-          "optionalFailCount": 12
+          "classification": "OPTIMAL"
         },
         "VP_DXVK_d3d10_level_10_1_baseline": {
           "status": "FAIL",
           "passCount": 58,
           "failCount": 9,
+          "unknownCount": 0,
           "blockers": [
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
@@ -132,6 +156,7 @@
             "transformFeedback",
             "geometryStreams"
           ],
+          "unknown": [],
           "label": "DXVK D3D10 Level 10.1 Baseline profile",
           "classification": "BASELINE"
         },
@@ -139,6 +164,7 @@
           "status": "FAIL",
           "passCount": 61,
           "failCount": 10,
+          "unknownCount": 0,
           "blockers": [
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
@@ -151,6 +177,7 @@
             "geometryStreams",
             "tessellationShader"
           ],
+          "unknown": [],
           "label": "DXVK D3D11 Level 11.0 Baseline profile",
           "classification": "BASELINE"
         },
@@ -158,6 +185,7 @@
           "status": "FAIL",
           "passCount": 62,
           "failCount": 11,
+          "unknownCount": 0,
           "blockers": [
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
@@ -171,14 +199,18 @@
             "tessellationShader",
             "vertexPipelineStoresAndAtomics"
           ],
+          "unknown": [],
           "label": "DXVK D3D11 Level 11.1 Baseline profile",
           "classification": "BASELINE"
         },
         "VP_DXVK_d3d11_level_11_1_optimal": {
           "status": "FAIL",
-          "passCount": 62,
-          "failCount": 11,
+          "passCount": 93,
+          "failCount": 20,
+          "unknownCount": 4,
           "blockers": [
+            "VK_EXT_pageable_device_local_memory",
+            "smoothLines",
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
             "geometryShader",
@@ -188,18 +220,33 @@
             "textureCompressionBC",
             "transformFeedback",
             "geometryStreams",
+            "VK_EXT_memory_priority",
+            "VK_EXT_multi_draw",
+            "VK_EXT_swapchain_colorspace",
+            "depthBounds",
+            "pipelineStatisticsQuery",
+            "leastRepresentableValueForceUnormRepresentation",
             "tessellationShader",
+            "shaderFloat64",
             "vertexPipelineStoresAndAtomics"
           ],
+          "unknown": [
+            "pageableDeviceLocalMemory",
+            "swapchainMaintenance1",
+            "memoryPriority",
+            "multiDraw"
+          ],
           "label": "DXVK D3D11 Level 11.1 Optimal profile",
-          "classification": "OPTIMAL",
-          "optionalFailCount": 14
+          "classification": "OPTIMAL"
         },
         "VP_DXVK_d3d11_level_12_0_optimal": {
           "status": "FAIL",
-          "passCount": 63,
-          "failCount": 20,
+          "passCount": 96,
+          "failCount": 27,
+          "unknownCount": 4,
           "blockers": [
+            "VK_EXT_pageable_device_local_memory",
+            "smoothLines",
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
             "geometryShader",
@@ -209,7 +256,14 @@
             "textureCompressionBC",
             "transformFeedback",
             "geometryStreams",
+            "VK_EXT_memory_priority",
+            "VK_EXT_multi_draw",
+            "VK_EXT_swapchain_colorspace",
+            "depthBounds",
+            "pipelineStatisticsQuery",
+            "leastRepresentableValueForceUnormRepresentation",
             "tessellationShader",
+            "shaderFloat64",
             "vertexPipelineStoresAndAtomics",
             "shaderResourceResidency",
             "shaderResourceMinLod",
@@ -217,14 +271,811 @@
             "sparseResidencyBuffer",
             "sparseResidencyAliased",
             "sparseResidencyImage2D",
-            "residencyStandard2DBlockShape",
-            "residencyAlignedMipSize",
             "residencyNonResidentStrict"
           ],
+          "unknown": [
+            "pageableDeviceLocalMemory",
+            "swapchainMaintenance1",
+            "memoryPriority",
+            "multiDraw"
+          ],
           "label": "DXVK D3D11 Level 12.0 Optimal profile",
-          "classification": "OPTIMAL",
-          "optionalFailCount": 14
+          "classification": "OPTIMAL"
         }
+      },
+      "recommendations": {
+        "VP_DXVK_d3d9_optimal": [
+          {
+            "requirement": "VK_KHR_load_store_op_none",
+            "path": "extensions.VK_KHR_load_store_op_none",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance6",
+            "path": "extensions.VK_KHR_maintenance6",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance7",
+            "path": "extensions.VK_KHR_maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_id",
+            "path": "extensions.VK_KHR_present_id",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_wait",
+            "path": "extensions.VK_KHR_present_wait",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_mutable_format",
+            "path": "extensions.VK_KHR_swapchain_mutable_format",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_line_rasterization",
+            "path": "extensions.VK_EXT_line_rasterization",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_swapchain_maintenance1",
+            "path": "extensions.VK_EXT_swapchain_maintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "wideLines",
+            "path": "features.VkPhysicalDeviceFeatures.wideLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderInt16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.shaderInt16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance6",
+            "path": "features.VkPhysicalDeviceMaintenance6FeaturesKHR.maintenance6",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance7",
+            "path": "features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentId",
+            "path": "features.VkPhysicalDevicePresentIdFeaturesKHR.presentId",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentWait",
+            "path": "features.VkPhysicalDevicePresentWaitFeaturesKHR.presentWait",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "rectangularLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_vertex_attribute_divisor",
+            "path": "extensions.VK_EXT_vertex_attribute_divisor",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_bias_control",
+            "path": "extensions.VK_EXT_depth_bias_control",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_clip_enable",
+            "path": "extensions.VK_EXT_depth_clip_enable",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_custom_border_color",
+            "path": "extensions.VK_EXT_custom_border_color",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_attachment_feedback_loop_layout",
+            "path": "extensions.VK_EXT_attachment_feedback_loop_layout",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_non_seamless_cube_map",
+            "path": "extensions.VK_EXT_non_seamless_cube_map",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "samplerAnisotropy",
+            "path": "features.VkPhysicalDeviceFeatures.samplerAnisotropy",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateZeroDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasControl",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasExact",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthClipEnable",
+            "path": "features.VkPhysicalDeviceDepthClipEnableFeaturesEXT.depthClipEnable",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColors",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColorWithoutFormat",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "attachmentFeedbackLoopLayout",
+            "path": "features.VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT.attachmentFeedbackLoopLayout",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "nonSeamlessCubeMap",
+            "path": "features.VkPhysicalDeviceNonSeamlessCubeMapFeaturesEXT.nonSeamlessCubeMap",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_pageable_device_local_memory",
+            "path": "extensions.VK_EXT_pageable_device_local_memory",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "smoothLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pageableDeviceLocalMemory",
+            "path": "features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "swapchainMaintenance1",
+            "path": "features.VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT.swapchainMaintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "VK_EXT_memory_priority",
+            "path": "extensions.VK_EXT_memory_priority",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "depthBounds",
+            "path": "features.VkPhysicalDeviceFeatures.depthBounds",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "vertexPipelineStoresAndAtomics",
+            "path": "features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pipelineStatisticsQuery",
+            "path": "features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "memoryPriority",
+            "path": "features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+            "capability": "d3d9_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "leastRepresentableValueForceUnormRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "floatRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.floatRepresentation",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          }
+        ],
+        "VP_DXVK_d3d11_level_11_1_optimal": [
+          {
+            "requirement": "VK_KHR_load_store_op_none",
+            "path": "extensions.VK_KHR_load_store_op_none",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance6",
+            "path": "extensions.VK_KHR_maintenance6",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance7",
+            "path": "extensions.VK_KHR_maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_id",
+            "path": "extensions.VK_KHR_present_id",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_wait",
+            "path": "extensions.VK_KHR_present_wait",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_mutable_format",
+            "path": "extensions.VK_KHR_swapchain_mutable_format",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_line_rasterization",
+            "path": "extensions.VK_EXT_line_rasterization",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_swapchain_maintenance1",
+            "path": "extensions.VK_EXT_swapchain_maintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "wideLines",
+            "path": "features.VkPhysicalDeviceFeatures.wideLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderInt16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.shaderInt16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance6",
+            "path": "features.VkPhysicalDeviceMaintenance6FeaturesKHR.maintenance6",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance7",
+            "path": "features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentId",
+            "path": "features.VkPhysicalDevicePresentIdFeaturesKHR.presentId",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentWait",
+            "path": "features.VkPhysicalDevicePresentWaitFeaturesKHR.presentWait",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "rectangularLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_vertex_attribute_divisor",
+            "path": "extensions.VK_EXT_vertex_attribute_divisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_custom_border_color",
+            "path": "extensions.VK_EXT_custom_border_color",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_bias_control",
+            "path": "extensions.VK_EXT_depth_bias_control",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_clip_enable",
+            "path": "extensions.VK_EXT_depth_clip_enable",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_hdr_metadata",
+            "path": "extensions.VK_EXT_hdr_metadata",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "logicOp",
+            "path": "features.VkPhysicalDeviceFeatures.logicOp",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "samplerAnisotropy",
+            "path": "features.VkPhysicalDeviceFeatures.samplerAnisotropy",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateZeroDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColors",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColorWithoutFormat",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasControl",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasExact",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthClipEnable",
+            "path": "features.VkPhysicalDeviceDepthClipEnableFeaturesEXT.depthClipEnable",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderInt64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderInt64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_pageable_device_local_memory",
+            "path": "extensions.VK_EXT_pageable_device_local_memory",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "smoothLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pageableDeviceLocalMemory",
+            "path": "features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "swapchainMaintenance1",
+            "path": "features.VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT.swapchainMaintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "VK_EXT_memory_priority",
+            "path": "extensions.VK_EXT_memory_priority",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_multi_draw",
+            "path": "extensions.VK_EXT_multi_draw",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_swapchain_colorspace",
+            "path": "extensions.VK_EXT_swapchain_colorspace",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "depthBounds",
+            "path": "features.VkPhysicalDeviceFeatures.depthBounds",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pipelineStatisticsQuery",
+            "path": "features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "memoryPriority",
+            "path": "features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "multiDraw",
+            "path": "features.VkPhysicalDeviceMultiDrawFeaturesEXT.multiDraw",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "leastRepresentableValueForceUnormRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "shaderFloat64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderFloat64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "FAIL"
+          }
+        ],
+        "VP_DXVK_d3d11_level_12_0_optimal": [
+          {
+            "requirement": "VK_KHR_load_store_op_none",
+            "path": "extensions.VK_KHR_load_store_op_none",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance6",
+            "path": "extensions.VK_KHR_maintenance6",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance7",
+            "path": "extensions.VK_KHR_maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_id",
+            "path": "extensions.VK_KHR_present_id",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_wait",
+            "path": "extensions.VK_KHR_present_wait",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_mutable_format",
+            "path": "extensions.VK_KHR_swapchain_mutable_format",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_line_rasterization",
+            "path": "extensions.VK_EXT_line_rasterization",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_swapchain_maintenance1",
+            "path": "extensions.VK_EXT_swapchain_maintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "wideLines",
+            "path": "features.VkPhysicalDeviceFeatures.wideLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderInt16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.shaderInt16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance6",
+            "path": "features.VkPhysicalDeviceMaintenance6FeaturesKHR.maintenance6",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance7",
+            "path": "features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentId",
+            "path": "features.VkPhysicalDevicePresentIdFeaturesKHR.presentId",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentWait",
+            "path": "features.VkPhysicalDevicePresentWaitFeaturesKHR.presentWait",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "rectangularLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_vertex_attribute_divisor",
+            "path": "extensions.VK_EXT_vertex_attribute_divisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_custom_border_color",
+            "path": "extensions.VK_EXT_custom_border_color",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_bias_control",
+            "path": "extensions.VK_EXT_depth_bias_control",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_clip_enable",
+            "path": "extensions.VK_EXT_depth_clip_enable",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_hdr_metadata",
+            "path": "extensions.VK_EXT_hdr_metadata",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "logicOp",
+            "path": "features.VkPhysicalDeviceFeatures.logicOp",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "samplerAnisotropy",
+            "path": "features.VkPhysicalDeviceFeatures.samplerAnisotropy",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateZeroDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColors",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColorWithoutFormat",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasControl",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasExact",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthClipEnable",
+            "path": "features.VkPhysicalDeviceDepthClipEnableFeaturesEXT.depthClipEnable",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderInt64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderInt64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_pageable_device_local_memory",
+            "path": "extensions.VK_EXT_pageable_device_local_memory",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "smoothLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pageableDeviceLocalMemory",
+            "path": "features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "swapchainMaintenance1",
+            "path": "features.VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT.swapchainMaintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "VK_EXT_memory_priority",
+            "path": "extensions.VK_EXT_memory_priority",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_multi_draw",
+            "path": "extensions.VK_EXT_multi_draw",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_swapchain_colorspace",
+            "path": "extensions.VK_EXT_swapchain_colorspace",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "depthBounds",
+            "path": "features.VkPhysicalDeviceFeatures.depthBounds",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pipelineStatisticsQuery",
+            "path": "features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "memoryPriority",
+            "path": "features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "multiDraw",
+            "path": "features.VkPhysicalDeviceMultiDrawFeaturesEXT.multiDraw",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "leastRepresentableValueForceUnormRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "shaderFloat64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderFloat64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "FAIL"
+          }
+        ]
       }
     },
     "3.1.1": {
@@ -242,13 +1093,16 @@
         "status": "PASS",
         "passCount": 24,
         "failCount": 0,
-        "blockers": []
+        "unknownCount": 0,
+        "blockers": [],
+        "unknown": []
       },
       "profiles": {
         "VP_DXVK_d3d9_baseline": {
           "status": "FAIL",
           "passCount": 71,
           "failCount": 5,
+          "unknownCount": 0,
           "blockers": [
             "geometryShader",
             "fillModeNonSolid",
@@ -256,28 +1110,51 @@
             "shaderCullDistance",
             "textureCompressionBC"
           ],
+          "unknown": [],
           "label": "DXVK D3D9 Baseline profile",
           "classification": "BASELINE"
         },
         "VP_DXVK_d3d9_optimal": {
           "status": "FAIL",
-          "passCount": 71,
-          "failCount": 5,
+          "passCount": 117,
+          "failCount": 19,
+          "unknownCount": 5,
           "blockers": [
+            "VK_KHR_incremental_present",
+            "VK_KHR_maintenance10",
+            "VK_KHR_maintenance11",
+            "VK_EXT_descriptor_heap",
+            "VK_EXT_pageable_device_local_memory",
+            "extendedDynamicState3SampleLocationsEnable",
+            "smoothLines",
             "geometryShader",
             "fillModeNonSolid",
             "shaderClipDistance",
             "shaderCullDistance",
-            "textureCompressionBC"
+            "textureCompressionBC",
+            "VK_EXT_memory_priority",
+            "VK_EXT_sample_locations",
+            "depthBounds",
+            "vertexPipelineStoresAndAtomics",
+            "pipelineStatisticsQuery",
+            "leastRepresentableValueForceUnormRepresentation",
+            "floatRepresentation"
+          ],
+          "unknown": [
+            "maintenance10",
+            "maintenance11",
+            "descriptorHeap",
+            "pageableDeviceLocalMemory",
+            "memoryPriority"
           ],
           "label": "DXVK D3D9 Optimal profile",
-          "classification": "OPTIMAL",
-          "optionalFailCount": 19
+          "classification": "OPTIMAL"
         },
         "VP_DXVK_d3d10_level_10_1_baseline": {
           "status": "FAIL",
           "passCount": 69,
           "failCount": 9,
+          "unknownCount": 0,
           "blockers": [
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
@@ -289,6 +1166,7 @@
             "transformFeedback",
             "geometryStreams"
           ],
+          "unknown": [],
           "label": "DXVK D3D10 Level 10.1 Baseline profile",
           "classification": "BASELINE"
         },
@@ -296,6 +1174,7 @@
           "status": "FAIL",
           "passCount": 71,
           "failCount": 10,
+          "unknownCount": 0,
           "blockers": [
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
@@ -308,6 +1187,7 @@
             "geometryStreams",
             "tessellationShader"
           ],
+          "unknown": [],
           "label": "DXVK D3D11 Level 11.0 Baseline profile",
           "classification": "BASELINE"
         },
@@ -315,6 +1195,7 @@
           "status": "FAIL",
           "passCount": 72,
           "failCount": 11,
+          "unknownCount": 0,
           "blockers": [
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
@@ -328,14 +1209,23 @@
             "tessellationShader",
             "vertexPipelineStoresAndAtomics"
           ],
+          "unknown": [],
           "label": "DXVK D3D11 Level 11.1 Baseline profile",
           "classification": "BASELINE"
         },
         "VP_DXVK_d3d11_level_11_1_optimal": {
           "status": "FAIL",
-          "passCount": 72,
-          "failCount": 11,
+          "passCount": 117,
+          "failCount": 25,
+          "unknownCount": 6,
           "blockers": [
+            "VK_KHR_incremental_present",
+            "VK_KHR_maintenance10",
+            "VK_KHR_maintenance11",
+            "VK_EXT_descriptor_heap",
+            "VK_EXT_pageable_device_local_memory",
+            "extendedDynamicState3SampleLocationsEnable",
+            "smoothLines",
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
             "geometryShader",
@@ -345,18 +1235,40 @@
             "textureCompressionBC",
             "transformFeedback",
             "geometryStreams",
+            "VK_EXT_memory_priority",
+            "VK_EXT_multi_draw",
+            "VK_EXT_swapchain_colorspace",
+            "depthBounds",
+            "pipelineStatisticsQuery",
+            "leastRepresentableValueForceUnormRepresentation",
             "tessellationShader",
+            "shaderFloat64",
             "vertexPipelineStoresAndAtomics"
           ],
+          "unknown": [
+            "maintenance10",
+            "maintenance11",
+            "descriptorHeap",
+            "pageableDeviceLocalMemory",
+            "memoryPriority",
+            "multiDraw"
+          ],
           "label": "DXVK D3D11 Level 11.1 Optimal profile",
-          "classification": "OPTIMAL",
-          "optionalFailCount": 20
+          "classification": "OPTIMAL"
         },
         "VP_DXVK_d3d11_level_12_0_optimal": {
           "status": "FAIL",
-          "passCount": 73,
-          "failCount": 20,
+          "passCount": 120,
+          "failCount": 32,
+          "unknownCount": 6,
           "blockers": [
+            "VK_KHR_incremental_present",
+            "VK_KHR_maintenance10",
+            "VK_KHR_maintenance11",
+            "VK_EXT_descriptor_heap",
+            "VK_EXT_pageable_device_local_memory",
+            "extendedDynamicState3SampleLocationsEnable",
+            "smoothLines",
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
             "geometryShader",
@@ -366,7 +1278,14 @@
             "textureCompressionBC",
             "transformFeedback",
             "geometryStreams",
+            "VK_EXT_memory_priority",
+            "VK_EXT_multi_draw",
+            "VK_EXT_swapchain_colorspace",
+            "depthBounds",
+            "pipelineStatisticsQuery",
+            "leastRepresentableValueForceUnormRepresentation",
             "tessellationShader",
+            "shaderFloat64",
             "vertexPipelineStoresAndAtomics",
             "shaderResourceResidency",
             "shaderResourceMinLod",
@@ -374,19 +1293,32 @@
             "sparseResidencyBuffer",
             "sparseResidencyAliased",
             "sparseResidencyImage2D",
-            "residencyStandard2DBlockShape",
-            "residencyAlignedMipSize",
             "residencyNonResidentStrict"
           ],
+          "unknown": [
+            "maintenance10",
+            "maintenance11",
+            "descriptorHeap",
+            "pageableDeviceLocalMemory",
+            "memoryPriority",
+            "multiDraw"
+          ],
           "label": "DXVK D3D11 Level 12.0 Optimal profile",
-          "classification": "OPTIMAL",
-          "optionalFailCount": 20
+          "classification": "OPTIMAL"
         },
         "VP_DXVK_d3d11_level_12_1_optimal": {
           "status": "FAIL",
-          "passCount": 74,
-          "failCount": 24,
+          "passCount": 121,
+          "failCount": 35,
+          "unknownCount": 7,
           "blockers": [
+            "VK_KHR_incremental_present",
+            "VK_KHR_maintenance10",
+            "VK_KHR_maintenance11",
+            "VK_EXT_descriptor_heap",
+            "VK_EXT_pageable_device_local_memory",
+            "extendedDynamicState3SampleLocationsEnable",
+            "smoothLines",
             "VK_EXT_transform_feedback",
             "fillModeNonSolid",
             "geometryShader",
@@ -396,7 +1328,14 @@
             "textureCompressionBC",
             "transformFeedback",
             "geometryStreams",
+            "VK_EXT_memory_priority",
+            "VK_EXT_multi_draw",
+            "VK_EXT_swapchain_colorspace",
+            "depthBounds",
+            "pipelineStatisticsQuery",
+            "leastRepresentableValueForceUnormRepresentation",
             "tessellationShader",
+            "shaderFloat64",
             "vertexPipelineStoresAndAtomics",
             "shaderResourceResidency",
             "shaderResourceMinLod",
@@ -404,18 +1343,1593 @@
             "sparseResidencyBuffer",
             "sparseResidencyAliased",
             "sparseResidencyImage2D",
-            "residencyStandard2DBlockShape",
-            "residencyAlignedMipSize",
             "residencyNonResidentStrict",
             "VK_EXT_fragment_shader_interlock",
-            "fragmentShaderPixelInterlock",
             "degenerateTrianglesRasterized",
             "fullyCoveredFragmentShaderInputVariable"
           ],
+          "unknown": [
+            "maintenance10",
+            "maintenance11",
+            "descriptorHeap",
+            "pageableDeviceLocalMemory",
+            "memoryPriority",
+            "multiDraw",
+            "fragmentShaderPixelInterlock"
+          ],
           "label": "DXVK D3D11 Level 12.1 Optimal profile",
-          "classification": "OPTIMAL",
-          "optionalFailCount": 20
+          "classification": "OPTIMAL"
         }
+      },
+      "recommendations": {
+        "VP_DXVK_d3d9_optimal": [
+          {
+            "requirement": "VK_KHR_maintenance7",
+            "path": "extensions.VK_KHR_maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance8",
+            "path": "extensions.VK_KHR_maintenance8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance9",
+            "path": "extensions.VK_KHR_maintenance9",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_id2",
+            "path": "extensions.VK_KHR_present_id2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_wait2",
+            "path": "extensions.VK_KHR_present_wait2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_shader_subgroup_uniform_control_flow",
+            "path": "extensions.VK_KHR_shader_subgroup_uniform_control_flow",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_maintenance1",
+            "path": "extensions.VK_KHR_swapchain_maintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_mutable_format",
+            "path": "extensions.VK_KHR_swapchain_mutable_format",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_unified_image_layouts",
+            "path": "extensions.VK_KHR_unified_image_layouts",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_border_color_swizzle",
+            "path": "extensions.VK_EXT_border_color_swizzle",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_dynamic_rendering_unused_attachments",
+            "path": "extensions.VK_EXT_dynamic_rendering_unused_attachments",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_extended_dynamic_state3",
+            "path": "extensions.VK_EXT_extended_dynamic_state3",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_line_rasterization",
+            "path": "extensions.VK_EXT_line_rasterization",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "largePoints",
+            "path": "features.VkPhysicalDeviceFeatures.largePoints",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "wideLines",
+            "path": "features.VkPhysicalDeviceFeatures.wideLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant8",
+            "path": "features.VkPhysicalDeviceVulkan12Features.storagePushConstant8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance7",
+            "path": "features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance8",
+            "path": "features.VkPhysicalDeviceMaintenance8FeaturesKHR.maintenance8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance9",
+            "path": "features.VkPhysicalDeviceMaintenance9FeaturesKHR.maintenance9",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentId2",
+            "path": "features.VkPhysicalDevicePresentId2FeaturesKHR.presentId2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentWait2",
+            "path": "features.VkPhysicalDevicePresentWait2FeaturesKHR.presentWait2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "swapchainMaintenance1",
+            "path": "features.VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR.swapchainMaintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "borderColorSwizzle",
+            "path": "features.VkPhysicalDeviceBorderColorSwizzleFeaturesEXT.borderColorSwizzle",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3AlphaToCoverageEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3AlphaToCoverageEnable",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3DepthClipEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3DepthClipEnable",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3RasterizationSamples",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3RasterizationSamples",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3SampleMask",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleMask",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3LineRasterizationMode",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3LineRasterizationMode",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "rectangularLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "unifiedImageLayouts",
+            "path": "features.VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR.unifiedImageLayouts",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderSubgroupUniformControlFlow",
+            "path": "features.VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR.shaderSubgroupUniformControlFlow",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "dynamicRenderingUnusedAttachments",
+            "path": "features.VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT.dynamicRenderingUnusedAttachments",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_vertex_attribute_divisor",
+            "path": "extensions.VK_EXT_vertex_attribute_divisor",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_bias_control",
+            "path": "extensions.VK_EXT_depth_bias_control",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_custom_border_color",
+            "path": "extensions.VK_EXT_custom_border_color",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_attachment_feedback_loop_layout",
+            "path": "extensions.VK_EXT_attachment_feedback_loop_layout",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_non_seamless_cube_map",
+            "path": "extensions.VK_EXT_non_seamless_cube_map",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateZeroDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasControl",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasExact",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColors",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColorWithoutFormat",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "attachmentFeedbackLoopLayout",
+            "path": "features.VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT.attachmentFeedbackLoopLayout",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "nonSeamlessCubeMap",
+            "path": "features.VkPhysicalDeviceNonSeamlessCubeMapFeaturesEXT.nonSeamlessCubeMap",
+            "capability": "d3d9_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_incremental_present",
+            "path": "extensions.VK_KHR_incremental_present",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_KHR_maintenance10",
+            "path": "extensions.VK_KHR_maintenance10",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_KHR_maintenance11",
+            "path": "extensions.VK_KHR_maintenance11",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_descriptor_heap",
+            "path": "extensions.VK_EXT_descriptor_heap",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_pageable_device_local_memory",
+            "path": "extensions.VK_EXT_pageable_device_local_memory",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "maintenance10",
+            "path": "features.VkPhysicalDeviceMaintenance10FeaturesKHR.maintenance10",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "maintenance11",
+            "path": "features.VkPhysicalDeviceMaintenance11FeaturesKHR.maintenance11",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "descriptorHeap",
+            "path": "features.VkPhysicalDeviceDescriptorHeapFeaturesEXT.descriptorHeap",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "extendedDynamicState3SampleLocationsEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleLocationsEnable",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "smoothLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pageableDeviceLocalMemory",
+            "path": "features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "VK_EXT_memory_priority",
+            "path": "extensions.VK_EXT_memory_priority",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_sample_locations",
+            "path": "extensions.VK_EXT_sample_locations",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "depthBounds",
+            "path": "features.VkPhysicalDeviceFeatures.depthBounds",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "vertexPipelineStoresAndAtomics",
+            "path": "features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pipelineStatisticsQuery",
+            "path": "features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "memoryPriority",
+            "path": "features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+            "capability": "d3d9_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "leastRepresentableValueForceUnormRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "floatRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.floatRepresentation",
+            "capability": "d3d9_optional",
+            "status": "FAIL"
+          }
+        ],
+        "VP_DXVK_d3d11_level_11_1_optimal": [
+          {
+            "requirement": "VK_KHR_maintenance7",
+            "path": "extensions.VK_KHR_maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance8",
+            "path": "extensions.VK_KHR_maintenance8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance9",
+            "path": "extensions.VK_KHR_maintenance9",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_id2",
+            "path": "extensions.VK_KHR_present_id2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_wait2",
+            "path": "extensions.VK_KHR_present_wait2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_shader_subgroup_uniform_control_flow",
+            "path": "extensions.VK_KHR_shader_subgroup_uniform_control_flow",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_maintenance1",
+            "path": "extensions.VK_KHR_swapchain_maintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_mutable_format",
+            "path": "extensions.VK_KHR_swapchain_mutable_format",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_unified_image_layouts",
+            "path": "extensions.VK_KHR_unified_image_layouts",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_border_color_swizzle",
+            "path": "extensions.VK_EXT_border_color_swizzle",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_dynamic_rendering_unused_attachments",
+            "path": "extensions.VK_EXT_dynamic_rendering_unused_attachments",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_extended_dynamic_state3",
+            "path": "extensions.VK_EXT_extended_dynamic_state3",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_line_rasterization",
+            "path": "extensions.VK_EXT_line_rasterization",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "largePoints",
+            "path": "features.VkPhysicalDeviceFeatures.largePoints",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "wideLines",
+            "path": "features.VkPhysicalDeviceFeatures.wideLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant8",
+            "path": "features.VkPhysicalDeviceVulkan12Features.storagePushConstant8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance7",
+            "path": "features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance8",
+            "path": "features.VkPhysicalDeviceMaintenance8FeaturesKHR.maintenance8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance9",
+            "path": "features.VkPhysicalDeviceMaintenance9FeaturesKHR.maintenance9",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentId2",
+            "path": "features.VkPhysicalDevicePresentId2FeaturesKHR.presentId2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentWait2",
+            "path": "features.VkPhysicalDevicePresentWait2FeaturesKHR.presentWait2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "swapchainMaintenance1",
+            "path": "features.VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR.swapchainMaintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "borderColorSwizzle",
+            "path": "features.VkPhysicalDeviceBorderColorSwizzleFeaturesEXT.borderColorSwizzle",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3AlphaToCoverageEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3AlphaToCoverageEnable",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3DepthClipEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3DepthClipEnable",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3RasterizationSamples",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3RasterizationSamples",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3SampleMask",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleMask",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3LineRasterizationMode",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3LineRasterizationMode",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "rectangularLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "unifiedImageLayouts",
+            "path": "features.VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR.unifiedImageLayouts",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderSubgroupUniformControlFlow",
+            "path": "features.VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR.shaderSubgroupUniformControlFlow",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "dynamicRenderingUnusedAttachments",
+            "path": "features.VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT.dynamicRenderingUnusedAttachments",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_vertex_attribute_divisor",
+            "path": "extensions.VK_EXT_vertex_attribute_divisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_custom_border_color",
+            "path": "extensions.VK_EXT_custom_border_color",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_bias_control",
+            "path": "extensions.VK_EXT_depth_bias_control",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_hdr_metadata",
+            "path": "extensions.VK_EXT_hdr_metadata",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "logicOp",
+            "path": "features.VkPhysicalDeviceFeatures.logicOp",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateZeroDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColors",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColorWithoutFormat",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasControl",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasExact",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderInt64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderInt64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_incremental_present",
+            "path": "extensions.VK_KHR_incremental_present",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_KHR_maintenance10",
+            "path": "extensions.VK_KHR_maintenance10",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_KHR_maintenance11",
+            "path": "extensions.VK_KHR_maintenance11",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_descriptor_heap",
+            "path": "extensions.VK_EXT_descriptor_heap",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_pageable_device_local_memory",
+            "path": "extensions.VK_EXT_pageable_device_local_memory",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "maintenance10",
+            "path": "features.VkPhysicalDeviceMaintenance10FeaturesKHR.maintenance10",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "maintenance11",
+            "path": "features.VkPhysicalDeviceMaintenance11FeaturesKHR.maintenance11",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "descriptorHeap",
+            "path": "features.VkPhysicalDeviceDescriptorHeapFeaturesEXT.descriptorHeap",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "extendedDynamicState3SampleLocationsEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleLocationsEnable",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "smoothLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pageableDeviceLocalMemory",
+            "path": "features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "VK_EXT_memory_priority",
+            "path": "extensions.VK_EXT_memory_priority",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_multi_draw",
+            "path": "extensions.VK_EXT_multi_draw",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_swapchain_colorspace",
+            "path": "extensions.VK_EXT_swapchain_colorspace",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "depthBounds",
+            "path": "features.VkPhysicalDeviceFeatures.depthBounds",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pipelineStatisticsQuery",
+            "path": "features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "memoryPriority",
+            "path": "features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "multiDraw",
+            "path": "features.VkPhysicalDeviceMultiDrawFeaturesEXT.multiDraw",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "leastRepresentableValueForceUnormRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "shaderFloat64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderFloat64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "FAIL"
+          }
+        ],
+        "VP_DXVK_d3d11_level_12_0_optimal": [
+          {
+            "requirement": "VK_KHR_maintenance7",
+            "path": "extensions.VK_KHR_maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance8",
+            "path": "extensions.VK_KHR_maintenance8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance9",
+            "path": "extensions.VK_KHR_maintenance9",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_id2",
+            "path": "extensions.VK_KHR_present_id2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_wait2",
+            "path": "extensions.VK_KHR_present_wait2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_shader_subgroup_uniform_control_flow",
+            "path": "extensions.VK_KHR_shader_subgroup_uniform_control_flow",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_maintenance1",
+            "path": "extensions.VK_KHR_swapchain_maintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_mutable_format",
+            "path": "extensions.VK_KHR_swapchain_mutable_format",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_unified_image_layouts",
+            "path": "extensions.VK_KHR_unified_image_layouts",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_border_color_swizzle",
+            "path": "extensions.VK_EXT_border_color_swizzle",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_dynamic_rendering_unused_attachments",
+            "path": "extensions.VK_EXT_dynamic_rendering_unused_attachments",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_extended_dynamic_state3",
+            "path": "extensions.VK_EXT_extended_dynamic_state3",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_line_rasterization",
+            "path": "extensions.VK_EXT_line_rasterization",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "largePoints",
+            "path": "features.VkPhysicalDeviceFeatures.largePoints",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "wideLines",
+            "path": "features.VkPhysicalDeviceFeatures.wideLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant8",
+            "path": "features.VkPhysicalDeviceVulkan12Features.storagePushConstant8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance7",
+            "path": "features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance8",
+            "path": "features.VkPhysicalDeviceMaintenance8FeaturesKHR.maintenance8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance9",
+            "path": "features.VkPhysicalDeviceMaintenance9FeaturesKHR.maintenance9",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentId2",
+            "path": "features.VkPhysicalDevicePresentId2FeaturesKHR.presentId2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentWait2",
+            "path": "features.VkPhysicalDevicePresentWait2FeaturesKHR.presentWait2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "swapchainMaintenance1",
+            "path": "features.VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR.swapchainMaintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "borderColorSwizzle",
+            "path": "features.VkPhysicalDeviceBorderColorSwizzleFeaturesEXT.borderColorSwizzle",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3AlphaToCoverageEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3AlphaToCoverageEnable",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3DepthClipEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3DepthClipEnable",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3RasterizationSamples",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3RasterizationSamples",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3SampleMask",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleMask",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3LineRasterizationMode",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3LineRasterizationMode",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "rectangularLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "unifiedImageLayouts",
+            "path": "features.VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR.unifiedImageLayouts",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderSubgroupUniformControlFlow",
+            "path": "features.VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR.shaderSubgroupUniformControlFlow",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "dynamicRenderingUnusedAttachments",
+            "path": "features.VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT.dynamicRenderingUnusedAttachments",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_vertex_attribute_divisor",
+            "path": "extensions.VK_EXT_vertex_attribute_divisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_custom_border_color",
+            "path": "extensions.VK_EXT_custom_border_color",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_bias_control",
+            "path": "extensions.VK_EXT_depth_bias_control",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_hdr_metadata",
+            "path": "extensions.VK_EXT_hdr_metadata",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "logicOp",
+            "path": "features.VkPhysicalDeviceFeatures.logicOp",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateZeroDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColors",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColorWithoutFormat",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasControl",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasExact",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderInt64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderInt64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_incremental_present",
+            "path": "extensions.VK_KHR_incremental_present",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_KHR_maintenance10",
+            "path": "extensions.VK_KHR_maintenance10",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_KHR_maintenance11",
+            "path": "extensions.VK_KHR_maintenance11",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_descriptor_heap",
+            "path": "extensions.VK_EXT_descriptor_heap",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_pageable_device_local_memory",
+            "path": "extensions.VK_EXT_pageable_device_local_memory",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "maintenance10",
+            "path": "features.VkPhysicalDeviceMaintenance10FeaturesKHR.maintenance10",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "maintenance11",
+            "path": "features.VkPhysicalDeviceMaintenance11FeaturesKHR.maintenance11",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "descriptorHeap",
+            "path": "features.VkPhysicalDeviceDescriptorHeapFeaturesEXT.descriptorHeap",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "extendedDynamicState3SampleLocationsEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleLocationsEnable",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "smoothLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pageableDeviceLocalMemory",
+            "path": "features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "VK_EXT_memory_priority",
+            "path": "extensions.VK_EXT_memory_priority",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_multi_draw",
+            "path": "extensions.VK_EXT_multi_draw",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_swapchain_colorspace",
+            "path": "extensions.VK_EXT_swapchain_colorspace",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "depthBounds",
+            "path": "features.VkPhysicalDeviceFeatures.depthBounds",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pipelineStatisticsQuery",
+            "path": "features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "memoryPriority",
+            "path": "features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "multiDraw",
+            "path": "features.VkPhysicalDeviceMultiDrawFeaturesEXT.multiDraw",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "leastRepresentableValueForceUnormRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "shaderFloat64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderFloat64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "FAIL"
+          }
+        ],
+        "VP_DXVK_d3d11_level_12_1_optimal": [
+          {
+            "requirement": "VK_KHR_maintenance7",
+            "path": "extensions.VK_KHR_maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance8",
+            "path": "extensions.VK_KHR_maintenance8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_maintenance9",
+            "path": "extensions.VK_KHR_maintenance9",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_id2",
+            "path": "extensions.VK_KHR_present_id2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_present_wait2",
+            "path": "extensions.VK_KHR_present_wait2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_shader_subgroup_uniform_control_flow",
+            "path": "extensions.VK_KHR_shader_subgroup_uniform_control_flow",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_maintenance1",
+            "path": "extensions.VK_KHR_swapchain_maintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_swapchain_mutable_format",
+            "path": "extensions.VK_KHR_swapchain_mutable_format",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_unified_image_layouts",
+            "path": "extensions.VK_KHR_unified_image_layouts",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_border_color_swizzle",
+            "path": "extensions.VK_EXT_border_color_swizzle",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_dynamic_rendering_unused_attachments",
+            "path": "extensions.VK_EXT_dynamic_rendering_unused_attachments",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_extended_dynamic_state3",
+            "path": "extensions.VK_EXT_extended_dynamic_state3",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_line_rasterization",
+            "path": "extensions.VK_EXT_line_rasterization",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "largePoints",
+            "path": "features.VkPhysicalDeviceFeatures.largePoints",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "wideLines",
+            "path": "features.VkPhysicalDeviceFeatures.wideLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant16",
+            "path": "features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "storagePushConstant8",
+            "path": "features.VkPhysicalDeviceVulkan12Features.storagePushConstant8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance7",
+            "path": "features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance8",
+            "path": "features.VkPhysicalDeviceMaintenance8FeaturesKHR.maintenance8",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "maintenance9",
+            "path": "features.VkPhysicalDeviceMaintenance9FeaturesKHR.maintenance9",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentId2",
+            "path": "features.VkPhysicalDevicePresentId2FeaturesKHR.presentId2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "presentWait2",
+            "path": "features.VkPhysicalDevicePresentWait2FeaturesKHR.presentWait2",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "swapchainMaintenance1",
+            "path": "features.VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR.swapchainMaintenance1",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "borderColorSwizzle",
+            "path": "features.VkPhysicalDeviceBorderColorSwizzleFeaturesEXT.borderColorSwizzle",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3AlphaToCoverageEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3AlphaToCoverageEnable",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3DepthClipEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3DepthClipEnable",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3RasterizationSamples",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3RasterizationSamples",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3SampleMask",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleMask",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "extendedDynamicState3LineRasterizationMode",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3LineRasterizationMode",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "rectangularLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "unifiedImageLayouts",
+            "path": "features.VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR.unifiedImageLayouts",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderSubgroupUniformControlFlow",
+            "path": "features.VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR.shaderSubgroupUniformControlFlow",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "dynamicRenderingUnusedAttachments",
+            "path": "features.VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT.dynamicRenderingUnusedAttachments",
+            "capability": "dxvk_common_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_vertex_attribute_divisor",
+            "path": "extensions.VK_EXT_vertex_attribute_divisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_custom_border_color",
+            "path": "extensions.VK_EXT_custom_border_color",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_depth_bias_control",
+            "path": "extensions.VK_EXT_depth_bias_control",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_EXT_hdr_metadata",
+            "path": "extensions.VK_EXT_hdr_metadata",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "logicOp",
+            "path": "features.VkPhysicalDeviceFeatures.logicOp",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "vertexAttributeInstanceRateZeroDivisor",
+            "path": "features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColors",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "customBorderColorWithoutFormat",
+            "path": "features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasControl",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "depthBiasExact",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+            "capability": "d3d11_baseline_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "shaderInt64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderInt64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "PASS"
+          },
+          {
+            "requirement": "VK_KHR_incremental_present",
+            "path": "extensions.VK_KHR_incremental_present",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_KHR_maintenance10",
+            "path": "extensions.VK_KHR_maintenance10",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_KHR_maintenance11",
+            "path": "extensions.VK_KHR_maintenance11",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_descriptor_heap",
+            "path": "extensions.VK_EXT_descriptor_heap",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_pageable_device_local_memory",
+            "path": "extensions.VK_EXT_pageable_device_local_memory",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "maintenance10",
+            "path": "features.VkPhysicalDeviceMaintenance10FeaturesKHR.maintenance10",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "maintenance11",
+            "path": "features.VkPhysicalDeviceMaintenance11FeaturesKHR.maintenance11",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "descriptorHeap",
+            "path": "features.VkPhysicalDeviceDescriptorHeapFeaturesEXT.descriptorHeap",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "extendedDynamicState3SampleLocationsEnable",
+            "path": "features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleLocationsEnable",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "smoothLines",
+            "path": "features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+            "capability": "dxvk_common_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pageableDeviceLocalMemory",
+            "path": "features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+            "capability": "dxvk_common_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "VK_EXT_memory_priority",
+            "path": "extensions.VK_EXT_memory_priority",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_multi_draw",
+            "path": "extensions.VK_EXT_multi_draw",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "VK_EXT_swapchain_colorspace",
+            "path": "extensions.VK_EXT_swapchain_colorspace",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "depthBounds",
+            "path": "features.VkPhysicalDeviceFeatures.depthBounds",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "pipelineStatisticsQuery",
+            "path": "features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "memoryPriority",
+            "path": "features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "multiDraw",
+            "path": "features.VkPhysicalDeviceMultiDrawFeaturesEXT.multiDraw",
+            "capability": "d3d11_baseline_optional",
+            "status": "UNKNOWN"
+          },
+          {
+            "requirement": "leastRepresentableValueForceUnormRepresentation",
+            "path": "features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+            "capability": "d3d11_baseline_optional",
+            "status": "FAIL"
+          },
+          {
+            "requirement": "shaderFloat64",
+            "path": "features.VkPhysicalDeviceFeatures.shaderFloat64",
+            "capability": "d3d11_level11_0_optional",
+            "status": "FAIL"
+          }
+        ]
       }
     }
   }

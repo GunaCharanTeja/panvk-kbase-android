@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "phase": "DX1",
+  "timestamp": "2026-09-20",
+  "testRevision": "WORKTREE_AFTER_973b99deceb73d62196f30e47a6ea9ef60b98851",
+  "scope": "HOST_ONLY_STATIC_EVALUATION",
+  "provenance": {
+    "repositoryBase": "973b99deceb73d62196f30e47a6ea9ef60b98851",
+    "mesaCommit": "5a07217f034b3e50d8c7c7794f97a2df1742613b",
+    "patchSeries": "sha256:8d47072143f5651aeeac9e95f64dd64b389d9b2cf7a840803d2f9daf16d3810a",
+    "capabilityCaptureSha256": "f3bcff6feef5ab54b176d72fe91c89e372a5bd0d0295b1178ebeb752aa63117c",
+    "profileArtifacts": {
+      "dxvk-2.7.1": "b5a12c88cf5e40e2e4dd490bb13fddbbb707bd75197658c0f89b2ad283f867d9",
+      "dxvk-3.1.1": "4b74328bfdc1d7da3e1996fdb77bd64f41181aeb6ead2aa75f90f2f7619a8f5a"
+    },
+    "androidIcdSha256": "576e37de9a3b60dda9a972a6f91c3a50e09238bd31a9888e04215c7b554c803a",
+    "glibcIcdSha256": "95a019b21d42f9d91bf3ee697a4e84b09485fdd8f0c298dda4494356cb983ec0",
+    "runtimeEvidenceSource": "DX0-BASELINE.md; no binary or device rerun in DX1"
+  },
+  "abis": {
+    "android-aarch64-bionic": {
+      "queriedState": "ADVERTISED",
+      "deviceCreation": "NOT_RUN",
+      "positiveWorkload": "NOT_RUN",
+      "cts": "NOT_RUN",
+      "stockDxvk": "BLOCKED"
+    },
+    "linux-aarch64-glibc": {
+      "queriedState": "ADVERTISED",
+      "deviceCreation": "NOT_RUN",
+      "positiveWorkload": "NOT_RUN",
+      "cts": "NOT_RUN",
+      "stockDxvk": "NOT_RUN"
+    }
+  },
+  "features": {
+    "textureCompressionBC": "UNSUPPORTED",
+    "shaderClipDistance": "UNSUPPORTED",
+    "shaderCullDistance": "UNSUPPORTED",
+    "fillModeNonSolid": "UNSUPPORTED",
+    "geometryShader": "UNSUPPORTED",
+    "multiViewport": "UNSUPPORTED",
+    "VK_EXT_transform_feedback": "UNSUPPORTED",
+    "transformFeedback": "UNSUPPORTED",
+    "geometryStreams": "UNSUPPORTED",
+    "tessellationShader": "UNSUPPORTED",
+    "vertexPipelineStoresAndAtomics": "UNSUPPORTED"
+  },
+  "notes": [
+    "Feature states come from the immutable beta.3 capability capture.",
+    "NOT_RUN is retained where DX1 performed no runtime action.",
+    "No prior runtime result is copied as a current-binary result."
+  ]
+}
