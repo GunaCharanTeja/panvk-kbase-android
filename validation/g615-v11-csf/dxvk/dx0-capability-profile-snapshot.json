@@ -4,7 +4,22 @@
   "date": "2026-09-20",
   "repository": {
     "branch": "feature/g615-dxvk-complete",
-    "baseCommit": "052a5d37315e621082436fc9fa2745d0264347e2"
+    "baseCommit": "052a5d37315e621082436fc9fa2745d0264347e2",
+    "originMainChecked": "052a5d37315e621082436fc9fa2745d0264347e2",
+    "preservedCommits": [
+      "c7b4b9b",
+      "3d6da7c",
+      "13ed680",
+      "d3a2b4f"
+    ]
+  },
+  "sourceReconstruction": {
+    "mesaCommit": "5a07217f034b3e50d8c7c7794f97a2df1742613b",
+    "profileSha256": "82cca8b16c007d9498c7696df1192bc8b0772394534277b8877e106c08ce46bf",
+    "patchSeries": "sha256:8d47072143f5651aeeac9e95f64dd64b389d9b2cf7a840803d2f9daf16d3810a",
+    "patchCount": 18,
+    "recursiveDependencies": [],
+    "status": "PASS_CLEAN_APPLY"
   },
   "runtimeCapture": {
     "status": "EXISTING_CAPTURE",
@@ -129,7 +144,30 @@
   "runtimeValidation": {
     "vulkanCts": "NOT_TESTED_BLOCKED_NO_DEQP_VK",
     "dxvkNative": "NOT_TESTED",
-    "stockDxvkSmoke": "BLOCKED"
+    "stockDxvkSmoke": "BLOCKED",
+    "baselineArtifactAbis": {
+      "android": {
+        "libc": "bionic",
+        "elf": "ELF64 AArch64",
+        "androidApi": 35,
+        "ndk": "r30-beta1 (14904198)",
+        "buildId": "2ba551018ebc18b8990c7431e3c99b0523f87d15",
+        "sha256": "576e37de9a3b60dda9a972a6f91c3a50e09238bd31a9888e04215c7b554c803a"
+      },
+      "glibc": {
+        "libc": "glibc",
+        "elf": "ELF64 AArch64",
+        "maxReferencedVersion": "GLIBC_2.38",
+        "toolchain": "Meson 1.12.0; GCC 15.2.0; GNU ld.bfd 2.45.1",
+        "buildId": "0a87f02d2a958b9a480f9a5e1303a73e65e683b5",
+        "sha256": "95a019b21d42f9d91bf3ee697a4e84b09485fdd8f0c298dda4494356cb983ec0"
+      }
+    },
+    "baselineRegressions": {
+      "source": "existing beta.3 evidence; not rerun for current branch",
+      "android": "PASS_ENUM_DEVICE_COMPUTE_OFFSCREEN_AHB_WSI300_COLD_SECOND_PROCESS",
+      "glibc": "PASS_ENUM_COMPUTE_OFFSCREEN"
+    }
   },
   "nextPhase": "DX1"
 }
