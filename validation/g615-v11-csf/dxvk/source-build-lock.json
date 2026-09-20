@@ -30,7 +30,8 @@
       "ninja": "1.9.0",
       "compiler": "GCC 15.2.0",
       "shaderCompiler": "glslang 16.2.0",
-      "status": "PASS"
+      "status": "PASS_AFTER_ONE_INCREMENTAL_RETRY",
+      "initialBuildInvocation": "FAIL_UNKNOWN_TERMINAL_DIAGNOSTIC_NOT_RETAINED"
     },
     "artifacts": {
       "d3d8": {

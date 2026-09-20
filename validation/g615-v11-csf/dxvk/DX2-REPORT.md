@@ -19,10 +19,12 @@ inside the Poco X6 Pro AArch64 Alpine glibc chroot. SDL2 is the sole enabled WSI
 backend. Meson configured a native `aarch64` build; Ninja was limited to two jobs.
 Recursive commits are recorded in `source-build-lock.json`.
 
-The first foreground build command's captured output ended before Ninja's final
-13 steps. A single bounded incremental `ninja -j2` invocation completed those
-steps successfully. This was a build-command/output interruption, not a compiler,
-runtime, CTS, Vulkan, PanVK, or missing-feature failure.
+The first foreground build command exited nonzero late in the Ninja build. Its
+indexed output did not retain the terminal diagnostic, so the exact build failure
+is `UNKNOWN`. A single bounded incremental `ninja -j2` invocation completed the
+remaining work successfully. The final artifacts and harness link verification
+pass. This transient build invocation failure is not reclassified as a runtime,
+CTS, Vulkan, PanVK, or missing-driver-feature result.
 
 ## Harness boundary
 
