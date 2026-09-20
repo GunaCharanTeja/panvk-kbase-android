@@ -27,6 +27,7 @@ required = (
     "info->nir->num_inputs == 0",
     "nir_intrinsic_load_vertex_param_buffer_poly",
     "panvk_lower_gpu_prerast_sysval",
+    "if (!gpu_lower)",
     "nir->info.stage = MESA_SHADER_COMPUTE",
     'PANVK_VS_VARIANT_GPU_LOWERED] = "GPU_LOWERED"',
     "gpu_prerast_abi",

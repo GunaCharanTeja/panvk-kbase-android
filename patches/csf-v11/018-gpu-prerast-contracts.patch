@@ -407,7 +407,7 @@ diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_v
 -      const enum panvk_vs_variant last_variant = PANVK_VS_VARIANT_HW;
 +      const enum panvk_vs_variant last_variant = PANVK_VS_VARIANT_GPU_LOWERED;
        for (enum panvk_vs_variant v = 0; v <= last_variant; v++) {
-@@ -1450,6 +1469,17 @@ panvk_compile_shader(struct panvk_device *dev,
+@@ -1450,4 +1469,25 @@ panvk_compile_shader(struct panvk_device *dev,
           nir_shader *nir =
              clone_nir ? nir_shader_clone(NULL, info->nir) : info->nir;
  
@@ -415,6 +415,8 @@ diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_v
 +         const bool gpu_lower = v == PANVK_VS_VARIANT_GPU_LOWERED &&
 +                                info->nir->num_inputs == 0;
 +         if (gpu_lower) {
++            nir_assign_io_var_locations(nir, nir_var_shader_out);
++            panvk_lower_nir_io(nir);
 +            NIR_PASS(_, nir, poly_nir_lower_vs_before_gs);
 +            NIR_PASS(_, nir, poly_nir_lower_sw_vs);
 +            NIR_PASS(_, nir, poly_nir_lower_sysvals);
@@ -431,6 +433,15 @@ diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_v
 +#endif
 +
           panvk_lower_nir(dev, nir, info->set_layout_count,
+@@ -1491,4 +1531,6 @@ panvk_compile_shader(struct panvk_device *dev,
+-         nir_assign_io_var_locations(nir, nir_var_shader_out);
+-         panvk_lower_nir_io(nir);
++         if (!gpu_lower) {
++            nir_assign_io_var_locations(nir, nir_var_shader_out);
++            panvk_lower_nir_io(nir);
++         }
+          /* This somehow folds the location for multi-slot nir_load/nir_store */
+          NIR_PASS(_, nir, nir_opt_constant_folding);
 @@ -1495,6 +1525,11 @@ panvk_compile_shader(struct panvk_device *dev,
  
           struct pan_varying_layout varying_layout;
