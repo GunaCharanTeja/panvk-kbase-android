@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "phase": "DX2",
+  "target": "Poco X6 Pro / duchamp native Linux aarch64 Alpine chroot",
+  "vkGlCts": {
+    "lock": "cts-lock.json",
+    "status": "REUSED_AND_REVERIFIED"
+  },
+  "dxvk": {
+    "repository": "https://github.com/doitsujin/dxvk.git",
+    "tag": "v3.1.1",
+    "tagObject": "1e0f92318d6ec7b7286e050d9e24fd01a2d09c92",
+    "commit": "b1a1c99ab52b687cf950d62c88bc2fa316b41663",
+    "sourceStatus": "STOCK_UNPATCHED",
+    "submodules": {
+      "include/native/directx": "9df86f2341616ef1888ae59919feaa6d4fad693d",
+      "include/spirv": "04f10f650d514df88b76d25e83db360142c7b174",
+      "include/vulkan": "8864cdc896bbc2a9b6eb36b3218fc9ef57908d77",
+      "subprojects/dxbc-spirv": "bf14419e5fa7eacb817b7b632f03cb61d61bbad7",
+      "subprojects/dxbc-spirv/submodules/spirv_headers": "c8ad050fcb29e42a2f57d9f59e97488f465c436d",
+      "subprojects/libdisplay-info": "275e6459c7ab1ddd4b125f28d0440716e4888078"
+    },
+    "build": {
+      "abi": "ELF64 AArch64 glibc",
+      "buildType": "release",
+      "jobs": 2,
+      "wsi": "SDL2",
+      "sdl2": "2.32.10",
+      "meson": "1.12.0",
+      "ninja": "1.9.0",
+      "compiler": "GCC 15.2.0",
+      "shaderCompiler": "glslang 16.2.0",
+      "status": "PASS"
+    },
+    "artifacts": {
+      "d3d8": {
+        "path": "/root/panvk-dxvk-v3.1.1-build/src/d3d8/libdxvk_d3d8.so.0.30101",
+        "sha256": "c5c71528a80cfeee0ceb5e2154420e1d3e36dd09e7548874469ff90be5bece98"
+      },
+      "d3d9": {
+        "path": "/root/panvk-dxvk-v3.1.1-build/src/d3d9/libdxvk_d3d9.so.0.30101",
+        "sha256": "39e9ac927eaef1cae2e276142c3773a857115f779e61937f8dfd03424ce4cd5e"
+      },
+      "d3d11": {
+        "path": "/root/panvk-dxvk-v3.1.1-build/src/d3d11/libdxvk_d3d11.so.0.30101",
+        "sha256": "013b135ceccd5403ac6d02fe1ee2b9997c4945b69a7fc384faa1a45ed45416df"
+      },
+      "dxgi": {
+        "path": "/root/panvk-dxvk-v3.1.1-build/src/dxgi/libdxvk_dxgi.so.0.30101",
+        "sha256": "6f8bf81cd3cd168946f486d29e047a3edb6cbf0e0ec0cd1628062ae9fac6b82f"
+      },
+      "earlyProbe": {
+        "path": "/root/panvk-dxvk-native-probe",
+        "sourceSha256": "6c4e186b6cceb17162318da1b19a213ced4a272f6cad9590dfb99c802d213c8d",
+        "sha256": "e2712b22201bb36883e6071744320103ab2172e79806fb9f9c96437bbf311458",
+        "runtime": "NOT_RUN_DX2"
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "phase": "DX1",
-  "scope": "HOST_ONLY_STATIC_EVALUATION",
+  "phase": "DX2",
+  "scope": "TOOLCHAIN_BUILD_ONLY_NO_GRAPHICS_RUNTIME",
   "provenance": {
     "repositoryBase": "973b99deceb73d62196f30e47a6ea9ef60b98851",
     "evaluatorCommit": "bf35f88",
@@ -12,7 +12,22 @@
       "dxvk-2.7.1": "b5a12c88cf5e40e2e4dd490bb13fddbbb707bd75197658c0f89b2ad283f867d9",
       "dxvk-3.1.1": "4b74328bfdc1d7da3e1996fdb77bd64f41181aeb6ead2aa75f90f2f7619a8f5a"
     },
-    "runtimeEvidenceSource": "DX0-BASELINE.md; no binary or device rerun in DX1"
+    "runtimeEvidenceSource": "DX0-BASELINE.md; DX2 built tooling only and ran no graphics workload"
+  },
+  "dx2": {
+    "cts": {
+      "build": "PASS_REVERIFIED",
+      "execution": "NOT_RUN",
+      "binarySha256": "5515cea5213851879c1b8f690aadae5ae6f50b117514b2d28e36f3539f2caac7",
+      "testListSha256": "3d046479d4f23f574d9bc93511d028831468184e508f5e4c981d6643450fffc0"
+    },
+    "dxvkNative": {
+      "version": "3.1.1",
+      "commit": "b1a1c99ab52b687cf950d62c88bc2fa316b41663",
+      "build": "PASS",
+      "runtime": "NOT_RUN",
+      "driverFeatureResult": "NOT_EVALUATED"
+    }
   },
   "rowDefaults": {
     "implementationState": "UNSUPPORTED",

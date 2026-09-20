@@ -7,7 +7,8 @@ does not cover vkd3d-proton or other translation layers.
   against a capability capture using `scripts/evaluate-dxvk.py`.
 - `vulkan/` will hold focused Vulkan semantic tests as each DXVK blocker is
   implemented.
-- `native/` will hold DXVK Native workloads after profile and CTS gates pass.
+- `native/` contains the compile-tested early DXVK Native probe; runtime stays
+  deferred until the same-ICD DX3 environment gate.
 
 Run the current suite with:
 
