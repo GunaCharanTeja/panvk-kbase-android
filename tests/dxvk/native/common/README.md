@@ -2,7 +2,9 @@
 
 `dxvk_native_probe.cpp` is the compile-time starting point for DX3 and later
 runtime work. It creates an SDL2 Vulkan window, then requests either a D3D9
-device or D3D11 feature levels 11.1, 11.0, and 10.1 in that order.
+device or D3D11 feature levels 11.1, 11.0, and 10.1 in that order. The
+`d3d11-headless` mode bypasses SDL window creation so baseline adapter rejection
+remains testable when the target has no display session.
 
 Build only on the target AArch64 glibc environment against the pinned, stock
 DXVK Native build:

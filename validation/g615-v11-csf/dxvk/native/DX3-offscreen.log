@@ -1,0 +1,14 @@
+CANDIDATE_SHA256=736f868bf720c95edd9b8bbac4a0a0b650fed67c2a9e46635dc3ee379fb0d2ca
+deviceName=Mali-G615 MC6
+deviceID=0xb8a31030
+driverID=20
+driverName=panvk
+driverInfo=Mesa 26.3.0-devel (git-5a07217f03)
+F-device ready (family 0)
+F-pipeline ready
+F-submit complete
+F-interior RGBA=255 0 0 255
+F-clear    RGBA=0 0 255 255
+MESA: info: kbase_queue_wait_current: wait completed successfully
+F-PASS
+EXIT=0

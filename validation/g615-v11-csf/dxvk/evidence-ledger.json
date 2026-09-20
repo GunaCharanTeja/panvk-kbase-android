@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "phase": "DX2",
-  "scope": "TOOLCHAIN_BUILD_ONLY_NO_GRAPHICS_RUNTIME",
+  "phase": "DX3",
+  "scope": "GLIBC_RUNTIME_PARTIAL",
   "provenance": {
     "repositoryBase": "973b99deceb73d62196f30e47a6ea9ef60b98851",
     "evaluatorCommit": "bf35f88",
@@ -28,6 +28,15 @@
       "runtime": "NOT_RUN",
       "driverFeatureResult": "NOT_EVALUATED"
     }
+  },
+  "dx3": {
+    "evidence": "DX3-EVIDENCE.json",
+    "candidateIcdSha256": "736f868bf720c95edd9b8bbac4a0a0b650fed67c2a9e46635dc3ee379fb0d2ca",
+    "deviceCreation": "PASS",
+    "offscreenRender": "PASS",
+    "presentation": "BLOCKED_NO_X11_OR_WAYLAND_SESSION",
+    "stockDxvkBaselineRejection": "NOT_CAPTURED_CRASH_BEFORE_REQUIREMENT_GATE",
+    "gpuSubmissionTrace": "BLOCKED_DIAGNOSTIC_MODES_SEGFAULT"
   },
   "rowDefaults": {
     "implementationState": "UNSUPPORTED",
@@ -57,7 +66,7 @@
       }
     },
     "linux-aarch64-glibc": {
-      "binarySha256": "95a019b21d42f9d91bf3ee697a4e84b09485fdd8f0c298dda4494356cb983ec0",
+      "binarySha256": "736f868bf720c95edd9b8bbac4a0a0b650fed67c2a9e46635dc3ee379fb0d2ca",
       "features": {
         "textureCompressionBC": {},
         "shaderClipDistance": {},
@@ -77,6 +86,7 @@
     "Each feature row inherits every rowDefaults field; listed fields override defaults.",
     "Feature states come from the immutable beta.3 capability capture.",
     "NOT_RUN is retained because DX1 performed no runtime action.",
-    "No previous result is represented as a current-binary rerun."
+    "No previous result is represented as a current-binary rerun.",
+    "DX3 outcomes keep Vulkan creation, rendering, presentation, DXVK creation, and trace proof distinct."
   ]
 }

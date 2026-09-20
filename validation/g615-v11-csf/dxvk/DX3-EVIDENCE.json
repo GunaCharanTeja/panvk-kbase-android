@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "phase": "DX3",
+  "status": "PARTIAL",
+  "target": {
+    "serial": "Y5WWBMJVOZSK4HU8",
+    "device": "duchamp",
+    "model": "2311DRK48I",
+    "abi": "arm64-v8a",
+    "gpu": "Mali-G615 MC6",
+    "gpuId": "0xb8a31030"
+  },
+  "adb": {
+    "total": 9,
+    "shell": 7,
+    "push": 2,
+    "identityChecks": 1,
+    "transportErrors": 0,
+    "disconnects": 0,
+    "kernelUsbSymptoms": 0
+  },
+  "candidateIcd": {
+    "path": "/tmp/build-glibc/src/panfrost/vulkan/libvulkan_panfrost.so",
+    "sha256": "736f868bf720c95edd9b8bbac4a0a0b650fed67c2a9e46635dc3ee379fb0d2ca",
+    "buildId": "1f8b1362ae206dc1f31dc57f0e1c7da2c7c6206b",
+    "mesa": "26.3.0-devel (git-5a07217f03)",
+    "driverId": 20,
+    "driverIdName": "VK_DRIVER_ID_MESA_PANVK",
+    "temporaryManifestSha256": "f9264ebb2b5e2759b6c752c29bcd6d0f515b077f1dbd50b7356a49ef6ec1b4ba"
+  },
+  "outcomes": {
+    "instanceAndPhysicalDeviceCreation": "PASS",
+    "logicalDeviceCreation": "PASS",
+    "offscreenRenderReadback": "PASS",
+    "presentation": "BLOCKED_NO_X11_OR_WAYLAND_SESSION",
+    "stockDxvkDeviceCreation": "CRASH_BEFORE_REQUIREMENT_GATE",
+    "stockDxvkExpectedBaselineRejection": "NOT_CAPTURED",
+    "stockDxvkRendering": "NOT_RUN",
+    "stockDxvkPresentation": "BLOCKED"
+  },
+  "trace": {
+    "status": "BLOCKED_DIAGNOSTIC_MODES_SEGFAULT",
+    "counters": {
+      "submittedJobs": null,
+      "completedJobs": null,
+      "successfulWaits": 1
+    },
+    "kbaseDiagExit": 139,
+    "panvkTraceExit": 139
+  },
+  "dxvk": {
+    "version": "3.1.1",
+    "commit": "b1a1c99ab52b687cf950d62c88bc2fa316b41663",
+    "sourceStatus": "STOCK_UNPATCHED",
+    "probeSha256": "93a41073373ea294c38858810e3ec9ba7ccf581c15d9850842d34b63eb3e12bf"
+  },
+  "usbStatus": "HEALTHY_NO_TRANSPORT_SYMPTOM"
+}

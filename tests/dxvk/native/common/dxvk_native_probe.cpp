@@ -50,10 +50,13 @@ static int probe_d3d11() {
 
 int main(int argc, char **argv) {
   if (argc != 2 || (std::strcmp(argv[1], "d3d9") != 0 &&
-                    std::strcmp(argv[1], "d3d11") != 0)) {
-    std::fprintf(stderr, "usage: %s d3d9|d3d11\n", argv[0]);
+                    std::strcmp(argv[1], "d3d11") != 0 &&
+                    std::strcmp(argv[1], "d3d11-headless") != 0)) {
+    std::fprintf(stderr, "usage: %s d3d9|d3d11|d3d11-headless\n", argv[0]);
     return 2;
   }
+  if (std::strcmp(argv[1], "d3d11-headless") == 0)
+    return probe_d3d11();
   if (SDL_Init(SDL_INIT_VIDEO) != 0) {
     std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
     return 3;
