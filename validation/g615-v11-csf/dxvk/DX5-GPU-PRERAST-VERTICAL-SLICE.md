@@ -45,14 +45,7 @@ seqno before IDVS. Arena is released after IDVS scoreboards. No
 
 ## Device and USB
 
-Post-commit identity session on `Y5WWBMJVOZSK4HU8`: `duchamp`, `arm64-v8a`,
-`/dev/mali0` present. USB transport: connected, no disconnect/kernel USB
-symptom. No reusable glibc source/ICD on device.
-
-ADB calls: `2`
-Categories: `1 identity`, `1 inspect`
-Remaining budget: `6`
-
-Device rebuild + matrix cannot fit the remaining 6 calls (`build-glibc.sh`
-needs 6 ADB with no runtime left). Runtime matrix: `NOT_RUN`.
-Candidate ICD hash: none.
+See `DX5-RUNTIME.md`. This session: 8 sequential ADB on `Y5WWBMJVOZSK4HU8`.
+Identity PASS. Overlay ninja `-j2` FAILED (typeof / cmd_draw order /
+`nir_metadata_preserve` / `PAN_ARCH<10` passthrough). Matrix `NOT_RUN`.
+USB connected, no transport symptom. Candidate ICD hash: none.
