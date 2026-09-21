@@ -10,19 +10,6 @@ Mesa base range: 5a07217f034b3e50d8c7c7794f97a2df1742613b
 Dependencies: csf, csf-v11, src/poly
 Validation test: tests/dxvk/vulkan/test_gpu_prerast_contracts.py
 
-diff --git a/meson.build b/meson.build
-index 986f6da..9ef00cd 100644
---- a/meson.build
-+++ b/meson.build
-@@ -1080,7 +1080,7 @@ with_llvm = with_llvm \
- 
- with_poly = [
-   with_gallium_asahi, with_asahi_vk, with_tools.contains('asahi'),
--  with_kosmickrisp_vk,
-+  with_kosmickrisp_vk, with_panfrost_vk,
- ].contains(true)
- 
- dep_clc = null_dep
 diff --git a/src/panfrost/compiler/bifrost/bifrost_compile.c b/src/panfrost/compiler/bifrost/bifrost_compile.c
 index 7322b40..d7adf88 100644
 --- a/src/panfrost/compiler/bifrost/bifrost_compile.c
@@ -526,14 +513,6 @@ index 7c87fe4..ba83014 100644
    'csf/panvk_vX_cmd_buffer.c',
    'csf/panvk_vX_cmd_cond_render.c',
    'csf/panvk_vX_cmd_dispatch.c',
-@@ -185,6 +186,7 @@ foreach arch : [6, 7, 10, 11, 12, 13, 14]
-       dep_valgrind,
-       idep_libpan_per_arch[arch.to_string()],
-     ],
-+    link_with : arch >= 10 ? [libpoly_nir] : [],
-     c_args : [no_override_init_args, panvk_flags, soong_compat_c_args, '-DPAN_ARCH=@0@'.format(arch)],
-     gnu_symbol_visibility : 'hidden',
-   )
 diff --git a/src/panfrost/vulkan/panvk_cmd_draw.h b/src/panfrost/vulkan/panvk_cmd_draw.h
 index ff34da3..9c6dfac 100644
 --- a/src/panfrost/vulkan/panvk_cmd_draw.h
@@ -580,8 +559,8 @@ index 0000000..0655ee0
 +
 +#define PANVK_GPU_PRERAST_ABI_VERSION 1
 +#define PANVK_GPU_PRERAST_MAX_EXECUTION_BYTES (256ull * 1024 * 1024)
-+#define PANVK_GPU_PRERAST_ARENA_SIZE (64ull * 1024 * 1024)
-+#define PANVK_GPU_PRERAST_MAX_INVOCATIONS (1024u * 1024u)
++#define PANVK_GPU_PRERAST_ARENA_SIZE (256ull * 1024)
++#define PANVK_GPU_PRERAST_MAX_INVOCATIONS (4096u)
 +#define PANVK_GPU_PRERAST_PARAMS_OFFSET 64
 +#define PANVK_GPU_PRERAST_DISPATCH_OFFSET 256
 +#define PANVK_GPU_PRERAST_DRAW_OFFSET 320
@@ -872,32 +851,34 @@ index 604f558..764c1db 100644
  #include "panvk_cmd_draw.h"
  #include "panvk_entrypoints.h"
  #include "panvk_instance.h"
-@@ -581,6 +584,24 @@ panvk_per_arch(create_device)(struct panvk_physical_device *physical_device,
+@@ -581,6 +584,26 @@ panvk_per_arch(create_device)(struct panvk_physical_device *physical_device,
  
     panvk_device_init_mempools(device);
  
 +#if PAN_ARCH >= 10
-+   device->gpu_prerast_arena = panvk_pool_alloc_mem(
-+      &device->mempools.rw,
-+      (struct panvk_pool_alloc_info){
-+         .size = PANVK_GPU_PRERAST_ARENA_SIZE,
-+         .alignment = 4096,
-+      });
-+   if (!panvk_priv_mem_check_alloc(device->gpu_prerast_arena)) {
-+      result = panvk_error(device, VK_ERROR_OUT_OF_DEVICE_MEMORY);
-+      goto err_free_priv_bos;
-+   }
-+   panvk_priv_mem_write(device->gpu_prerast_arena, 0,
-+                        struct panvk_gpu_prerast_arena, arena) {
-+      memset(arena, 0, sizeof(*arena));
-+      arena->available = 1;
++   if (PANVK_DEBUG(GPU_PRERAST)) {
++      device->gpu_prerast_arena = panvk_pool_alloc_mem(
++         &device->mempools.rw,
++         (struct panvk_pool_alloc_info){
++            .size = PANVK_GPU_PRERAST_ARENA_SIZE,
++            .alignment = 4096,
++         });
++      if (!panvk_priv_mem_check_alloc(device->gpu_prerast_arena)) {
++         result = panvk_error(device, VK_ERROR_OUT_OF_DEVICE_MEMORY);
++         goto err_free_priv_bos;
++      }
++      panvk_priv_mem_write(device->gpu_prerast_arena, 0,
++                           struct panvk_gpu_prerast_arena, arena) {
++         memset(arena, 0, sizeof(*arena));
++         arena->available = 1;
++      }
 +   }
 +#endif
 +
  #if PAN_ARCH >= 10
     /* The only reason this is a heap allocation is that PANVK_SUBQUEUE_COUNT
      * isn't available in the header */
-@@ -707,6 +728,7 @@ err_free_mem_cache:
+@@ -707,6 +730,7 @@ err_free_mem_cache:
  err_free_precomp:
     panvk_precomp_cleanup(device);
  err_free_priv_bos:
@@ -905,7 +886,7 @@ index 604f558..764c1db 100644
     if (device->printf.bo)
        u_printf_destroy(&device->printf.ctx);
     panvk_priv_bo_unref(device->printf.bo);
-@@ -764,10 +786,11 @@ panvk_per_arch(destroy_device)(struct panvk_device *device,
+@@ -764,10 +788,11 @@ panvk_per_arch(destroy_device)(struct panvk_device *device,
     u_printf_destroy(&device->printf.ctx);
     panvk_priv_bo_unref(device->printf.bo);
     panvk_priv_bo_unref(device->tiler_oom.handlers_bo);
@@ -925,18 +906,17 @@ diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_v
 index ae29960..b9a7b4c 100644
 --- a/src/panfrost/vulkan/panvk_vX_shader.c
 +++ b/src/panfrost/vulkan/panvk_vX_shader.c
-@@ -20,6 +20,10 @@
+@@ -20,6 +20,9 @@
  #include "panvk_physical_device.h"
  #include "panvk_sampler.h"
  #include "panvk_shader.h"
 +#if PAN_ARCH >= 10
 +#include "panvk_gpu_prerast.h"
-+#include "poly/nir/poly_nir.h"
 +#endif
  
  #include "spirv/nir_spirv.h"
  #include "util/memstream.h"
-@@ -502,6 +506,105 @@ panvk_preprocess_nir(struct vk_physical_device *vk_pdev,
+@@ -502,6 +506,265 @@ panvk_preprocess_nir(struct vk_physical_device *vk_pdev,
     pan_preprocess_nir(nir, pdev->kmod.dev->props.gpu_id);
  }
  
@@ -952,6 +932,166 @@ index ae29960..b9a7b4c 100644
 +   nir_def *addr = load_sysval(b, graphics, 64, gpu_prerast_params);
 +   nir_def_replace(&intr->def, addr);
 +   return true;
++}
++
++static nir_def *
++poly_nir_load_raw_vertex_id(nir_builder *b, nir_def *id)
++{
++   nir_def *p = nir_load_vertex_param_buffer_poly(b);
++   nir_def *index_size = nir_load_global(
++      b, 1, 32,
++      nir_iadd_imm(b, p, offsetof(struct poly_vertex_params, index_size_B)),
++      .align_mul = 4);
++   nir_def *pulled;
++   nir_if *have_index = nir_push_if(b, nir_ine_imm(b, index_size, 0));
++   {
++      nir_def *index_buffer = nir_load_global(b, 1, 64, p, .align_mul = 8);
++      nir_def *range = nir_load_global(
++         b, 1, 32,
++         nir_iadd_imm(b, p,
++                      offsetof(struct poly_vertex_params,
++                               index_buffer_range_el)),
++         .align_mul = 4);
++      nir_def *oob = nir_uge(b, id, range);
++      nir_def *el_id = nir_bcsel(b, oob, nir_imm_int(b, 0), id);
++      nir_def *addr = nir_iadd(
++         b, index_buffer, nir_u2u64(b, nir_imul(b, el_id, index_size)));
++      nir_def *el8;
++      nir_def *el_rest;
++      nir_if *is8 = nir_push_if(b, nir_ieq_imm(b, index_size, 1));
++      {
++         el8 = nir_u2u32(b, nir_load_global(b, 1, 8, addr, .align_mul = 1));
++      }
++      nir_push_else(b, is8);
++      {
++         nir_def *el16;
++         nir_def *el32;
++         nir_if *is16 = nir_push_if(b, nir_ieq_imm(b, index_size, 2));
++         {
++            el16 =
++               nir_u2u32(b, nir_load_global(b, 1, 16, addr, .align_mul = 2));
++         }
++         nir_push_else(b, is16);
++         {
++            el32 = nir_load_global(b, 1, 32, addr, .align_mul = 4);
++         }
++         nir_pop_if(b, is16);
++         el_rest = nir_if_phi(b, el16, el32);
++      }
++      nir_pop_if(b, is8);
++      nir_def *el = nir_if_phi(b, el8, el_rest);
++      pulled = nir_bcsel(b, oob, nir_imm_int(b, 0), el);
++   }
++   nir_pop_if(b, have_index);
++   return nir_if_phi(b, pulled, id);
++}
++
++static nir_def *
++poly_nir_load_vertex_id(nir_builder *b, nir_def *id)
++{
++   return nir_iadd(b, poly_nir_load_raw_vertex_id(b, id),
++                   nir_load_first_vertex(b));
++}
++
++static bool
++panvk_gpu_prerast_lower_sysval_intr(nir_builder *b, nir_intrinsic_instr *intr,
++                                    UNUSED void *data)
++{
++   if (intr->intrinsic != nir_intrinsic_load_index_size_poly &&
++       intr->intrinsic != nir_intrinsic_load_vs_outputs_poly)
++      return false;
++
++   b->cursor = nir_before_instr(&intr->instr);
++   nir_def *p = nir_load_vertex_param_buffer_poly(b);
++   unsigned off = intr->intrinsic == nir_intrinsic_load_index_size_poly
++                     ? offsetof(struct poly_vertex_params, index_size_B)
++                     : offsetof(struct poly_vertex_params, outputs);
++   unsigned bits = intr->intrinsic == nir_intrinsic_load_index_size_poly ? 32
++                                                                         : 64;
++   nir_def *v = nir_load_global(b, 1, bits, nir_iadd_imm(b, p, off),
++                                .align_mul = bits / 8);
++   nir_def_replace(&intr->def, v);
++   return true;
++}
++
++static bool
++poly_nir_lower_sysvals(nir_shader *s)
++{
++   return nir_shader_intrinsics_pass(s, panvk_gpu_prerast_lower_sysval_intr,
++                                     nir_metadata_control_flow, NULL);
++}
++
++static bool
++panvk_gpu_prerast_lower_sw_vs_intr(nir_builder *b, nir_intrinsic_instr *intr,
++                                   UNUSED void *data)
++{
++   b->cursor = nir_before_instr(&intr->instr);
++   if (intr->intrinsic == nir_intrinsic_load_vertex_id) {
++      nir_def *id = nir_channel(b, nir_load_global_invocation_id(b, 32), 0);
++      nir_def_replace(&intr->def, poly_nir_load_vertex_id(b, id));
++      return true;
++   }
++   if (intr->intrinsic == nir_intrinsic_load_vertex_id_zero_base) {
++      nir_def_replace(
++         &intr->def, nir_channel(b, nir_load_global_invocation_id(b, 32), 0));
++      return true;
++   }
++   if (intr->intrinsic == nir_intrinsic_load_instance_id) {
++      nir_def_replace(
++         &intr->def, nir_channel(b, nir_load_global_invocation_id(b, 32), 1));
++      return true;
++   }
++   return false;
++}
++
++static bool
++poly_nir_lower_sw_vs(nir_shader *s)
++{
++   return nir_shader_intrinsics_pass(s, panvk_gpu_prerast_lower_sw_vs_intr,
++                                     nir_metadata_control_flow, NULL);
++}
++
++static bool
++panvk_gpu_prerast_lower_vs_before_gs_intr(nir_builder *b,
++                                          nir_intrinsic_instr *intr,
++                                          UNUSED void *data)
++{
++   if (intr->intrinsic != nir_intrinsic_store_output)
++      return false;
++
++   b->cursor = nir_instr_remove(&intr->instr);
++   nir_io_semantics sem = nir_intrinsic_io_semantics(intr);
++   uint64_t mask = b->shader->info.outputs_written;
++   unsigned slot =
++      util_bitcount64(mask & (((uint64_t)1 << sem.location) - 1));
++   unsigned nout = util_bitcount64(mask);
++   nir_def *p = nir_load_vertex_param_buffer_poly(b);
++   nir_def *nr_verts = nir_load_global(
++      b, 1, 32,
++      nir_iadd_imm(b, p, offsetof(struct poly_vertex_params, verts_per_instance)),
++      .align_mul = 4);
++   nir_def *out_buf = nir_load_global(
++      b, 1, 64,
++      nir_iadd_imm(b, p, offsetof(struct poly_vertex_params, output_buffer)),
++      .align_mul = 8);
++   nir_def *linear =
++      nir_iadd(b, nir_imul(b, nir_load_instance_id(b), nr_verts),
++               nir_load_vertex_id_zero_base(b));
++   nir_def *addr = nir_iadd(
++      b, out_buf,
++      nir_u2u64(b, nir_iadd_imm(b, nir_imul_imm(b, linear, nout * 16),
++                                slot * 16 + nir_intrinsic_component(intr) * 4)));
++   nir_store_global(b, intr->src[0].ssa, addr,
++                    .write_mask = nir_intrinsic_write_mask(intr),
++                    .align_mul = 4);
++   return true;
++}
++
++static bool
++poly_nir_lower_vs_before_gs(nir_shader *vs)
++{
++   return nir_shader_intrinsics_pass(vs, panvk_gpu_prerast_lower_vs_before_gs_intr,
++                                     nir_metadata_control_flow, NULL);
 +}
 +
 +static nir_shader *
@@ -1042,7 +1182,7 @@ index ae29960..b9a7b4c 100644
  static void
  panvk_hash_state(struct vk_physical_device *device,
                   const struct vk_graphics_pipeline_state *state,
-@@ -511,6 +614,11 @@ panvk_hash_state(struct vk_physical_device *device,
+@@ -511,6 +774,11 @@ panvk_hash_state(struct vk_physical_device *device,
     struct mesa_blake3 blake3_ctx;
     _mesa_blake3_init(&blake3_ctx);
  
@@ -1054,7 +1194,7 @@ index ae29960..b9a7b4c 100644
     if (state != NULL) {
        /* This doesn't impact the shader compile but it does go in the
         * panvk_shader and gets [de]serialized along with the binary so
-@@ -1410,6 +1518,18 @@ panvk_compile_shader(struct panvk_device *dev,
+@@ -1410,6 +1678,18 @@ panvk_compile_shader(struct panvk_device *dev,
     if (shader == NULL)
        return panvk_error(dev, VK_ERROR_OUT_OF_HOST_MEMORY);
  
@@ -1073,7 +1213,7 @@ index ae29960..b9a7b4c 100644
     nir_variable_mode robust_modes = 0;
     if (info->robustness->uniform_buffers != VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DISABLED_EXT)
        robust_modes |= nir_var_mem_ubo;
-@@ -1426,20 +1546,57 @@ panvk_compile_shader(struct panvk_device *dev,
+@@ -1426,20 +1706,57 @@ panvk_compile_shader(struct panvk_device *dev,
  
     switch (info->stage) {
     case MESA_SHADER_VERTEX: {
@@ -1132,7 +1272,7 @@ index ae29960..b9a7b4c 100644
  
  #if PAN_ARCH >= 10 && PAN_ARCH < 14
           if (inputs.view_mask) {
-@@ -1469,14 +1626,24 @@ panvk_compile_shader(struct panvk_device *dev,
+@@ -1469,14 +1786,24 @@ panvk_compile_shader(struct panvk_device *dev,
            * vk_vertex_input_state where there are holes in the attribute
            * locations.
            */
@@ -1164,7 +1304,7 @@ index ae29960..b9a7b4c 100644
           /* This somehow folds the location for multi-slot nir_load/nir_store */
           NIR_PASS(_, nir, nir_opt_constant_folding);
  
-@@ -1486,14 +1653,32 @@ panvk_compile_shader(struct panvk_device *dev,
+@@ -1486,14 +1813,32 @@ panvk_compile_shader(struct panvk_device *dev,
              pan_build_varying_layout_compact(&varying_layout, nir,
                                               inputs.gpu_id);
              inputs.varying_layout = &varying_layout;
@@ -1197,7 +1337,7 @@ index ae29960..b9a7b4c 100644
           /* If we cloned, it's our job to clean up */
           if (clone_nir)
              ralloc_free(nir);
-@@ -1946,6 +2131,12 @@ panvk_deserialize_shader(struct vk_device *vk_dev, struct blob_reader *blob,
+@@ -1946,6 +2291,12 @@ panvk_deserialize_shader(struct vk_device *vk_dev, struct blob_reader *blob,
     if (shader == NULL)
        return panvk_error(device, VK_ERROR_OUT_OF_HOST_MEMORY);
  
@@ -1210,7 +1350,7 @@ index ae29960..b9a7b4c 100644
     result = shader_desc_info_deserialize(device, blob, shader);
     if (result != VK_SUCCESS) {
        panvk_shader_destroy(vk_dev, &shader->vk, pAllocator);
-@@ -2060,6 +2251,10 @@ panvk_shader_serialize(struct vk_device *vk_dev,
+@@ -2060,6 +2411,10 @@ panvk_shader_serialize(struct vk_device *vk_dev,
  
     blob_write_uint8(blob, vk_shader->stage);
  
@@ -1221,70 +1361,3 @@ index ae29960..b9a7b4c 100644
     shader_desc_info_serialize(blob, shader);
  
     panvk_shader_foreach_variant(shader, variant) {
-diff --git a/src/poly/nir/poly_nir.h b/src/poly/nir/poly_nir.h
-index 7071561..9991fd0 100644
---- a/src/poly/nir/poly_nir.h
-+++ b/src/poly/nir/poly_nir.h
-@@ -17,6 +17,7 @@ struct nir_def *poly_load_per_vertex_input(struct nir_builder *b,
-                                            struct nir_def *vertex);
- 
- nir_def *poly_nir_load_vertex_id(struct nir_builder *b, nir_def *id);
-+nir_def *poly_nir_load_raw_vertex_id(struct nir_builder *b, nir_def *id);
- 
- bool poly_nir_lower_sw_vs(struct nir_shader *s);
- 
-diff --git a/src/poly/nir/poly_nir_lower_vs.c b/src/poly/nir/poly_nir_lower_vs.c
-index 08a2197dfbd..c0ffee00001 100644
---- a/src/poly/nir/poly_nir_lower_vs.c
-+++ b/src/poly/nir/poly_nir_lower_vs.c
-@@ -15,26 +15,32 @@
-  * the topology, which happens in the geometry shader.
-  */
- nir_def *
--poly_nir_load_vertex_id(nir_builder *b, nir_def *id)
-+poly_nir_load_raw_vertex_id(nir_builder *b, nir_def *id)
- {
-    /* If drawing with an index buffer, pull the vertex ID. Otherwise, the
-     * vertex ID is just the index as-is.
-     */
-    nir_def *index_size = nir_load_index_size_poly(b);
-    nir_def *index_buffer_id;
-    nir_if *index_size_present = nir_push_if(b, nir_ine_imm(b, index_size, 0));
-    {
-       nir_def *p = nir_load_vertex_param_buffer_poly(b);
-       index_buffer_id = poly_load_index_buffer(b, p, id, index_size);
-    }
-    nir_pop_if(b, index_size_present);
--   nir_def *effective_id = nir_if_phi(b, index_buffer_id, id);
-+   return nir_if_phi(b, index_buffer_id, id);
-+}
- 
--   /* Add the "start", either an index bias or a base vertex. This must happen
--    * after indexing for proper index bias behaviour.
--    */
--   return nir_iadd(b, effective_id, nir_load_first_vertex(b));
-+nir_def *
-+poly_nir_load_vertex_id(nir_builder *b, nir_def *id)
-+{
-+   nir_def *effective_id = poly_nir_load_raw_vertex_id(b, id);
-+
-+   /* Add the "start", either an index bias or a base vertex. This must happen
-+    * after indexing for proper index bias behaviour.
-+    */
-+   return nir_iadd(b, effective_id, nir_load_first_vertex(b));
- }
- 
- static bool
-@@ -41,8 +47,12 @@ lower(nir_builder *b, nir_intrinsic_instr *intr, void *data)
- 
-    if (intr->intrinsic == nir_intrinsic_load_vertex_id) {
-       nir_def *id = nir_channel(b, nir_load_global_invocation_id(b, 32), 0);
-       nir_def_replace(&intr->def, poly_nir_load_vertex_id(b, id));
-       return true;
-+   } else if (intr->intrinsic == nir_intrinsic_load_vertex_id_zero_base) {
-+      nir_def_replace(&intr->def,
-+                      nir_channel(b, nir_load_global_invocation_id(b, 32), 0));
-+      return true;
-    } else if (intr->intrinsic == nir_intrinsic_load_instance_id) {
-       nir_def_replace(&intr->def,
-                       nir_channel(b, nir_load_global_invocation_id(b, 32), 1));

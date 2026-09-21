@@ -48,8 +48,8 @@ required = (
     "nir_load_instance_id",
     "primitive_restart",
     "PANVK_GPU_PRERAST_MAX_INVOCATIONS",
-    "libpoly_nir",
-    "with_panfrost_vk",
+    "static nir_def *",
+    "poly_nir_load_raw_vertex_id",
 )
 for token in required:
     assert token in text, token
