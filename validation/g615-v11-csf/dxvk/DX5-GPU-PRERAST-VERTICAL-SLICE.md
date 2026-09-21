@@ -46,6 +46,7 @@ seqno before IDVS. Arena is released after IDVS scoreboards. No
 ## Device and USB
 
 See `DX5-RUNTIME.md`. This session: 8 sequential ADB on `Y5WWBMJVOZSK4HU8`.
-Identity PASS. Overlay ninja `-j2` FAILED (typeof / cmd_draw order /
-`nir_metadata_preserve` / `PAN_ARCH<10` passthrough). Matrix `NOT_RUN`.
-USB connected, no transport symptom. Candidate ICD hash: none.
+Identity PASS. Four compile defects fixed in tracked 018. Overlay ninja
+`-j2` compiled v6/v7 then FAILED ICD link (`pan_nir_lower_vs_inputs_poly`,
+`poly_nir_load_raw_vertex_id` not rebuilt). Matrix `NOT_RUN`. USB connected,
+no transport symptom. Candidate ICD hash: none.
