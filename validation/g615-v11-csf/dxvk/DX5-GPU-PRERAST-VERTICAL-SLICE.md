@@ -45,5 +45,14 @@ seqno before IDVS. Arena is released after IDVS scoreboards. No
 
 ## Device and USB
 
-Device validation: `NOT_RUN` until a bounded ADB session after this commit.
-ADB calls: `0` for implementation. USB: unused.
+Post-commit identity session on `Y5WWBMJVOZSK4HU8`: `duchamp`, `arm64-v8a`,
+`/dev/mali0` present. USB transport: connected, no disconnect/kernel USB
+symptom. No reusable glibc source/ICD on device.
+
+ADB calls: `2`
+Categories: `1 identity`, `1 inspect`
+Remaining budget: `6`
+
+Device rebuild + matrix cannot fit the remaining 6 calls (`build-glibc.sh`
+needs 6 ADB with no runtime left). Runtime matrix: `NOT_RUN`.
+Candidate ICD hash: none.
