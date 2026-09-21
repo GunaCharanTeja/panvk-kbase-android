@@ -19,21 +19,35 @@ required = (
     "PANVK_GPU_PRERAST_STATE_SAVED_AND_DIRTIED",
     "VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT",
     "VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT",
-    "VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT",
     "PANVK_GPU_PRERAST_MAX_EXECUTION_BYTES",
+    "PANVK_GPU_PRERAST_ARENA_SIZE",
+    "PANVK_DEBUG_GPU_PRERAST",
+    "PANVK_VS_VARIANT_GPU_PASSTHROUGH",
+    "pan_nir_lower_vs_inputs_poly",
     "poly_nir_lower_vs_before_gs",
     "poly_nir_lower_sw_vs",
     "poly_nir_lower_sysvals",
-    "v == PANVK_VS_VARIANT_GPU_LOWERED && info->nir->num_inputs",
     "requirements && lowered_vs_compiled",
     "nir_intrinsic_load_vertex_param_buffer_poly",
     "panvk_lower_gpu_prerast_sysval",
-    "if (!gpu_lower)",
+    "if (!gpu_lower && v != PANVK_VS_VARIANT_GPU_PASSTHROUGH)",
     "bool gpu_lower = false",
     "nir->info.stage = MESA_SHADER_COMPUTE",
     'PANVK_VS_VARIANT_GPU_LOWERED] = "GPU_LOWERED"',
+    'PANVK_VS_VARIANT_GPU_PASSTHROUGH] = "GPU_PASSTHROUGH"',
     "gpu_prerast_abi",
     "lowered_vs_compiled = true",
+    "passthrough_vs_compiled = true",
+    "gpu_prerast_can_lower",
+    "gpu_prerast_draw",
+    "gpu_prerast_wait_compute",
+    "gpu_prerast_release_arena",
+    "cs_sync32_wait",
+    "cs_sync32_add",
+    "nir_load_first_vertex",
+    "nir_load_instance_id",
+    "primitive_restart",
+    "PANVK_GPU_PRERAST_MAX_INVOCATIONS",
     "libpoly_nir",
     "with_panfrost_vk",
 )
@@ -60,13 +74,21 @@ if physical_device.exists():
 
 with tempfile.TemporaryDirectory() as directory:
     checkout = Path(directory) / "mesa"
-    checkout.mkdir()
-    archive = subprocess.Popen(
-        ["git", "-C", ROOT / "work/mesa", "archive", "5a07217f034b3e50d8c7c7794f97a2df1742613b"],
-        stdout=subprocess.PIPE,
+    subprocess.run(
+        ["git", "clone", "--no-checkout", str(ROOT / "work/mesa"), str(checkout)],
+        check=True,
+        stdout=subprocess.DEVNULL,
     )
-    subprocess.run(["tar", "-x", "-C", checkout], stdin=archive.stdout, check=True)
-    assert archive.wait() == 0
-    subprocess.run(["git", "apply", "--recount", "--check", PATCH], cwd=checkout, check=True)
+    subprocess.run(
+        ["git", "-C", checkout, "checkout", "-q",
+         "5a07217f034b3e50d8c7c7794f97a2df1742613b"],
+        check=True,
+    )
+    subprocess.run(
+        [str(ROOT / "scripts/apply-patches.sh"), "--profile", "g615-v11-csf",
+         "--mesa", str(checkout)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
 
-print("PASS: GPU-lowered pre-raster contracts; first VS compute variant; exposure unchanged")
+print("PASS: GPU prerast VS records to IDVS/FS slice; exposure unchanged")
