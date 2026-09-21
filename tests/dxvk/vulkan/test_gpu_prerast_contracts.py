@@ -24,7 +24,8 @@ required = (
     "poly_nir_lower_vs_before_gs",
     "poly_nir_lower_sw_vs",
     "poly_nir_lower_sysvals",
-    "info->nir->num_inputs == 0",
+    "v == PANVK_VS_VARIANT_GPU_LOWERED && info->nir->num_inputs",
+    "requirements && lowered_vs_compiled",
     "nir_intrinsic_load_vertex_param_buffer_poly",
     "panvk_lower_gpu_prerast_sysval",
     "if (!gpu_lower)",
@@ -41,6 +42,8 @@ for token in required:
 
 for forbidden in ("PANVK_PRERAST_SW", "panvk_sw_prerast", "cmd_alloc_dev_mem"):
     assert forbidden not in text, forbidden
+
+assert "gpu_lower = v == PANVK_VS_VARIANT_GPU_LOWERED &&" not in text
 
 physical_device = ROOT / "work/mesa/src/panfrost/vulkan/panvk_vX_physical_device.c"
 if physical_device.exists():

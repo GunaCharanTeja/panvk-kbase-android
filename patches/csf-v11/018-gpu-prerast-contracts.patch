@@ -116,7 +116,8 @@ diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/c
     assert(vs);
  
 +   assert(panvk_gpu_prerast_select(
-+             cmdbuf->state.gfx.vs.shader->gpu_prerast.requirements) ==
++             cmdbuf->state.gfx.vs.shader->gpu_prerast.requirements,
++             cmdbuf->state.gfx.vs.shader->gpu_prerast.lowered_vs_compiled) ==
 +          PANVK_PRERAST_HW_IDVS);
 +
     /* FIXME: support non-IDVS. */
@@ -272,9 +273,10 @@ new file mode 100644
 +panvk_per_arch(gpu_prerast_contract);
 +
 +static inline enum panvk_prerast_path
-+panvk_gpu_prerast_select(uint32_t requirements)
++panvk_gpu_prerast_select(uint32_t requirements, bool lowered_vs_compiled)
 +{
-+   return requirements ? PANVK_PRERAST_GPU_LOWERED : PANVK_PRERAST_HW_IDVS;
++   return requirements && lowered_vs_compiled ? PANVK_PRERAST_GPU_LOWERED
++                                              : PANVK_PRERAST_HW_IDVS;
 +}
 +
 +struct panvk_gpu_prerast_draw
@@ -413,8 +415,10 @@ diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_v
  
 +         bool gpu_lower = false;
 +#if PAN_ARCH >= 10
-+         gpu_lower = v == PANVK_VS_VARIANT_GPU_LOWERED &&
-+                     info->nir->num_inputs == 0;
++         if (v == PANVK_VS_VARIANT_GPU_LOWERED && info->nir->num_inputs)
++            continue;
++
++         gpu_lower = v == PANVK_VS_VARIANT_GPU_LOWERED;
 +         if (gpu_lower) {
 +            nir_assign_io_var_locations(nir, nir_var_shader_out);
 +            panvk_lower_nir_io(nir);
