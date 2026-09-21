@@ -411,9 +411,10 @@ diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_v
           nir_shader *nir =
              clone_nir ? nir_shader_clone(NULL, info->nir) : info->nir;
  
++         bool gpu_lower = false;
 +#if PAN_ARCH >= 10
-+         const bool gpu_lower = v == PANVK_VS_VARIANT_GPU_LOWERED &&
-+                                info->nir->num_inputs == 0;
++         gpu_lower = v == PANVK_VS_VARIANT_GPU_LOWERED &&
++                     info->nir->num_inputs == 0;
 +         if (gpu_lower) {
 +            nir_assign_io_var_locations(nir, nir_var_shader_out);
 +            panvk_lower_nir_io(nir);
