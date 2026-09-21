@@ -26,6 +26,10 @@ Poly NIR helpers used by the slice (`poly_nir_load_raw_vertex_id`,
 `poly_nir_lower_sysvals`) are inlined in `panvk_vX_shader.c`. The device
 tree has no `mesa_clc`, so `libpoly_nir` is not linked.
 
+Tracked 018 now gates the arena on `PANVK_DEBUG=gpu_prerast` and sizes it
+to 256 KiB / 4096 invocations. Device rebuild of that overlay is still
+pending (`scripts/dxvk/dx5-device-validate.sh`).
+
 ## Semantic matrix
 
 | Case | Status | Mechanism |
@@ -53,9 +57,12 @@ seqno before IDVS. Arena is released after IDVS scoreboards. No
 
 ## Device and USB
 
-See `DX5-RUNTIME.md`. This session: 8 sequential ADB on `Y5WWBMJVOZSK4HU8`.
-Identity PASS. Ninja `-j2` LINK PASS. `vkCreateDevice` SIGSEGV 139. Matrix
-`NOT_RUN`. USB connected, no transport symptom.
+See `DX5-RUNTIME.md`. This session: identity ADB on `Y5WWBMJVOZSK4HU8`
+failed, then serial disappeared (`device not found`). Overlay, ninja,
+CreateDevice, matrix `NOT_RUN`. USB disconnected. No kernel USB line
+observed. No further ADB.
+
+Previous linked ICD (not the gated 256 KiB overlay):
 
 ```text
 ICD sha256: 61ab189087f9d34bfde2969c2e5d707f5725f0ad3a9e687257c532d7610e973a
