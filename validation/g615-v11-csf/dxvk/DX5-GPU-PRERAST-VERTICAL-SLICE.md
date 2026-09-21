@@ -1,6 +1,6 @@
 # DX5 GPU pre-raster vertical slice
 
-Status: `IMPLEMENTED_DEV_ONLY`
+Status: `IMPLEMENTED_DEV_ONLY` (linked; CreateDevice not proven)
 
 Development routing is `PANVK_DEBUG=gpu_prerast`. No Vulkan feature or
 extension exposure changed.
@@ -16,9 +16,15 @@ extension exposure changed.
 3. Producer/consumer: compute writes generated `uint32` indices and a
    `VkDrawIndexedIndirectCommand`; CSF waits compute seqno, then IDVS consumes
    those GPU records. No host readback between stages.
-4. Lifetime: device-owned arena with GPU `SYNC32` acquire/release. Command
-   streams store parameters at submit time. Simultaneous-use is no longer
-   rejected. Replay uses the same immutable arena address.
+4. Lifetime: device-owned arena with GPU `SYNC32` acquire/release, allocated
+   only when `PANVK_DEBUG=gpu_prerast`. Command streams store parameters at
+   submit time. Simultaneous-use is no longer rejected. Replay uses the same
+   immutable arena address.
+
+Poly NIR helpers used by the slice (`poly_nir_load_raw_vertex_id`,
+`poly_nir_lower_sw_vs`, `poly_nir_lower_vs_before_gs`,
+`poly_nir_lower_sysvals`) are inlined in `panvk_vX_shader.c`. The device
+tree has no `mesa_clc`, so `libpoly_nir` is not linked.
 
 ## Semantic matrix
 
@@ -37,6 +43,8 @@ extension exposure changed.
 | simultaneous submission | IMPLEMENTED | GPU arena semaphore |
 | normal IDVS before/after | IMPLEMENTED | debug-only select; VS/FAU dirtied after |
 
+Runtime of that matrix is `NOT_RUN`. See `DX5-RUNTIME.md`.
+
 ## Ordering and readback
 
 Compute signals `PANVK_SUBQUEUE_COMPUTE` sync64. Vertex-tiler waits that
@@ -46,7 +54,10 @@ seqno before IDVS. Arena is released after IDVS scoreboards. No
 ## Device and USB
 
 See `DX5-RUNTIME.md`. This session: 8 sequential ADB on `Y5WWBMJVOZSK4HU8`.
-Identity PASS. Four compile defects fixed in tracked 018. Overlay ninja
-`-j2` compiled v6/v7 then FAILED ICD link (`pan_nir_lower_vs_inputs_poly`,
-`poly_nir_load_raw_vertex_id` not rebuilt). Matrix `NOT_RUN`. USB connected,
-no transport symptom. Candidate ICD hash: none.
+Identity PASS. Ninja `-j2` LINK PASS. `vkCreateDevice` SIGSEGV 139. Matrix
+`NOT_RUN`. USB connected, no transport symptom.
+
+```text
+ICD sha256: 61ab189087f9d34bfde2969c2e5d707f5725f0ad3a9e687257c532d7610e973a
+size: 20053320
+```
