@@ -142,10 +142,64 @@ zeroInitializeDeviceMemory issue, not BC. Open.
 Regression on the same ICD: dx5 IDVS/gpu_prerast 13/13, clip-cull 13/13,
 multi-viewport 5/5, fill-mode 17/17 (all `*_FAILS=0`).
 
+## 2026-09-29 re-test
+
+Mesa `work/mesa` `dx6-dx7-base` HEAD `bdd0c26cc5e` (GS behind `PANVK_DEBUG=gs`)
+on `efce7cc4382` ("panfrost/kmod: kbase: zero BO pages at allocation") on
+`89274dbd817` (= `csf-v11/040`). Uncommitted TMP debug code stashed first
+(`stash@{0}` "TMP debug BC5 3D timeout"); tree clean.
+ADB `192.168.1.61:41161` (duchamp, Mali-G615 MC6), chroot
+`/data/local/tmp/chrootAlpine`. Device `/tmp/mesa` synced to HEAD (sha256 of all
+75 files changed since pin `5a07217f` identical), `/tmp/bld.sh`
+(`ninja -j4 -C /tmp/build-glibc src/panfrost/vulkan/libvulkan_panfrost.so`),
+`NINJA_RC=0`. ICD sha256 `3a10ad4adda689c66d7dd104d649e8be6bb7222cfc0cfd76c52ca923d05d25f0`,
+`VK_ICD_FILENAMES=/tmp/bp-icd.json`.
+
+`memory.zero_initialize_device_memory.image_transition` (432 cases, `/tmp/cts-zi.sh`):
+
+| build | Pass | Fail | NotSupported |
+|---|---|---|---|
+| 040 (baseline) | 160 | 248 | 24 |
+| `bdd0c26cc5e` (kbase zeroes BO pages) | **408** | **0** | 24 |
+
+NotSupported: "Format not supported for the target usage" (16 + 8). The general
+zeroInitializeDeviceMemory bug is fixed by `efce7cc4382`.
+
+Full `api.copy_and_blit` BC subset, no sampling (22764 cases, `/tmp/cab.sh
+'api.copy_and_blit' cab3`: `deqp-vk --deqp-caselist-file`, resumes after an
+aborted case):
+
+| run | Pass | Fail | NotSupported | DeviceLost |
+|---|---|---|---|---|
+| 1/20 sample (040) | 465 | 0 | 673 | 0 |
+| full (`bdd0c26cc5e`) | 9619 | 0 | 13144 | 1 |
+
+Runtime 83 s, 2 deqp processes (one resume). The DeviceLost:
+
+```text
+dEQP-VK.api.copy_and_blit.core.blit_image.all_formats.color.2d.bc2_srgb_block.r8g8b8a8_srgb.optimal_optimal_linear
+vk.waitForFences(...): VK_ERROR_DEVICE_LOST at vkCmdUtil.cpp:296
+MESA: error: kbase: timeout on subqueue 0: seqno 33910, ... target 33911, insert 6555712, extract 6555632
+MESA: error: kbase_queue_wait_current: failed to wait for subqueue 0 seqno 33911
+dmesg: mali 13000000.mali: Timeout waiting for dump completion; Terminate ctx ..., kbase_csf_ctx_handle_fault
+```
+
+It is position-dependent, not case-dependent: the case passes alone, the 45-case
+window before it passes, and all 12 `bc2_srgb -> r8g8b8a8_srgb` blits pass
+(8 Pass, 4 cubic NotSupported). An earlier full run on a pre-`efce7cc4382` build
+(`/tmp/cts-cabfull`) hung at the same case and the same subqueue-0 seqno 33911,
+then aborted (17274 results). The same class as the earlier one-off BC5 3D
+`texel_view_compatible` timeout in a long batch. Likely a per-process resource
+that is exhausted after about 34k submissions (for example, ring/syncobj/BO
+growth in the kbase queue path), not BC decode. Not root-caused.
+
 ## Still open
 
 - `vkCmdCopyImage` uncompressed->BC and cube-view specific checks beyond CTS sample.
-- Full `api.copy_and_blit` BC run (only 1/20 sampled).
+- ~~Long-batch queue timeout at subqueue-0 seqno 33911~~ fixed by `9add58a66ee`
+  (exported as `csf-v11/043`):
+  the kbase tiler heap was never renewed (`tiler_work_estimate` never set).
+  Full copy_and_blit is now 9620/0/13144 with 0 DeviceLost. See `SUBMIT-EXHAUSTION.md`.
 - Host-mapped writes to BC optimal images are undefined by spec; not handled.
 - BC6H UF16<->SF16 mutable views decode with the image format.
 - Memory: decoded plane adds 4-8x the raw size per BC image.
