@@ -1,10 +1,11 @@
 # DXVK Native early probe
 
-`dxvk_native_probe.cpp` is the compile-time starting point for DX3 and later
-runtime work. It creates an SDL2 Vulkan window, then requests either a D3D9
-device or D3D11 feature levels 11.1, 11.0, and 10.1 in that order. The
-`d3d11-headless` mode bypasses SDL window creation so baseline adapter rejection
-remains testable when the target has no display session.
+`dxvk_native_probe.cpp` creates an SDL2 Vulkan window, then requests either a
+D3D9 device or D3D11 feature levels 11.1, 11.0, and 10.1 in that order. The
+`d3d9-workload` mode draws a fixed-function triangle and checks a GPU readback;
+`d3d9-present` also presents the frame. `d3d11-workload` clears a render target,
+copies it to staging memory, and checks a GPU readback. `d3d11-headless` skips window creation but
+still initializes SDL2 video for stock DXVK's Vulkan extension provider.
 
 Build only on the target AArch64 glibc environment against the pinned, stock
 DXVK Native build:
@@ -21,5 +22,14 @@ c++ -std=c++17 dxvk_native_probe.cpp -o dxvk-native-probe \
   -ldxvk_d3d9 -ldxvk_d3d11
 ```
 
-Do not treat compilation as runtime proof. DX3 must set `DXVK_WSI_DRIVER=SDL2`
-and force the recorded PanVK glibc ICD before running this executable.
+On the G615 Alpine chroot, start a virtual X display:
+
+```sh
+Xvfb :99 -screen 0 1280x720x24 -nolisten tcp -ac
+```
+
+Run the probe with `DISPLAY=:99`,
+`SDL_VIDEODRIVER=x11`, `DXVK_WSI_DRIVER=SDL2`, and
+`VK_DRIVER_FILES=/tmp/bp-icd.json` for the current PanVK glibc ICD. Run both
+workload modes and record the exit codes, pixel checks, and DXVK feature level.
+Xvfb supplies an SDL display; the workload readbacks verify GPU output.

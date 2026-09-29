@@ -98,3 +98,10 @@ submission-count trace is `BLOCKED`, not PASS.
 `PARTIAL`: same-candidate ICD creation and offscreen rendering pass. Presentation,
 expected stock DXVK baseline rejection, and non-crashing GPU submission trace
 remain unresolved. DX4 must not start from this result.
+
+## 2026-09-29 continuation
+
+The later Xvfb-backed DXVK Native run creates D3D9 and D3D11 devices and passes
+GPU-rendered D3D9 and D3D11 readback workloads on the integrated G615 driver.
+See `DX8-NATIVE-WORKLOAD.md`. The earlier crash was limited to the no-display
+SDL2 startup path; physical presentation remains unverified.
