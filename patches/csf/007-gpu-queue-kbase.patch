@@ -802,12 +802,28 @@ Validation test: x86 smoke build; runtime Gates C-H on Poco.
 +         break;
 +
 +      if (cell->error) {
-+         mesa_loge("kbase: CS error 0x%x on subqueue %u", cell->error,
-+                   subqueue);
++         /* CS output block mirrors the CS registers. cell->error is only
++          * a fault flag; CS_FAULT (0x80) and CS_FAULT_INFO (0x88) carry
++          * the exception type and the fault address. A real fault has a
++          * non-zero exception type. Exception type 0 with info 0 is not
++          * a GPU exception — keep waiting for the seqno. */
++         uint32_t cs_fault = *(volatile uint32_t *)(output_page + 0x80);
++         uint32_t cs_fault_lo = *(volatile uint32_t *)(output_page + 0x88);
++         uint32_t cs_fault_hi = *(volatile uint32_t *)(output_page + 0x8c);
++         uint32_t exc = cs_fault & 0xffu;
++         if (exc == 0 && cs_fault_lo == 0 && cs_fault_hi == 0)
++            goto kbase_wait_continue;
++         mesa_loge("kbase: CS error 0x%x on subqueue %u"
++                   " fault 0x%x info 0x%08x%08x",
++                   cell->error, subqueue, cs_fault, cs_fault_hi, cs_fault_lo);
 +         return vk_queue_set_lost(&queue->vk,
-+                                  "kbase: CS error 0x%x on subqueue %u",
-+                                  cell->error, subqueue);
++                                  "kbase: CS error 0x%x on subqueue %u"
++                                  " fault 0x%x info 0x%08x%08x",
++                                  cell->error, subqueue, cs_fault,
++                                  cs_fault_hi, cs_fault_lo);
 +      }
++
++   kbase_wait_continue:
 +
 +      int64_t now = os_time_get_nano();
 +

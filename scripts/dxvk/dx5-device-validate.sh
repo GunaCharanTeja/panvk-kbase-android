@@ -79,11 +79,12 @@ log "=== force rebuild changed files ==="
 find "$BUILD" \( \
    -name '*gpu_prerast*.o' -o \
    -name '*panvk_v11_device*.o' -o \
-   -name '*panvk_v11_cmd_draw*.o' -o \
+   -name '*cmd_draw*.o' -o \
    -name '*panvk_v11_shader*.o' -o \
    -name '*pan_nir_lower_vs_inputs*.o' -o \
    -name '*bifrost_compile*.o' -o \
-   -name '*panvk_instance*.o' \
+   -name '*panvk_instance*.o' -o \
+   -name '*nir_lower_io*.o' \
 \) -print -delete | while IFS= read -r p; do
    log "RM_OBJ $p"
 done
@@ -102,11 +103,12 @@ if [ "$nr" -ne 0 ]; then
    find "$BUILD" \( \
       -name '*gpu_prerast*.d' -o \
       -name '*panvk_v11_device*.d' -o \
-      -name '*panvk_v11_cmd_draw*.d' -o \
+       -name '*cmd_draw*.d' -o \
       -name '*panvk_v11_shader*.d' -o \
       -name '*pan_nir_lower_vs_inputs*.d' -o \
       -name '*bifrost_compile*.d' -o \
-      -name '*panvk_instance*.d' \
+      -name '*panvk_instance*.d' -o \
+      -name '*nir_lower_io*.d' \
    \) -delete
    set +e
    ninja_once

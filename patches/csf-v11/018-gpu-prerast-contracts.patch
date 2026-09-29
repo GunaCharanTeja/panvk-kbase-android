@@ -1088,7 +1088,7 @@ index ae29960..b9a7b4c 100644
 +}
 +
 +static bool
-+poly_nir_lower_vs_before_gs(nir_shader *vs)
++panvk_gpu_prerast_lower_vs_outputs(nir_shader *vs)
 +{
 +   return nir_shader_intrinsics_pass(vs, panvk_gpu_prerast_lower_vs_before_gs_intr,
 +                                     nir_metadata_control_flow, NULL);
@@ -1213,7 +1213,7 @@ index ae29960..b9a7b4c 100644
     nir_variable_mode robust_modes = 0;
     if (info->robustness->uniform_buffers != VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_DISABLED_EXT)
        robust_modes |= nir_var_mem_ubo;
-@@ -1426,20 +1706,57 @@ panvk_compile_shader(struct panvk_device *dev,
+@@ -1426,20 +1706,40 @@ panvk_compile_shader(struct panvk_device *dev,
  
     switch (info->stage) {
     case MESA_SHADER_VERTEX: {
@@ -1244,15 +1244,6 @@ index ae29960..b9a7b4c 100644
 +         gpu_lower = v == PANVK_VS_VARIANT_GPU_LOWERED;
 +         if (gpu_lower) {
 +            nir_assign_io_var_locations(nir, nir_var_shader_out);
-+            panvk_lower_nir_io(nir);
-+            NIR_PASS(_, nir, pan_nir_lower_vs_inputs_poly, inputs.gpu_id);
-+            NIR_PASS(_, nir, poly_nir_lower_vs_before_gs);
-+            panvk_gpu_prerast_emit_generated_records(nir);
-+            NIR_PASS(_, nir, poly_nir_lower_sw_vs);
-+            NIR_PASS(_, nir, poly_nir_lower_sysvals);
-+            NIR_PASS(_, nir, nir_shader_intrinsics_pass,
-+                     panvk_lower_gpu_prerast_sysval,
-+                     nir_metadata_control_flow, NULL);
 +            nir->xfb_info = NULL;
 +         }
 +#endif
@@ -1261,18 +1252,10 @@ index ae29960..b9a7b4c 100644
                           info->set_layouts, info->robustness,
 -                         state, &shader->desc_info, false);
 +                          state, &shader->desc_info, false);
-+
-+         if (gpu_lower) {
-+            nir->info.stage = MESA_SHADER_COMPUTE;
-+            memset(&nir->info.cs, 0, sizeof(nir->info.cs));
-+            nir->info.workgroup_size[0] = 1;
-+            nir->info.workgroup_size[1] = 1;
-+            nir->info.workgroup_size[2] = 1;
-+         }
  
  #if PAN_ARCH >= 10 && PAN_ARCH < 14
           if (inputs.view_mask) {
-@@ -1469,14 +1786,24 @@ panvk_compile_shader(struct panvk_device *dev,
+@@ -1469,14 +1746,43 @@ panvk_compile_shader(struct panvk_device *dev,
            * vk_vertex_input_state where there are holes in the attribute
            * locations.
            */
@@ -1297,14 +1280,33 @@ index ae29960..b9a7b4c 100644
 +         if (!gpu_lower && v != PANVK_VS_VARIANT_GPU_PASSTHROUGH) {
 +#endif
 +            nir_assign_io_var_locations(nir, nir_var_shader_out);
++#if PAN_ARCH >= 10
++         }
++         if (v != PANVK_VS_VARIANT_GPU_PASSTHROUGH) {
++#endif
 +            panvk_lower_nir_io(nir);
 +#if PAN_ARCH >= 10
++            if (gpu_lower) {
++               NIR_PASS(_, nir, pan_nir_lower_vs_inputs_poly, inputs.gpu_id);
++               NIR_PASS(_, nir, panvk_gpu_prerast_lower_vs_outputs);
++               panvk_gpu_prerast_emit_generated_records(nir);
++               NIR_PASS(_, nir, poly_nir_lower_sw_vs);
++               NIR_PASS(_, nir, poly_nir_lower_sysvals);
++               NIR_PASS(_, nir, nir_shader_intrinsics_pass,
++                        panvk_lower_gpu_prerast_sysval,
++                        nir_metadata_control_flow, NULL);
++               nir->info.stage = MESA_SHADER_COMPUTE;
++               memset(&nir->info.cs, 0, sizeof(nir->info.cs));
++               nir->info.workgroup_size[0] = 1;
++               nir->info.workgroup_size[1] = 1;
++               nir->info.workgroup_size[2] = 1;
++            }
 +         }
 +#endif
           /* This somehow folds the location for multi-slot nir_load/nir_store */
           NIR_PASS(_, nir, nir_opt_constant_folding);
  
-@@ -1486,14 +1813,32 @@ panvk_compile_shader(struct panvk_device *dev,
+@@ -1486,14 +1789,32 @@ panvk_compile_shader(struct panvk_device *dev,
              pan_build_varying_layout_compact(&varying_layout, nir,
                                               inputs.gpu_id);
              inputs.varying_layout = &varying_layout;

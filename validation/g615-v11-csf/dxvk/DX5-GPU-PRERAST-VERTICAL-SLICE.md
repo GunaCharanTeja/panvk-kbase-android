@@ -47,7 +47,7 @@ pending (`scripts/dxvk/dx5-device-validate.sh`).
 | simultaneous submission | IMPLEMENTED | GPU arena semaphore |
 | normal IDVS before/after | IMPLEMENTED | debug-only select; VS/FAU dirtied after |
 
-Runtime of that matrix is `NOT_RUN`. See `DX5-RUNTIME.md`.
+Runtime of that matrix is `FAIL` (SIGSEGV 139 both IDVS and `gpu_prerast`, no `CASE` lines). See `DX5-RUNTIME.md`.
 
 ## Ordering and readback
 

@@ -24,7 +24,7 @@ required = (
     "PANVK_DEBUG_GPU_PRERAST",
     "PANVK_VS_VARIANT_GPU_PASSTHROUGH",
     "pan_nir_lower_vs_inputs_poly",
-    "poly_nir_lower_vs_before_gs",
+    "panvk_gpu_prerast_lower_vs_outputs",
     "poly_nir_lower_sw_vs",
     "poly_nir_lower_sysvals",
     "requirements && lowered_vs_compiled",

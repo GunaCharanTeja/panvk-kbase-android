@@ -1,46 +1,43 @@
 # DX5 runtime session
 
-Status: `BLOCKED_USB_DISCONNECT`
+Status: `MATRIX_FAIL`
 
-Serial `Y5WWBMJVOZSK4HU8`. Sequential ADB only. Identity once intended.
-No server ops, USB reset, reboot, polling, or `PANVK_DEBUG=kbase_diag|trace`.
-Stopped on transport disconnect. Overlay/rebuild/CreateDevice/matrix **not run**.
+Serial `Y5WWBMJVOZSK4HU8` via network ADB `192.168.1.34:32913`.
+Identity once. No overlay rebuild this chunk. CreateDevice IDVS +
+`PANVK_DEBUG=gpu_prerast` both PASS r=0. Matrix SIGSEGV 139 both paths.
 
 ## ADB (this session)
 
 | # | Category | Result |
 |---|---|---|
-| 1 | identity | FAIL: `adb -s Y5WWBMJVOZSK4HU8 shell` returned; host-expanded `getprop` printed empty serial, not `Y5WWBMJVOZSK4HU8` |
-| — | follow-up | `adb -s Y5WWBMJVOZSK4HU8 get-state` → `error: device 'Y5WWBMJVOZSK4HU8' not found` |
-| — | list | `adb devices -l` empty. `lsusb` has no Xiaomi/Android gadget (only Foxconn MediaTek Bluetooth `0489:e0cd`) |
+| 1 | identity | PASS: `getprop ro.serialno=Y5WWBMJVOZSK4HU8`, `duchamp`, `2311DRK48I`, `arm64-v8a`, `/dev/mali0`, Mali-G615 6 cores `0xB8A3` |
+| 2 | checksum-push | `/tmp/opencode/dx5-validate.tar.gz` sha256 `dfdd306ed814d925a159969f1d5f627bf55a66d1c5dcac46b7bb413475ebb9ee` into chroot `/tmp/dx5-validate.tar.gz` (match) |
+| 3 | overlay+ninja | chroot overlay 018 + `ninja -j2`; CreateDevice/matrix truncated |
 
-Push, chroot script, ninja, CreateDevice, matrix, log pull: **NOT_RUN**.
-Transport error: device not found. Disconnect: **yes**. Kernel USB symptom in `dmesg`: **none observed** (no further ADB).
+Transport errors: `0`. Disconnects: `0`.
 
-## Host (no device compile)
-
-Tracked 018 already contains the CreateDevice gate:
+## Device rebuild
 
 ```text
-PANVK_DEBUG(GPU_PRERAST) arena alloc
-PANVK_GPU_PRERAST_ARENA_SIZE (256ull * 1024)
-```
-
-That overlay was **not** rebuilt on device this session. Linked ICD from the previous session remains:
-
-```text
+OVERLAY_ARENA=#define PANVK_GPU_PRERAST_ARENA_SIZE (256ull * 1024)
+OVERLAY_GATE=PANVK_DEBUG(GPU_PRERAST)
+EXPOSURE_SOURCE=false
+NINJA PASS
 path: /tmp/build-glibc/src/panfrost/vulkan/libvulkan_panfrost.so
 size: 20053320
-sha256: 61ab189087f9d34bfde2969c2e5d707f5725f0ad3a9e687257c532d7610e973a
+sha256: f38bee643aec947fe9b97288e0701182c70324149ca1a5cc29a8a6de7f1c40ca
+ICD_STRINGS=gpu_prerast
+ELF: ARM aarch64, BuildID[sha1]=f2fea46665b9d9001cb281b83a5a638126b81bfc
 ```
 
-That binary still allocated a 64 MiB host-mapped arena on every
-`vkCreateDevice` (SIGSEGV 139). Tracked 018 is not in it.
+Replaced stale ICD `61ab189087f9d34bfde2969c2e5d707f5725f0ad3a9e687257c532d7610e973a`
+(64 MiB arena SIGSEGV). Tracked 018 256 KiB / `PANVK_DEBUG(GPU_PRERAST)`
+gate is now in the linked ICD.
 
 Device script: `scripts/dxvk/dx5-device-validate.sh`
 sha256 `8a5056b6f2bdeda93e447a6c44d28ebb6a98a8868806155a1813dd4391d7b7cb`
 
-Staged overlay tarball (host only, not pushed):
+Staged overlay tarball:
 `/tmp/opencode/dx5-validate.tar.gz`
 sha256 `dfdd306ed814d925a159969f1d5f627bf55a66d1c5dcac46b7bb413475ebb9ee`
 
@@ -63,24 +60,22 @@ Public feature bits in reconstructed Mesa remain false
 
 ## Matrix
 
-All cases `NOT_RUN` (USB disconnect before overlay):
+`SLICE_COMPILE=PASS`. Same ICD `f38bee64…`.
 
+| Path | RC | Note |
+|---|---|---|
+| MATRIX_IDVS | 139 | CreateDevice printed; SIGSEGV before CASE |
+| MATRIX_PRERAST | 139 | CreateDevice printed; SIGSEGV before CASE |
+
+Cases all `NOT_RUN` (crash, not skip):
 direct, indexed, instanced, base vertex, first instance, zero counts,
 repeated indices, primitive restart, GPU-written indirect, replay,
 simultaneous, IDVS before/after.
 
-CreateDevice default IDVS: `NOT_RUN`
-CreateDevice `PANVK_DEBUG=gpu_prerast`: `NOT_RUN`
+CreateDevice default IDVS: `PASS r=0`
+CreateDevice `PANVK_DEBUG=gpu_prerast`: `PASS r=0`
 
-## Remaining blocker
+## Remaining
 
-`Y5WWBMJVOZSK4HU8` disconnected after the identity attempt.
-Do not overlay/rebuild until the serial is present again.
-
-Then run **one** `adb -s Y5WWBMJVOZSK4HU8 shell` identity that evaluates
-`getprop` **on the device**, checksum-push
-`scripts/dxvk/dx5-device-validate.sh` plus overlay/harness, one chroot
-invocation of that script (`ninja -j2`, CreateDevice, matrix), optional
-log pull. Max 4 ADB. Stop on disconnect.
-
-USB: **disconnected**. DX6 not started.
+Next: diagnose slice SIGSEGV 139. Same ADB/serial/ICD.
+No overlay rebuild unless required. No DX6.
