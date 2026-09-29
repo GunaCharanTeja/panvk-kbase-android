@@ -6,6 +6,9 @@ layout(location = 1) out vec2 vuv;
 
 out gl_PerVertex {
    vec4 gl_Position;
+#ifdef PSIZE
+   float gl_PointSize;
+#endif
 #if NCLIP > 0
    float gl_ClipDistance[NCLIP];
 #endif
@@ -20,6 +23,9 @@ main()
    gl_Position = vec4(a.xy, 0.0, 1.0);
    vcol = vec4(1.0, 0.0, 0.0, 1.0);
    vuv = a.xy * 0.5 + 0.5;
+#ifdef PSIZE
+   gl_PointSize = PSIZE;
+#endif
 #if NCLIP > 0
    for (int i = 0; i < NCLIP; i++)
       gl_ClipDistance[i] = 1.0;

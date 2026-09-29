@@ -10,14 +10,22 @@ PANVK = MESA / "src/panfrost/vulkan"
 VALHALL_XML = MESA / "src/panfrost/genxml/v11.xml"
 
 
+PROOF = ROOT / "validation/g615-v11-csf/dxvk/DX7-FILL-MODE.md"
+
+
+# DX7 (patch 025): fillModeNonSolid is exposed on v10+ through the GPU
+# polygon kernel on the gpu_prerast path (no hardware polygon mode exists),
+# only after the fill_mode device draw test passed. Dynamic polygon mode stays
+# off because the variant is chosen at pipeline compile time.
 class FillModeSafeFalseTest(unittest.TestCase):
     def test_features_remain_disabled(self):
         source = PHYSICAL_DEVICE.read_text()
-        self.assertRegex(source, r"\.fillModeNonSolid\s*=\s*false,")
+        self.assertRegex(source, r"\.fillModeNonSolid\s*=\s*PAN_ARCH >= 10,")
         self.assertRegex(
             source, r"\.extendedDynamicState3PolygonMode\s*=\s*false,"
         )
         self.assertNotRegex(source, r"\.fillModeNonSolid\s*=\s*true,")
+        self.assertIn("FILL_MODE_FAILS=0", PROOF.read_text())
 
     def test_panvk_has_no_polygon_mode_implementation(self):
         pattern = re.compile(r"polygon_mode|polygonMode", re.IGNORECASE)
@@ -29,8 +37,11 @@ class FillModeSafeFalseTest(unittest.TestCase):
             if pattern.search(source):
                 matches.append(str(path.relative_to(MESA)))
         self.assertEqual(
-            matches,
-            [],
+            sorted(matches),
+            [
+                "src/panfrost/vulkan/csf/panvk_gpu_prerast.c",
+                "src/panfrost/vulkan/panvk_vX_shader.c",
+            ],
             "unexpected PanVK polygon-mode path; reassess P11:\n"
             + "\n".join(matches),
         )

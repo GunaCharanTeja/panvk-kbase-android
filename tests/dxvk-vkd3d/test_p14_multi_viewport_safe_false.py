@@ -15,19 +15,25 @@ VALHALL_H = MESA / "src/panfrost/compiler/bifrost/valhall/valhall.h"
 SHADER_H = MESA / "src/panfrost/vulkan/panvk_shader.h"
 
 
+PROOF = ROOT / "validation/g615-v11-csf/dxvk/DX7-MULTIVIEWPORT.md"
+
+
+# DX7 (patch 024): multiViewport is exposed on v10+ because no exposed stage
+# can write ViewportIndex, so viewport/scissor 0 is always correct; proven by
+# the multi_viewport device draw test. ViewportIndex output stays off.
 class MultiViewportSafeFalseTest(unittest.TestCase):
     def test_features_remain_disabled(self):
         source = PHYSICAL_DEVICE.read_text()
-        self.assertRegex(source, r"\.multiViewport\s*=\s*false,")
+        self.assertRegex(source, r"\.multiViewport\s*=\s*PAN_ARCH >= 10,")
         self.assertRegex(source, r"\.shaderOutputViewportIndex\s*=\s*false,")
-        self.assertRegex(source, r"\.maxViewports\s*=\s*1,")
+        self.assertRegex(source, r"\.maxViewports\s*=\s*PAN_ARCH >= 10 \? 16 : 1,")
         self.assertNotRegex(source, r"\.multiViewport\s*=\s*true,")
         self.assertNotRegex(source, r"\.shaderOutputViewportIndex\s*=\s*true,")
-        self.assertNotRegex(source, r"\.maxViewports\s*=\s*[2-9]")
+        self.assertIn("MULTI_VIEWPORT_FAILS=0", PROOF.read_text())
 
     def test_not_confused_with_multiview(self):
         source = PHYSICAL_DEVICE.read_text()
-        self.assertRegex(source, r"\.multiViewport\s*=\s*false,")
+        self.assertRegex(source, r"\.multiViewport\s*=\s*PAN_ARCH >= 10,")
         self.assertRegex(source, r"\.multiview\s*=\s*true,")
         self.assertRegex(source, r"\.maxMultiviewViewCount\s*=")
 

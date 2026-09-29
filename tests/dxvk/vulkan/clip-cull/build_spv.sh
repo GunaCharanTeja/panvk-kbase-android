@@ -10,6 +10,7 @@ v() {
       -o "$T/$name.h" clip_cull.vert >/dev/null
 }
 v vs_none -DNCLIP=0 -DNCULL=0
+v vs_psize1 -DNCLIP=0 -DNCULL=0 -DPSIZE=1.0
 v vs_clip1_x -DNCLIP=1 -DNCULL=0 -DCLIPX=0
 v vs_clip2_xy -DNCLIP=2 -DNCULL=0 -DCLIPX=0 -DCLIPY=1
 v vs_clip6_x5 -DNCLIP=6 -DNCULL=0 -DCLIPX=5

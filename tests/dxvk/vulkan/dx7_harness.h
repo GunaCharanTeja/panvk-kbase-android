@@ -31,6 +31,7 @@
    X(AllocateCommandBuffers) X(BeginCommandBuffer) X(ResetCommandBuffer)       \
    X(CmdBeginRenderPass) X(CmdBindPipeline) X(CmdBindVertexBuffers)            \
    X(CmdBindIndexBuffer) X(CmdDraw) X(CmdDrawIndexed) X(CmdPushConstants)      \
+   X(CmdDrawIndirect) X(CmdDrawIndexedIndirect)                                \
    X(CmdSetViewport) X(CmdSetScissor) X(CmdEndRenderPass)                      \
    X(CmdCopyImageToBuffer) X(CmdPipelineBarrier) X(EndCommandBuffer)           \
    X(CreateFence) X(QueueSubmit) X(WaitForFences) X(ResetFences)               \
@@ -272,6 +273,7 @@ struct dx7_pipe_desc {
    const VkViewport *viewports;
    const VkRect2D *scissors;
    uint32_t vertex_stride;
+   int primitive_restart;
 };
 
 static VkPipeline
@@ -298,7 +300,8 @@ dx7_pipeline(struct dx7 *t, const struct dx7_pipe_desc *d)
       .pVertexAttributeDescriptions = &va};
    VkPipelineInputAssemblyStateCreateInfo ia = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-      .topology = d->topology};
+      .topology = d->topology,
+      .primitiveRestartEnable = d->primitive_restart};
    VkViewport vp1 = {0, 0, RT_W, RT_H, 0, 1};
    VkRect2D sc1 = {{0, 0}, {RT_W, RT_H}};
    uint32_t nvp = d->viewport_count ? d->viewport_count : 1;

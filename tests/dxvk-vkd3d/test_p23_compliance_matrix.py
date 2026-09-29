@@ -96,13 +96,17 @@ class P23ComplianceMatrixTest(unittest.TestCase):
         for name in (
             "geometryShader",
             "tessellationShader",
+            "pipelineStatisticsQuery",
+        ):
+            self.assertRegex(source, rf"\.{name}\s*=\s*false,")
+        # DX7 device-proven bits (validation/g615-v11-csf/dxvk/DX7-*.md).
+        for name in (
             "fillModeNonSolid",
             "multiViewport",
             "shaderClipDistance",
             "shaderCullDistance",
-            "pipelineStatisticsQuery",
         ):
-            self.assertRegex(source, rf"\.{name}\s*=\s*false,")
+            self.assertRegex(source, rf"\.{name}\s*=\s*PAN_ARCH >= 10,")
         self.assertNotRegex(source, r"\.sparseBinding\s*=\s*true")
         self.assertNotRegex(source, r"\.textureCompressionBC\s*=\s*true")
 

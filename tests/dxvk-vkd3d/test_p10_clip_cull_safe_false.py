@@ -12,26 +12,25 @@ PHYSICAL_DEVICE = (
 PANVK = MESA / "src/panfrost/vulkan"
 
 
-class ClipCullSafeFalseTest(unittest.TestCase):
-    def test_features_remain_disabled(self):
-        source = PHYSICAL_DEVICE.read_text()
-        self.assertRegex(source, r"\.shaderClipDistance\s*=\s*false,")
-        self.assertRegex(source, r"\.shaderCullDistance\s*=\s*false,")
-        self.assertNotRegex(source, r"\.shader(?:Clip|Cull)Distance\s*=\s*true,")
+PROOF = ROOT / "validation/g615-v11-csf/dxvk/DX7-CLIP-CULL.md"
 
-    def test_panvk_has_no_clip_cull_lowering(self):
-        patterns = (
-            re.compile(r"nir_lower_clip_fs\s*\("),
-            re.compile(r"clip_distance_array_size"),
-            re.compile(r"cull_distance_array_size"),
-        )
-        matches = []
-        for path in PANVK.rglob("*.[ch]"):
-            source = path.read_text(errors="replace")
-            for pattern in patterns:
-                if pattern.search(source):
-                    matches.append(f"{path.relative_to(MESA)}: {pattern.pattern}")
-        self.assertEqual(matches, [], "unexpected PanVK implementation:\n" + "\n".join(matches))
+
+# DX7 (patch 023): clip/cull distance exposed on v10+ only after the
+# clip_cull device draw test passed; see DX7-CLIP-CULL.md.
+class ClipCullSafeFalseTest(unittest.TestCase):
+    def test_features_exposed_only_with_device_proof(self):
+        source = PHYSICAL_DEVICE.read_text()
+        self.assertRegex(source, r"\.shaderClipDistance\s*=\s*PAN_ARCH >= 10,")
+        self.assertRegex(source, r"\.shaderCullDistance\s*=\s*PAN_ARCH >= 10,")
+        self.assertNotRegex(source, r"\.shader(?:Clip|Cull)Distance\s*=\s*true,")
+        proof = PROOF.read_text()
+        self.assertIn("CLIP_CULL_FAILS=0", proof)
+
+    def test_panvk_lowers_clip_cull_on_gpu(self):
+        shader = (PANVK / "panvk_vX_shader.c").read_text()
+        self.assertIn("panvk_lower_clip_cull_vs", shader)
+        self.assertIn("panvk_lower_clip_cull_fs", shader)
+        self.assertNotRegex(shader, re.compile(r"nir_lower_clip_fs\s*\("))
 
 
 if __name__ == "__main__":

@@ -92,13 +92,18 @@ assert "VK_PIPELINE_STAGE_TRANSFER_BIT,\n                              VK_PIPELI
 physical_device = ROOT / "work/mesa/src/panfrost/vulkan/panvk_vX_physical_device.c"
 if physical_device.exists():
     exposed = physical_device.read_text()
-    for feature in (
-        "geometryShader",
-        "fillModeNonSolid",
-        "shaderClipDistance",
-        "shaderCullDistance",
+    assert ".geometryShader = false" in exposed
+    # DX7: exposed only with a recorded device proof.
+    proofs = ROOT / "validation/g615-v11-csf/dxvk"
+    for feature, proof in (
+        ("fillModeNonSolid", "DX7-FILL-MODE.md"),
+        ("shaderClipDistance", "DX7-CLIP-CULL.md"),
+        ("shaderCullDistance", "DX7-CLIP-CULL.md"),
+        ("multiViewport", "DX7-MULTIVIEWPORT.md"),
     ):
-        assert f".{feature} = false" in exposed, feature
+        assert f".{feature} = PAN_ARCH >= 10" in exposed, feature
+        doc = (proofs / proof).read_text()
+        assert "FAILS=0" in doc and "PASS" in doc, proof
     assert ".vertexPipelineStoresAndAtomics =" in exposed
     assert "PAN_ARCH >= 13" in exposed
 
@@ -121,4 +126,4 @@ with tempfile.TemporaryDirectory() as directory:
         stdout=subprocess.DEVNULL,
     )
 
-print("PASS: GPU prerast VS records to IDVS/FS slice (018+020); exposure unchanged")
+print("PASS: GPU prerast VS records to IDVS/FS slice (018+020); DX7 exposure proven")
