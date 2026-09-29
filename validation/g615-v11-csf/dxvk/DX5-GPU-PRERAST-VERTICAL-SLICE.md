@@ -47,10 +47,29 @@ pending (`scripts/dxvk/dx5-device-validate.sh`).
 | simultaneous submission | IMPLEMENTED | GPU arena semaphore |
 | normal IDVS before/after | IMPLEMENTED | debug-only select; VS/FAU dirtied after |
 
-Runtime of that matrix is `FAIL` (SIGSEGV 139 both IDVS and `gpu_prerast`, no `CASE` lines). See `DX5-RUNTIME.md`.
+Runtime (2026-09-29, profile g615-v11-csf, patches 018+019+020, ICD
+`24fb09610c651a9a2e2f986684467466e07c6fe8ef8d84551e8a5c7685c8c5a4`):
+IDVS 13/13 PASS, `PANVK_DEBUG=gpu_prerast` 13/13 PASS, `MATRIX_FAILS=0`
+on both paths, 9 consecutive runs (1 + 8). No CS_FAULT, no device loss.
+See `DX5-RUNTIME.md`.
+
+Root cause of empty records (fixed in `csf-v11/020`): lowered VS
+`RUN_COMPUTE` used `gfx.tsd`, which is 0 until `prepare_draw()` runs after
+`gpu_prerast_draw()`. The COMPUTE CSG raised `CS_FAULT` 0x58
+DATA_INVALID_FAULT (data 0x1612) before any store. Also fixed:
+`outputs_written`=0 (read before IO gathering → empty passthrough),
+`load_vertex_id_zero_base` in the passthrough (no backend lowering →
+SIGSEGV 139), output types, and the COMPUTE subqueue missing from
+DRAW_INDIRECT/vertex-input barrier consumers.
+
+`gpu_written_indirect` harness was invalid Vulkan (fill/copy inside the
+render pass, no fill→copy barrier) and failed intermittently on both
+paths; fixed in `tests/dxvk/vulkan/gpu_prerast_slice.c`.
 
 ## Ordering and readback
 
+With `gpu_prerast`, barriers whose dst stages include DRAW_INDIRECT,
+vertex input, or pre-raster shaders also make the COMPUTE subqueue wait.
 Compute signals `PANVK_SUBQUEUE_COMPUTE` sync64. Vertex-tiler waits that
 seqno before IDVS. Arena is released after IDVS scoreboards. No
 `DeviceWaitIdle` or host mapping of generated records.

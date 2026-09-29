@@ -59,6 +59,36 @@ for forbidden in ("PANVK_PRERAST_SW", "panvk_sw_prerast", "cmd_alloc_dev_mem"):
 
 assert "gpu_lower = v == PANVK_VS_VARIANT_GPU_LOWERED &&" not in text
 
+# 020: lowered VS gets its own TSD (gfx.tsd=0 -> CS_FAULT 0x58), record IO
+# mask captured after lowering, passthrough uses a backend-lowered vertex ID,
+# COMPUTE subqueue consumes vertex-input/indirect barriers.
+fix = (ROOT / "patches/csf-v11/020-gpu-prerast-tls-io-barrier.patch").read_text()
+added = "\n".join(l for l in fix.splitlines() if l.startswith("+"))
+removed = "\n".join(l for l in fix.splitlines() if l.startswith("-"))
+for token in (
+    "panvk_per_arch(cmd_dispatch_prepare_tls)(",
+    "gpu_prerast_launch_cs(cmdbuf, lowered, push.gpu, tsd, &dispatch)",
+    "nir_load_vertex_id(&b)",
+    "shader->gpu_prerast.io.outputs_written =",
+    "panvk_gpu_prerast_collect_out_type",
+    "PANVK_DEBUG(GPU_PRERAST) &&",
+    "dst_subqueues |= BITFIELD_BIT(PANVK_SUBQUEUE_COMPUTE)",
+):
+    assert token in added, token
+for token in (
+    "launch_gfx_cs(cmdbuf, lowered",
+    "nir_load_vertex_id_zero_base(&b)",
+    ".src_type = nir_type_uint32",
+):
+    assert token in removed, token
+
+# Harness must keep transfers outside the render pass with WAW + indirect
+# barriers (UB otherwise: gpu_written_indirect was flaky on both paths).
+slice_c = (ROOT / "tests/dxvk/vulkan/gpu_prerast_slice.c").read_text()
+fill = slice_c.index("vkCmdFillBuffer(cmds[0], indbuf")
+assert fill < slice_c.index("vkCmdBeginRenderPass(cmds[0]")
+assert "VK_PIPELINE_STAGE_TRANSFER_BIT,\n                              VK_PIPELINE_STAGE_TRANSFER_BIT" in slice_c[fill:]
+
 physical_device = ROOT / "work/mesa/src/panfrost/vulkan/panvk_vX_physical_device.c"
 if physical_device.exists():
     exposed = physical_device.read_text()
@@ -91,4 +121,4 @@ with tempfile.TemporaryDirectory() as directory:
         stdout=subprocess.DEVNULL,
     )
 
-print("PASS: GPU prerast VS records to IDVS/FS slice; exposure unchanged")
+print("PASS: GPU prerast VS records to IDVS/FS slice (018+020); exposure unchanged")

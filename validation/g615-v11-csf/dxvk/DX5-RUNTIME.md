@@ -1,6 +1,7 @@
 # DX5 runtime session
 
-Status: `MATRIX_FAIL`
+Status: `MATRIX_PASS` (2026-09-29, both paths 13/13; see last section).
+Earlier sections below are the historical `MATRIX_FAIL` record.
 
 Serial `Y5WWBMJVOZSK4HU8` via network ADB `192.168.1.34:32913`.
 Identity once. No overlay rebuild this chunk. CreateDevice IDVS +
@@ -75,7 +76,31 @@ simultaneous, IDVS before/after.
 CreateDevice default IDVS: `PASS r=0`
 CreateDevice `PANVK_DEBUG=gpu_prerast`: `PASS r=0`
 
+## Matrix 2026-09-29 (018+019+020)
+
+ADB `192.168.1.34:41369`, chroot `/tmp/build-glibc`, profile
+g615-v11-csf applied=21. ICD sha256
+`24fb09610c651a9a2e2f986684467466e07c6fe8ef8d84551e8a5c7685c8c5a4`.
+
+| Path | RC | Result |
+|---|---|---|
+| MATRIX_IDVS | 0 | 13/13 PASS, `MATRIX_FAILS=0` |
+| MATRIX_PRERAST (`PANVK_DEBUG=gpu_prerast`) | 0 | 13/13 PASS, `MATRIX_FAILS=0` |
+
+Repeated 8 consecutive runs after the harness fix: all 16 path runs
+`MATRIX_FAILS=0`. dmesg: no CS_FAULT, no device loss.
+
+History this session:
+- tracked 018 only: IDVS 13/13; prerast 12 `RGBA=0 0 255 255 FAIL`
+  (records empty). Cause: lowered VS `RUN_COMPUTE` with TSD=0 →
+  COMPUTE CSG `CS_FAULT` 0x58 DATA_INVALID_FAULT (0x1612).
+- SIGSEGV 139 was `Unhandled intrinsic load_vertex_id_zero_base` in the
+  passthrough VS compile.
+- Before the harness fix, `CASE gpu_written_indirect RGBA=0 0 255 255 FAIL`
+  was intermittent on both IDVS and prerast (fill/copy recorded inside
+  the render pass, no fill→copy barrier: invalid usage).
+
 ## Remaining
 
-Next: diagnose slice SIGSEGV 139. Same ADB/serial/ICD.
-No overlay rebuild unless required. No DX6.
+gpu_prerast still debug-gated; public GS/clip/cull bits stay false.
+Next: GS/XFB on the GPU prerast path, then a real DXVK app. No DX6.

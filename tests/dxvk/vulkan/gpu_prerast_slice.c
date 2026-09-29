@@ -495,6 +495,30 @@ main(int argc, char **argv)
       CK(vkResetFences(dev, 1, &fence), "ResetFence");
       CK(vkResetCommandBuffer(cmds[0], 0), "ResetCmd");
       CK(vkBeginCommandBuffer(cmds[0], &bbi), "Begin");
+      if (!strcmp(name, "gpu_written_indirect")) {
+         /* GPU-written parameters: fill, then copy from the pre-inited tail.
+          * Transfers are illegal inside a render pass, and fill->copy is a
+          * WAW hazard that needs its own barrier. */
+         VkBufferMemoryBarrier bb = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = indbuf,
+            .offset = 0,
+            .size = 20};
+         VkBufferCopy copy = {.srcOffset = 32, .dstOffset = 0, .size = 20};
+         vkCmdFillBuffer(cmds[0], indbuf, 0, 20, 0);
+         vkCmdPipelineBarrier(cmds[0], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 1,
+                              &bb, 0, NULL);
+         vkCmdCopyBuffer(cmds[0], indbuf, indbuf, 1, &copy);
+         bb.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+         vkCmdPipelineBarrier(cmds[0], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, 0, 0, NULL, 1,
+                              &bb, 0, NULL);
+      }
       vkCmdBeginRenderPass(cmds[0], &rpbi, VK_SUBPASS_CONTENTS_INLINE);
       vkCmdBindVertexBuffers(cmds[0], 0, 1, &vbuf, &off);
       if (!strcmp(name, "idvs_before") || !strcmp(name, "idvs_after") ||
@@ -526,26 +550,8 @@ main(int argc, char **argv)
       else if (!strcmp(name, "primitive_restart")) {
          vkCmdBindIndexBuffer(cmds[0], ibuf, 0, VK_INDEX_TYPE_UINT16);
          vkCmdDrawIndexed(cmds[0], 7, 1, 0, 0, 0);
-      } else if (!strcmp(name, "gpu_written_indirect")) {
-         vkCmdFillBuffer(cmds[0], indbuf, 0, 20, 0);
-         VkBufferCopy copy = {.srcOffset = 0, .dstOffset = 0, .size = 20};
-         /* GPU-written parameters: fill then copy from the pre-inited tail. */
-         copy.srcOffset = 32;
-         vkCmdCopyBuffer(cmds[0], indbuf, indbuf, 1, &copy);
-         VkBufferMemoryBarrier bb = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .buffer = indbuf,
-            .offset = 0,
-            .size = 20};
-         vkCmdPipelineBarrier(cmds[0], VK_PIPELINE_STAGE_TRANSFER_BIT,
-                              VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, 0, 0, NULL, 1,
-                              &bb, 0, NULL);
+      } else if (!strcmp(name, "gpu_written_indirect"))
          vkCmdDrawIndirect(cmds[0], indbuf, 0, 1, 20);
-      }
       vkCmdEndRenderPass(cmds[0]);
       vkCmdPipelineBarrier(cmds[0], VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                            VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1,
