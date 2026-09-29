@@ -159,8 +159,8 @@ main(int argc, char **argv)
    printf("EXPOSURE geometryShader=%d fillModeNonSolid=%d shaderClipDistance=%d shaderCullDistance=%d\n",
           feats.geometryShader, feats.fillModeNonSolid, feats.shaderClipDistance,
           feats.shaderCullDistance);
-   if (feats.geometryShader || feats.fillModeNonSolid ||
-       feats.shaderClipDistance || feats.shaderCullDistance) {
+   /* clip/cull distance are exposed since DX7 (tests/dxvk/vulkan/clip-cull) */
+   if (feats.geometryShader) {
       printf("FAIL unexpected feature exposure\n");
       return 1;
    }
