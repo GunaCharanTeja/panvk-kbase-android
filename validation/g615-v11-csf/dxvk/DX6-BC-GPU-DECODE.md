@@ -1,7 +1,10 @@
 # DX6 BC1-BC7 GPU decode
 
-Status: `GPU_LOWERED` / `DEV_CANDIDATE` (exposed only with `PANVK_DEBUG=bc_emul`).
-Default exposure unchanged: `textureCompressionBC=0`, 16 BC formats unsupported.
+Status: `GPU_LOWERED`, default on since `csf-v11/039` (2026-09-29).
+`textureCompressionBC=1` by default when the GPU has no BC texturing;
+`PANVK_DEBUG=no_bc_emul` opts out (`textureCompressionBC=0`, fmt_fail=16).
+`bc_emul` = vk_meta compute SPIR-V decode into a `bc_decoded` plane. No CPU decode.
+See "Default exposure proof" at the end; earlier sections are the 022 dev-gated history.
 
 ## Hardware
 
@@ -98,10 +101,51 @@ Regression: `gpu_prerast_slice` IDVS 13/13, `PANVK_DEBUG=gpu_prerast` 13/13,
 Fresh pin `5a07217f` + `scripts/apply-patches.sh --profile g615-v11-csf`:
 `OK applied=23`; tree identical to device-validated `work/mesa`.
 
-## Not yet proven (blocks default exposure, DX8)
+## Default exposure proof (csf-v11/038-040, 2026-09-29)
 
-- CTS `dEQP-VK.texture.compressed.*bc*`, `api.copy_and_blit.*bc*`, format
-  query tests; 3D BC images; cube views; `vkCmdCopyImage` uncompressed->BC.
+Patches: `038-crc-init-kmod-munmap` (CRC state init unmapped the kbase SAME_VA
+BO with `os_munmap`, tearing down the GPU mapping: CSF fault 0xc3 on the next
+render target, mmap ENOMEM on realloc; now `pan_kmod_bo_munmap`),
+`039-bc-gpu-decode-default`, `040-bc-zero-initialized-decode` (barrier out of
+`VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT` GPU-decodes the zero blocks).
+Fresh pin + apply: `OK applied=41`, tree identical to `work/mesa` 89274dbd817.
+ICD sha256 `6731e2ec70b8763dbefbf0f8c70ba5279d34e65691aa95b0769f269e2b26aa32`, PAN_ARCH 11.
+
+```text
+ICD device=Mali-G615 MC6 textureCompressionBC=1
+FORMAT <all 16> optimal=0x1d401 linear=0x0 ifp=0 PASS
+CASE <all 16> raw=PASS copy=PASS blit=PASS
+BC_DEVICE_FAILS=0
+BC_VERIFY_FAILS=0            (host reference, all 16)
+PANVK_DEBUG=no_bc_emul: textureCompressionBC=0 fmt_fail=16
+```
+
+CTS (`deqp-vk`, BC subset of the case list, same ICD):
+
+| group | Pass | Fail | NotSupported |
+|---|---|---|---|
+| texture.compressed (2D) + compressed_3D, image.texel_view_compatible, pipeline.monolithic, image.extended_usage_bit_compatibility, api.info (6348) | 1398 | 0 | 4950 |
+| api.copy_and_blit BC, every 20th (1138) | 465 | 0 | 673 |
+
+Main NotSupported reasons: storage/attachment usage on BC ("Operation not
+supported with this image format"), linear/DRM-modifier BC, video queues, FSR.
+One GPU queue timeout in the long batch at
+`texel_view_compatible.graphic.basic.3d_image.texture_read.bc5_unorm_block.r32g32b32a32_uint`;
+the case passes alone and the remaining 3144 cases resumed from it pass (0 fail).
+Not root-caused; watch for recurrence.
+
+`memory.zero_initialize_device_memory.image_transition`: BC1 1x1 pass after
+040. Larger sizes fail the same way non-BC formats do (whole group: Pass 160,
+Fail 248, NS 24 incl. r8/rg8/rgba8), so this is a general panvk
+zeroInitializeDeviceMemory issue, not BC. Open.
+
+Regression on the same ICD: dx5 IDVS/gpu_prerast 13/13, clip-cull 13/13,
+multi-viewport 5/5, fill-mode 17/17 (all `*_FAILS=0`).
+
+## Still open
+
+- `vkCmdCopyImage` uncompressed->BC and cube-view specific checks beyond CTS sample.
+- Full `api.copy_and_blit` BC run (only 1/20 sampled).
 - Host-mapped writes to BC optimal images are undefined by spec; not handled.
 - BC6H UF16<->SF16 mutable views decode with the image format.
 - Memory: decoded plane adds 4-8x the raw size per BC image.
