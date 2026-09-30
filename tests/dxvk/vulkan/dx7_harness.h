@@ -59,6 +59,10 @@ struct dx7 {
    uint8_t *px;
 };
 
+/* Optional: called with t->phys/t->feats known, before vkCreateDevice, to
+ * adjust features, extensions or pNext. */
+static void (*dx7_device_hook)(struct dx7 *t, VkDeviceCreateInfo *dci);
+
 static void
 dx7_buffer(struct dx7 *t, VkDeviceSize size, VkBufferUsageFlags usage,
            const void *data, VkBuffer *buf, VkDeviceMemory *mem)
@@ -150,6 +154,8 @@ dx7_init(struct dx7 *t, const char *icd, const VkPhysicalDeviceFeatures *want)
                              .queueCreateInfoCount = 1,
                              .pQueueCreateInfos = &qci,
                              .pEnabledFeatures = want};
+   if (dx7_device_hook)
+      dx7_device_hook(t, &dci);
    CK(vkCreateDevice(t->phys, &dci, NULL, &t->dev), "CreateDevice");
    vkGetDeviceQueue(t->dev, qi, 0, &t->queue);
 
@@ -263,8 +269,10 @@ dx7_module(struct dx7 *t, const uint32_t *code, size_t size)
 }
 
 struct dx7_pipe_desc {
-   const uint32_t *vs, *fs, *gs;
-   size_t vs_size, fs_size, gs_size;
+   const uint32_t *vs, *fs, *gs, *tcs, *tes;
+   size_t vs_size, fs_size, gs_size, tcs_size, tes_size;
+   uint32_t patch_control_points;
+   int dynamic_patch_control_points;
    VkPrimitiveTopology topology;
    VkPolygonMode polygon_mode;
    VkCullModeFlags cull_mode;
@@ -282,13 +290,28 @@ dx7_pipeline(struct dx7 *t, const struct dx7_pipe_desc *d)
    VkShaderModule vs = dx7_module(t, d->vs, d->vs_size);
    VkShaderModule fs = dx7_module(t, d->fs, d->fs_size);
    VkShaderModule gs = d->gs ? dx7_module(t, d->gs, d->gs_size) : VK_NULL_HANDLE;
-   VkPipelineShaderStageCreateInfo stages[3] = {
+   VkShaderModule tcs = d->tcs ? dx7_module(t, d->tcs, d->tcs_size) : VK_NULL_HANDLE;
+   VkShaderModule tes = d->tes ? dx7_module(t, d->tes, d->tes_size) : VK_NULL_HANDLE;
+   VkPipelineShaderStageCreateInfo stages[5] = {
       {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
        .stage = VK_SHADER_STAGE_VERTEX_BIT, .module = vs, .pName = "main"},
       {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-       .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = fs, .pName = "main"},
-      {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-       .stage = VK_SHADER_STAGE_GEOMETRY_BIT, .module = gs, .pName = "main"}};
+       .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = fs, .pName = "main"}};
+   uint32_t nstages = 2;
+   const struct {
+      VkShaderStageFlagBits stage;
+      VkShaderModule m;
+   } extra[3] = {{VK_SHADER_STAGE_GEOMETRY_BIT, gs},
+                 {VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, tcs},
+                 {VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, tes}};
+   for (int i = 0; i < 3; i++)
+      if (extra[i].m)
+         stages[nstages++] = (VkPipelineShaderStageCreateInfo){
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+            .stage = extra[i].stage, .module = extra[i].m, .pName = "main"};
+   VkPipelineTessellationStateCreateInfo ts = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
+      .patchControlPoints = d->patch_control_points ? d->patch_control_points : 1};
    VkVertexInputBindingDescription vb = {0, d->vertex_stride ? d->vertex_stride : 16,
                                          VK_VERTEX_INPUT_RATE_VERTEX};
    VkVertexInputAttributeDescription va = {0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0};
@@ -325,17 +348,19 @@ dx7_pipeline(struct dx7 *t, const struct dx7_pipe_desc *d)
       .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
       .attachmentCount = 1,
       .pAttachments = &ba};
-   VkDynamicState dyn[2] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+   VkDynamicState dyn[3] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
+                            VK_DYNAMIC_STATE_PATCH_CONTROL_POINTS_EXT};
    VkPipelineDynamicStateCreateInfo ds = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-      .dynamicStateCount = 2,
+      .dynamicStateCount = d->dynamic_patch_control_points ? 3 : 2,
       .pDynamicStates = dyn};
    VkGraphicsPipelineCreateInfo gpci = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .stageCount = d->gs ? 3 : 2,
+      .stageCount = nstages,
       .pStages = stages,
       .pVertexInputState = &vi,
       .pInputAssemblyState = &ia,
+      .pTessellationState = tcs ? &ts : NULL,
       .pViewportState = &vps,
       .pRasterizationState = &rs,
       .pMultisampleState = &ms,
@@ -348,8 +373,9 @@ dx7_pipeline(struct dx7 *t, const struct dx7_pipe_desc *d)
       "GfxPipe");
    vkDestroyShaderModule(t->dev, vs, NULL);
    vkDestroyShaderModule(t->dev, fs, NULL);
-   if (gs)
-      vkDestroyShaderModule(t->dev, gs, NULL);
+   for (int i = 0; i < 3; i++)
+      if (extra[i].m)
+         vkDestroyShaderModule(t->dev, extra[i].m, NULL);
    return p;
 }
 
