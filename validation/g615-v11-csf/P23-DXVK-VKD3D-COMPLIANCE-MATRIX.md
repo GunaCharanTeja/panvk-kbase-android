@@ -1,15 +1,20 @@
 # P23 Final DXVK/vkd3d compliance matrix
 
-## Beta.5 status (current)
+## Beta.6 status (current)
 
-Release `g615-v11-csf-v0.1.0-beta.5`. Patches through `073`.
+Release `g615-v11-csf-v0.1.0-beta.6`. Patches through `077`.
 
-Matrix rows below are evaluated from the beta.3-era consumer-capabilities.json capture; features listed here are device-proven in beta.5 but await a fresh capture
+Matrix rows below are evaluated from the beta.3-era consumer-capabilities.json capture; features listed here are device-proven in beta.6 but await a fresh capture. Swapchain lifecycle test done (passes on device); GS viewport index honoured (076).
 
 Exposed since the beta.3 capture:
 
 | Feature | Patch | CTS |
 |---|---|---|
+| `variableMultisampleRate` | `074` | variable_rate 504/0 standalone; combined regression 6210/0 |
+| `sync_fd export (kbase KCPU queue)` | `075` | 1996/0 (was 113 ResourceError) |
+| `multiViewport GS viewport index honoured` | `076` | draw scissor 88/88 |
+| `system-scope subqueue sync signals on kbase` | `077` | signal_order 1316/0 (0 timeouts) |
+| `swapchain lifecycle test` | `test-apk` | done (passes on device) |
 | `VK_EXT_memory_priority + VK_EXT_pageable_device_local_memory` | `069` | 224/0, 202/0; api.info 7799/0 |
 | `alphaToOne` | `070` | 123/0 |
 | `maxGeometryShaderInvocations` | `071` | geometry 193/0, instanced 20/0 |
@@ -30,9 +35,8 @@ Open items:
 - GS primitive drop
 - VMR (vertexPipelineStoresAndAtomics / FL11_1, worktree dx-vpsa)
 - JICA98 0005 (same-queue semaphore waits) review
-- swapchain test (in progress elsewhere)
 - depthBounds
-- shaderOutputViewportIndex (GS-written viewport index dropped)
+- shaderOutputViewportIndex (not exposed; GS viewport index honoured in 076)
 - XFB intermittent DeviceLost
 - XFB 65536-record cap per non-tess draw
 - robustImageAccess2 (vkd3d-proton device-create blocker)

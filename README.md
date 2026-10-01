@@ -64,14 +64,14 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-`g615-v11-csf-v0.1.0-beta.5` is the latest published tag (prerelease, Mesa
-`5a07217f` plus csf-v11 patches up to 073). It adds `VK_EXT_multi_draw`,
-`VK_EXT_primitives_generated_query`, `VK_EXT_memory_priority`,
-`VK_EXT_pageable_device_local_memory`, `alphaToOne` and 64 GS invocations,
-plus a native Info screen in the PanVK Test APK (no raw JSON). Assets: Android
-and glibc drivers, `.adpkg` package and the test APK. See
+`g615-v11-csf-v0.1.0-beta.6` is the latest published tag (prerelease, Mesa
+`5a07217f` plus csf-v11 patches up to 077). It adds `variableMultisampleRate`,
+kbase KCPU queue `sync_file` fence export, honoured geometry shader viewport
+index, and system-scope subqueue sync signals on kbase, plus swapchain lifecycle
+and Vulkan 1.3/1.4 core requirement gap checks in the PanVK Test APK. Assets:
+Android and glibc drivers, `.adpkg` package, EMULATOR zip, and the test APK. See
 [`CHANGELOG.md`](CHANGELOG.md) and the
-[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.5).
+[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.6).
 
 `g615-v11-csf-v0.1.0-beta.3` (code commit
 `fc8a759e7d1b2b8de01c0e96f1fdc5e3950ba1a3`, published 2026-09-19) and its
@@ -128,7 +128,7 @@ features are listed in [`docs/RUNTIME-FEATURES.md`](docs/RUNTIME-FEATURES.md).
 
 ## DXVK / vkd3d-proton compliance (G615)
 
-### Current state (after csf-v11/073)
+### Current state (after csf-v11/077)
 
 DXVK Native v3.1.1 on the Poco X6 Pro creates a D3D11 device at
 **feature level 11_0** (`D3D11 HRESULT=0x00000000 feature_level=0xb000`);
@@ -142,7 +142,7 @@ with no CPU fallback or simulation, and is exposed only after device proof.
 | `VK_EXT_transform_feedback` | GPU capture kernel, 4 streams, counters, queries | transform_feedback 15793 / 0 (2 intermittent DeviceLost) |
 | `textureCompressionBC` | GPU compute decode of BC1-7 | BC subset 1863 / 0; copy_and_blit 9620 / 0 |
 | `shaderClipDistance`, `shaderCullDistance` | NIR lowering | device matrix 0 fail |
-| `multiViewport` | 16 viewports | device matrix 0 fail |
+| `multiViewport` | 16 viewports, GS viewport index honoured (076) | device matrix 0 fail, scissor 88 / 88 |
 | `fillModeNonSolid` | GPU kernel builds line/point primitives | 17/17 pixel-exact |
 | `pipelineStatisticsQuery` | 049-054 | statistics_query 15374 / 0 |
 | `VK_KHR_incremental_present`, `VK_EXT_swapchain_colorspace`, `VK_EXT_image_compression_control` | upstream backports | device probes 0 fail |
@@ -150,10 +150,12 @@ with no CPU fallback or simulation, and is exposed only after device proof.
 | `VK_EXT_primitives_generated_query` | 073 | primitives_generated_query 75206 / 0 |
 | `VK_EXT_memory_priority`, `VK_EXT_pageable_device_local_memory` | 069 | 224 / 0, 202 / 0; api.info 7799 / 0 |
 | `alphaToOne` | 070 | alphaToOne 123 / 0 |
+| `variableMultisampleRate` | 074 | variable_rate 504 / 0 standalone (tmp/cts/p5-vmsr/summary.txt); combined regression run (geometry + tessellation + transform_feedback.simple + variable_rate: 15955 cases, 6210 pass, 9745 NotSupported, 0 fail; source tmp/cts/r6-geo/status.txt) |
+| `sync_fd` export | 075 (kbase KCPU queue) | sync_fd 1996 / 0 |
 
 Still missing: `robustImageAccess2` (the vkd3d-proton device-create
 blocker), `vertexPipelineStoresAndAtomics` (FL11_1), `depthBounds`,
-`shaderOutputViewportIndex` (a GS-written viewport index is dropped), and
+`shaderOutputViewportIndex` (not exposed; no patch sets it), and
 sparse (FL12_0, `NO-GO` on Kbase). The X11 present teardown hang was seen once
 under Xvfb only and is unverified on Android. Progress and TODOs:
 [`worklogs/g615-dxvk/PROGRESS.md`](worklogs/g615-dxvk/PROGRESS.md). Roadmap:

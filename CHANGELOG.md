@@ -1,5 +1,56 @@
 # Changelog
 
+## g615-v11-csf-v0.1.0-beta.6 (prerelease)
+
+Mesa `5a07217f034b` + csf-v11 patches up to 077
+(`patchSeriesId sha256:a20c23f542ac54f50614f71093cba26fcfbe1b04d93652340d1fa44b26ea0a29`).
+Poco X6 Pro, Mali-G615 MC6, mali_kbase CSF UAPI 1.21. Android minApi 35.
+
+### Added
+- `variableMultisampleRate` on v10+ (074).
+- `sync_file` fence export through a kbase KCPU queue (075), eliminating
+  reliance on `/dev/sw_sync` which is absent on this kernel and previously
+  caused exports to misreport as out of memory (CTS `sync_fd`: 1996 pass / 60644 NotSupported / 0 fail,
+  was 113 ResourceError).
+- Test APK: swapchain lifecycle test and Vulkan 1.3 and 1.4 core requirement
+  gap checks.
+
+### Fixed
+- Geometry-shader-written viewport index is now honoured for scissors and
+  viewports (076), fixing draw scissor tests (18 fail -> 88/88 pass).
+- System-scope subqueue sync signals on kbase (077), preventing missed signal
+  wakeups across subqueues and eliminating timeouts in `signal_order` (11–16
+  timeouts per run -> 1316 pass, 0 timeouts).
+
+### Results
+CTS: sync_fd and cross_instance 1996 pass / 60644 NotSupported / 0 fail (113 ResourceError resolved), draw
+scissor 88/88 pass (18 failures resolved), signal_order 1316/0 (0 timeouts),
+signal_order+basic 1357/0. Regression run: 0 failures across 15,955 cases in
+geometry, tessellation, transform_feedback.simple, and variable_rate (6210
+pass). On-device validation of the release APK on Mali-G615 MC6 (Poco X6 Pro):
+10/10 in-app tests pass (gpu_prerast_slice, clip_cull, multi_viewport,
+fill_mode, bc_decode, geometry, tessellation, xfb, pipeline_stats,
+swapchain_lifecycle); Vulkan 1.3 and 1.4 core requirements are met, with no
+DeviceLost or kbase faults.
+
+### Known issues
+Random `DeviceLost` (subqueue timeout) has not been observed in 4 runs since the
+patch 077 fix, but is not yet proven completely fixed; system-scope signals
+raise an interrupt per cross-subqueue signal, and the performance impact on
+games remains unmeasured; sync_file export (075) uses one device-wide KCPU
+queue, so a pending export can delay later exports (head-of-line blocking);
+with wait-before-signal timeline usage this can in theory deadlock (not seen in
+CTS); with a geometry-shader-selected viewport (076), depth clipping/clamping
+uses the union of all viewports' depth ranges, not the selected viewport's
+range (wrong only when viewports have different depth ranges); dEQP draw
+`depth_bias_patch_list_tri_line` still fails (pre-existing); `depthBounds` is
+not implemented; 2 intermittent `DeviceLost` occurrences remain in dEQP
+`transform_feedback` `query_copy`; transform feedback is capped at 65,536
+records per draw; the X11 present teardown hang was seen once under Xvfb only
+and remains unverified on Android; JICA98-derived patch 0005 is not fully
+validated; `robustImageAccess2` is missing (blocking vkd3d-proton device
+creation; deferred); and sparse resources or FL 12_0 are impossible on Kbase.
+
 ## g615-v11-csf-v0.1.0-beta.5 (prerelease)
 
 Mesa `5a07217f034b` + csf-v11 patches up to 073

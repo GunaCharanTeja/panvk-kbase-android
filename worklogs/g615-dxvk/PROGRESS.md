@@ -1,6 +1,6 @@
 # G615 DXVK / vkd3d progress
 
-Snapshot: 2026-10-01, beta.5 (`g615-v11-csf-v0.1.0-beta.5`). Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a31030), ADB 192.168.1.34:41369.
+Snapshot: 2026-10-01, beta.6 is current (`g615-v11-csf-v0.1.0-beta.6`, patches through 077). Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a31030).
 
 ## Done and device-proven
 

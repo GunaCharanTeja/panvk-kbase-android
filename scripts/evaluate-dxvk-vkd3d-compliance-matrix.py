@@ -70,10 +70,35 @@ INDEXING_BITS = (
 )
 
 # Overlay only. Evaluation still reads the beta.3-era capture. Do not gate on this.
-BETA5_STATUS = {
-    "release": "g615-v11-csf-v0.1.0-beta.5",
-    "patchesUpTo": "073",
+BETA6_STATUS = {
+    "release": "g615-v11-csf-v0.1.0-beta.6",
+    "patchesUpTo": "077",
     "exposedSinceCapture": [
+        {
+            "feature": "variableMultisampleRate",
+            "patch": "074",
+            "cts": "variable_rate 504/0 standalone; combined regression 6210/0",
+        },
+        {
+            "feature": "sync_fd export (kbase KCPU queue)",
+            "patch": "075",
+            "cts": "1996/0 (was 113 ResourceError)",
+        },
+        {
+            "feature": "multiViewport GS viewport index honoured",
+            "patch": "076",
+            "cts": "draw scissor 88/88",
+        },
+        {
+            "feature": "system-scope subqueue sync signals on kbase",
+            "patch": "077",
+            "cts": "signal_order 1316/0 (0 timeouts)",
+        },
+        {
+            "feature": "swapchain lifecycle test",
+            "patch": "test-apk",
+            "cts": "done (passes on device)",
+        },
         {
             "feature": "VK_EXT_memory_priority + VK_EXT_pageable_device_local_memory",
             "patch": "069",
@@ -133,9 +158,8 @@ BETA5_STATUS = {
         "GS primitive drop",
         "VMR (vertexPipelineStoresAndAtomics / FL11_1, worktree dx-vpsa)",
         "JICA98 0005 (same-queue semaphore waits) review",
-        "swapchain test (in progress elsewhere)",
         "depthBounds",
-        "shaderOutputViewportIndex (GS-written viewport index dropped)",
+        "shaderOutputViewportIndex (not exposed; GS viewport index honoured in 076)",
         "XFB intermittent DeviceLost",
         "XFB 65536-record cap per non-tess draw",
         "robustImageAccess2 (vkd3d-proton device-create blocker)",
@@ -147,9 +171,11 @@ BETA5_STATUS = {
     "note": (
         "Matrix rows below are evaluated from the beta.3-era "
         "consumer-capabilities.json capture; features listed here are "
-        "device-proven in beta.5 but await a fresh capture"
+        "device-proven in beta.6 but await a fresh capture. "
+        "Swapchain lifecycle test done (passes on device); GS viewport index honoured (076)."
     ),
 }
+BETA5_STATUS = BETA6_STATUS
 
 
 def load_evaluator():
@@ -524,7 +550,7 @@ def render_report_block(report):
     return "\n".join(lines)
 
 
-def render_beta5_section(status):
+def render_beta6_section(status):
     rows = [
         "| Feature | Patch | CTS |",
         "|---|---|---|",
@@ -534,7 +560,7 @@ def render_beta5_section(status):
     open_items = "\n".join(f"- {item}" for item in status["openItems"])
     deferred = "\n".join(f"- {item}" for item in status["deferred"])
     body = [
-        "## Beta.5 status (current)",
+        "## Beta.6 status (current)",
         "",
         f"Release `{status['release']}`. Patches through `{status['patchesUpTo']}`.",
         "",
@@ -555,16 +581,20 @@ def render_beta5_section(status):
     return "\n".join(body)
 
 
+render_beta5_section = render_beta6_section
+
+
 def render_md(doc):
     dxvk = doc["dxvk"]
     vkd3d = doc["vkd3d"]
     driver = doc["driver"]
     report = render_report_block(doc["workerReport"])
+    status = doc.get("beta6Status", doc.get("beta5Status", {}))
     return "\n".join(
         [
             "# P23 Final DXVK/vkd3d compliance matrix",
             "",
-            render_beta5_section(doc["beta5Status"]),
+            render_beta6_section(status),
             "",
             "## Result",
             "",
@@ -724,7 +754,7 @@ def main():
         "schemaVersion": 1,
         "phase": "P23",
         "date": "2026-09-20",
-        "beta5Status": BETA5_STATUS,
+        "beta6Status": BETA6_STATUS,
         "result": "FAIL",
         "smoke": "BLOCKED",
         "pinnedMesa": PINNED_MESA,
