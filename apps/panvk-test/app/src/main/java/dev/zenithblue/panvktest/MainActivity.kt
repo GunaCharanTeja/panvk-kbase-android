@@ -83,10 +83,9 @@ class MainActivity : ComponentActivity() {
 
     // Info tab state
     private var infoLoadingState = mutableStateOf(false)
-    private var infoRowsState = mutableStateOf<List<String>>(emptyList())
     private var infoRawTextState = mutableStateOf<String?>(null)
     private var infoRawJsonState = mutableStateOf<String?>(null)
-    private var infoFilterState = mutableStateOf("")
+    private var infoParsedState = mutableStateOf<ParsedVulkanInfo?>(null)
 
     // Tests tab state
     private var testResultsState = mutableStateOf(
@@ -194,28 +193,6 @@ class MainActivity : ComponentActivity() {
         Pair(jsonObject, if (jsonObject != null) jsonText else "Result: $res\n$logContent")
     }
 
-    private fun flattenJson(obj: Any?, prefix: String, result: MutableList<String>) {
-        when (obj) {
-            is JSONObject -> {
-                val keys = obj.keys().asSequence().sorted().toList()
-                for (k in keys) {
-                    val nextPrefix = if (prefix.isEmpty()) k else "$prefix.$k"
-                    flattenJson(obj.get(k), nextPrefix, result)
-                }
-            }
-            is JSONArray -> {
-                for (i in 0 until obj.length()) {
-                    flattenJson(obj.get(i), "$prefix[$i]", result)
-                }
-            }
-            JSONObject.NULL, null -> {
-                result.add("$prefix = null")
-            }
-            else -> {
-                result.add("$prefix = $obj")
-            }
-        }
-    }
 
     private suspend fun executeTest(test: TestCase): TestResult = withContext(Dispatchers.IO) {
         val t0 = System.currentTimeMillis()
@@ -434,102 +411,29 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun InfoTab() {
-        val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    enabled = !infoLoadingState.value,
-                    onClick = {
-                        coroutineScope.launch {
-                            infoLoadingState.value = true
-                            val (json, raw) = runInfo()
-                            if (json != null) {
-                                val rows = mutableListOf<String>()
-                                flattenJson(json, "", rows)
-                                infoRowsState.value = rows
-                                infoRawJsonState.value = json.toString(2)
-                                infoRawTextState.value = null
-                            } else {
-                                infoRowsState.value = emptyList()
-                                infoRawJsonState.value = null
-                                infoRawTextState.value = raw
-                            }
-                            infoLoadingState.value = false
-                        }
+        InfoTabContent(
+            isLoading = infoLoadingState.value,
+            parsedInfo = infoParsedState.value,
+            rawJson = infoRawJsonState.value,
+            rawErrorText = infoRawTextState.value,
+            onLoadClick = {
+                coroutineScope.launch {
+                    infoLoadingState.value = true
+                    val (json, raw) = runInfo()
+                    if (json != null) {
+                        infoParsedState.value = parseVulkanInfo(json)
+                        infoRawJsonState.value = json.toString(2)
+                        infoRawTextState.value = null
+                    } else {
+                        infoParsedState.value = null
+                        infoRawJsonState.value = null
+                        infoRawTextState.value = raw
                     }
-                ) {
-                    Text(if (infoLoadingState.value) "Running..." else "Load")
-                }
-
-                if (infoRawJsonState.value != null) {
-                    OutlinedButton(
-                        onClick = {
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, infoRawJsonState.value)
-                            }
-                            context.startActivity(Intent.createChooser(sendIntent, "Export JSON"))
-                        }
-                    ) {
-                        Text("Export JSON")
-                    }
+                    infoLoadingState.value = false
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
-
-            if (infoRowsState.value.isNotEmpty()) {
-                OutlinedTextField(
-                    value = infoFilterState.value,
-                    onValueChange = { infoFilterState.value = it },
-                    label = { Text("Filter properties") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                val filter = infoFilterState.value
-                val filteredRows = remember(filter, infoRowsState.value) {
-                    if (filter.isEmpty()) infoRowsState.value
-                    else infoRowsState.value.filter { it.contains(filter, ignoreCase = true) }
-                }
-
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(filteredRows) { row ->
-                        Text(
-                            text = row,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        )
-                    }
-                }
-            } else if (infoRawTextState.value != null) {
-                SelectionContainer(
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = infoRawTextState.value ?: "",
-                        fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            } else if (infoLoadingState.value) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Tap 'Load' to query Vulkan info.")
-                }
-            }
-        }
+        )
     }
 
     @Composable
