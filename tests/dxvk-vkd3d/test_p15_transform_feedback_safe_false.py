@@ -3,8 +3,10 @@ import pathlib
 import re
 import unittest
 
+from _mesa_tree import mesa_root
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-MESA = ROOT / "work" / "mesa"
+MESA = mesa_root()
 PHYSICAL_DEVICE = MESA / "src/panfrost/vulkan/panvk_vX_physical_device.c"
 SHADER = MESA / "src/panfrost/vulkan/panvk_vX_shader.c"
 QUERY = MESA / "src/panfrost/vulkan/csf/panvk_vX_cmd_query.c"
@@ -16,17 +18,31 @@ GALLIUM = MESA / "src/gallium/drivers/panfrost"
 REMOVE_XFB = COMPILER / "pan_nir_xfb.c"
 
 
+# VK_EXT_transform_feedback, transformFeedback, and geometryStreams are
+# exposed on v10+. vertexPipelineStoresAndAtomics stays off on v10.
+# XFB is a CSF capture path, not NIR lower-to-stores.
 class TransformFeedbackSafeFalseTest(unittest.TestCase):
     def test_extension_not_advertised(self):
         source = PHYSICAL_DEVICE.read_text()
-        self.assertNotRegex(source, r"\.EXT_transform_feedback\s*=")
+        self.assertRegex(
+            source, r"\.EXT_transform_feedback\s*=\s*PAN_ARCH >= 10,"
+        )
+        self.assertNotRegex(source, r"\.EXT_transform_feedback\s*=\s*true,")
         self.assertNotIn("KHR_transform_feedback", source)
 
     def test_features_remain_disabled(self):
         source = PHYSICAL_DEVICE.read_text()
-        self.assertNotRegex(source, r"\.transformFeedback\s*=\s*true")
-        self.assertNotRegex(source, r"\.geometryStreams\s*=\s*true")
-        self.assertRegex(source, r"\.geometryShader\s*=\s*false,")
+        self.assertRegex(source, r"\.transformFeedback\s*=\s*PAN_ARCH >= 10,")
+        self.assertRegex(
+            source,
+            r"\.geometryStreams\s*=\s*PAN_ARCH >= 10 && !PANVK_DEBUG\(NO_GS\),",
+        )
+        self.assertRegex(
+            source,
+            r"\.geometryShader\s*=\s*PAN_ARCH >= 10 && !PANVK_DEBUG\(NO_GS\),",
+        )
+        self.assertNotRegex(source, r"\.transformFeedback\s*=\s*true,")
+        self.assertNotRegex(source, r"\.geometryStreams\s*=\s*true,")
         self.assertRegex(
             source,
             r"\.vertexPipelineStoresAndAtomics\s*=\s*\n\s*\(PAN_ARCH >= 13",
@@ -51,10 +67,14 @@ class TransformFeedbackSafeFalseTest(unittest.TestCase):
                 if pattern.search(text):
                     matches.append(f"{path.relative_to(MESA)}: {pattern.pattern}")
         self.assertEqual(
-            matches,
-            [],
-            "PanVK now implements XFB entrypoints; reassess P15:\n"
-            + "\n".join(matches),
+            sorted(matches),
+            [
+                "src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c: CmdBeginTransformFeedback",
+                "src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c: CmdBindTransformFeedbackBuffers",
+                "src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c: CmdDrawIndirectByteCount",
+                "src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c: CmdEndTransformFeedback",
+            ],
+            "unexpected PanVK XFB entrypoints; reassess P15:\n" + "\n".join(matches),
         )
 
     def test_panvk_does_not_lower_xfb(self):
@@ -85,10 +105,12 @@ class TransformFeedbackSafeFalseTest(unittest.TestCase):
 
     def test_query_path_is_todo(self):
         source = QUERY.read_text()
-        self.assertEqual(source.count("TODO: transform feedback"), 2)
-        self.assertNotIn("VK_QUERY_TYPE_TRANSFORM_FEEDBACK_STREAM_EXT", source)
+        self.assertEqual(source.count("TODO: transform feedback"), 0)
+        self.assertIn("panvk_cmd_begin_xfb_query", source)
+        self.assertIn("panvk_cmd_end_xfb_query", source)
+        self.assertIn("VK_QUERY_TYPE_TRANSFORM_FEEDBACK_STREAM_EXT", source)
         pool = QUERY_POOL.read_text()
-        self.assertNotIn("VK_QUERY_TYPE_TRANSFORM_FEEDBACK_STREAM_EXT", pool)
+        self.assertIn("VK_QUERY_TYPE_TRANSFORM_FEEDBACK_STREAM_EXT", pool)
 
     def test_shader_compile_is_vs_fs_cs_only(self):
         source = SHADER.read_text()

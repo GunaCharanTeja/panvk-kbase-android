@@ -1,6 +1,6 @@
 # G615 DXVK / vkd3d progress
 
-Snapshot: 2026-09-30 23:10 IST. Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a31030), ADB 192.168.1.34:41369.
+Snapshot: 2026-10-01, beta.5 (`g615-v11-csf-v0.1.0-beta.5`). Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a31030), ADB 192.168.1.34:41369.
 
 ## Done and device-proven
 
@@ -14,12 +14,17 @@ Snapshot: 2026-09-30 23:10 IST. Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a3103
 | Tiler heap fix (043) | 380k render passes, 150k submits |
 | Pipeline statistics queries (049-054) | CTS 14,098 pass / 0 fail |
 | Upstream backports (incremental_present, swapchain_colorspace, image_compression_control) | device probes 0 fail |
-| Tessellation + transform feedback integrated (`work/mesa-dxint` `dx-integrate` on e2fde360503, `csf-v11/065-068`) | matrices 0 fail (tess 24/24, xfb 17/17 incl. tes_capture); CTS tessellation 526/0, transform_feedback 15793/0 (133695 cases, 2 intermittent DeviceLost, pre-existing), geometry 189/0, conditional_rendering 922/0, statistics_query 15374/0, draw subset 3446/0; DXVK Native FL 11_0 (`0xb000`) |
+| Tessellation + transform feedback integrated (`work/mesa-dxint` `dx-integrate` on e2fde360503, `csf-v11/065-068`) | matrices 0 fail (tess 24/24, xfb 17/17 incl. tes_capture); CTS tessellation 526/0, transform_feedback 15793/0 (133695 cases, 2 intermittent DeviceLost, pre-existing), geometry 189/0, conditional_rendering 922/0, statistics_query 15374/0, draw subset 3446/0; DXVK Native v3.1.1 FL 11_0 (`0xb000`) |
+| `VK_EXT_memory_priority` + `VK_EXT_pageable_device_local_memory` (069) | CTS 224/0, 202/0; api.info 7799/0 |
+| `alphaToOne` (070) | CTS 123/0 |
+| `maxGeometryShaderInvocations` 64 (071) | geometry 193/0, instanced 20/0 |
+| `VK_EXT_multi_draw` (072) | CTS 12704/0 |
+| `VK_EXT_primitives_generated_query` (073) | CTS 75206/0 |
 
-Patches exported and clean-applying: `patches/csf-v11/` up to `068`; fresh pin + apply = `work/mesa-dxint` tree `81bdf03edb7`.
+Patches exported and clean-applying: `patches/csf-v11/` up to `073` (069-073 on `work/mesa-p3` `dx-p3`); fresh pin + apply through 068 = `work/mesa-dxint` tree `81bdf03edb7`.
 Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELLATION.md`.
 
-Integration gaps: xfb 65536-record cap per non-tess draw; `VK_EXT_primitives_generated_query` missing; intermittent DeviceLost in `transform_feedback.*.query_copy_*` (also on `dx9-xfb`); P12/P15/P17/P20/P21 stale safe_false tests fail (they read `work/mesa` and already failed before); `work/mesa` (`dx6-dx7-base`) not advanced.
+Integration gaps: GS primitive drop; VMR (`vertexPipelineStoresAndAtomics` / FL11_1, worktree `dx-vpsa`); JICA98 0005 (same-queue semaphore waits) review; swapchain test (in progress elsewhere); `depthBounds`; `shaderOutputViewportIndex` (GS-written viewport index dropped); XFB intermittent DeviceLost; XFB 65536-record cap per non-tess draw; `robustImageAccess2` (vkd3d-proton device-create blocker).
 
 ## TODO (stopped 2026-10-01 00:45 IST)
 
@@ -39,12 +44,12 @@ Integration gaps: xfb 65536-record cap per non-tess draw; `VK_EXT_primitives_gen
 
 ## TODO (stopped, resume later)
 
-### vkd3d-proton native smoke (~30%)
+### vkd3d-proton native smoke (deferred)
+- Deferred. vkd3d/D3D12 and FL12 stay deferred (sparse NO-GO on kbase).
 - Scripts (untracked): `scripts/vkd3d/build-vkd3d-proton.sh` (chroot build with d3d12 tests), `scripts/vkd3d/run-d3d12-smoke.sh`, `tests/vkd3d/d3d12-smoke.list`.
 - Build finished (`BUILD_OK` in scratchpad `vkd3d/build-host.log`), but the built `libvkd3d-proton-d3d12.so` and `tests/d3d12` binary are not in the scratchpad; they are likely in the device chroot.
 - No device run yet (`run1.log` empty).
-- Next: run the d3d12 smoke list on device, record the device-create result and failures.
-- Known hard blockers: `robustImageAccess2=false`, transform feedback queries (landing via `dx9-xfb`).
+- Known hard blocker while deferred: `robustImageAccess2=false`. `VK_EXT_primitives_generated_query` landed in 073.
 
 ### X11 present teardown hang (~20%)
 - Symptom: DXVK Native hangs in `destroySwapchain` waiting in `x11_wait_for_present` (see `validation/g615-v11-csf/dxvk/DX8-NATIVE-WORKLOAD.md`).
@@ -62,8 +67,8 @@ Integration gaps: xfb 65536-record cap per non-tess draw; `VK_EXT_primitives_gen
 
 ## Remaining after that
 
-1. Export vertex-stores work as patches on top of `csf-v11/068`; prove clean apply.
-2. Feature bits: GS invocations 64+, `shaderOutputViewportIndex`.
+1. Export vertex-stores work as patches on top of `csf-v11/073`; prove clean apply.
+2. Feature bit: `shaderOutputViewportIndex`.
 3. Wine (x86_64 under box64/FEX in the Alpine chroot), then first game test at FL11_0 / SM6.0.
 4. SM6.2+ denorm control, Winlator packaging.
-5. FL12_0 needs sparse; blocked by kbase (NO-GO in the sparse feasibility doc).
+5. FL12_0 deferred. Sparse is NO-GO on kbase (sparse feasibility doc).

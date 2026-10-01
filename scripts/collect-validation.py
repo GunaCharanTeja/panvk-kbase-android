@@ -35,7 +35,7 @@ ANDROID_GATES = (
 GLIBC_GATES = ("enumeration", "compute10", "offscreen")
 
 # (gate, kind) -> ordered evidence filename globs, first match with a PASS token wins.
-# Prefer final beta.3 regressions; retain beta.2 fallbacks for old packages.
+# Base Android/glibc gates still use beta.3 logs; DXVK beta.5 evidence lives under the "dxvk" key.
 ANDROID_EVIDENCE = {
     "enumeration": ["beta3-phase8-android-shell-gates*.txt", "beta2-enumeration*.txt", "gateC-enumerate*.txt"],
     "deviceCreate": ["beta3-phase8-android-shell-gates*.txt", "beta2-compute*.txt", "gateDE-compute*.txt"],
@@ -50,6 +50,30 @@ GLIBC_EVIDENCE = {
     "enumeration": ["beta3-phase8-glibc-runtime*.txt", "beta2-glibc*.txt", "p16-glibc*.txt"],
     "compute10": ["beta3-phase8-glibc-runtime*.txt", "beta2-glibc*.txt", "p16-glibc*.txt"],
     "offscreen": ["beta3-phase8-glibc-runtime*.txt", "beta2-glibc*.txt", "p16-glibc*.txt"],
+}
+DXVK_EVIDENCE = {
+    "progress": "worklogs/g615-dxvk/PROGRESS.md",
+    "evidenceDir": "validation/{profile}/dxvk",
+    "complianceMatrix": "validation/{profile}/p23-dxvk-vkd3d-compliance-matrix.json",
+    "cts": {
+        "geometry": {"pass": 193, "fail": 0},
+        "geometry_instanced": {"pass": 20, "fail": 0},
+        "tessellation": {"pass": 526, "fail": 0},
+        "transform_feedback": {
+            "pass": 15793,
+            "fail": 0,
+            "note": "2 intermittent DeviceLost",
+        },
+        "bc_subset": {"pass": 1863, "fail": 0},
+        "copy_and_blit": {"pass": 9620, "fail": 0},
+        "statistics_query": {"pass": 15374, "fail": 0},
+        "multi_draw": {"pass": 12704, "fail": 0},
+        "primitives_generated_query": {"pass": 75206, "fail": 0},
+        "memory_priority": {"pass": 224, "fail": 0},
+        "pageable_device_local_memory": {"pass": 202, "fail": 0},
+        "api_info": {"pass": 7799, "fail": 0},
+        "alpha_to_one": {"pass": 123, "fail": 0},
+    },
 }
 UINT64_MAX = "18446744073709551615"
 
@@ -181,6 +205,28 @@ def collect(profile: str) -> dict:
     matrix_path = find_matrix(profile)
     matrix_rel = matrix_path.relative_to(ROOT).as_posix() if matrix_path else None
 
+    ev_dir_rel = DXVK_EVIDENCE["evidenceDir"].format(profile=profile)
+    ev_dir = ROOT / ev_dir_rel
+    files = (
+        sorted(
+            p.relative_to(ev_dir).as_posix()
+            for p in ev_dir.rglob("*")
+            if p.is_file()
+        )
+        if ev_dir.is_dir()
+        else []
+    )
+    cm_rel = DXVK_EVIDENCE["complianceMatrix"].format(profile=profile)
+    compliance_matrix = cm_rel if (ROOT / cm_rel).is_file() else None
+
+    dxvk = {
+        "progress": DXVK_EVIDENCE["progress"],
+        "evidenceDir": ev_dir_rel,
+        "files": files,
+        "complianceMatrix": compliance_matrix,
+        "cts": DXVK_EVIDENCE["cts"],
+    }
+
     return {
         "profile": profile,
         "device": prof.get("device", "Poco X6 Pro"),
@@ -191,6 +237,7 @@ def collect(profile: str) -> dict:
         "android": android,
         "glibc": glibc,
         "runtimeFeatureMatrix": matrix_rel,
+        "dxvk": dxvk,
         "generatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "generatedBy": "scripts/collect-validation.py",
     }

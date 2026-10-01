@@ -234,7 +234,7 @@
       "stockDxvkSmoke": "BLOCKED",
       "passCount": 56,
       "failCount": 5,
-      "optionalFailCount": 12,
+      "optionalFailCount": 0,
       "profiles": {
         "VP_DXVK_d3d9_baseline": {
           "label": "DXVK D3D9 Baseline profile",
@@ -947,9 +947,9 @@
             "d3d9_optional"
           ],
           "status": "FAIL",
-          "passCount": 56,
-          "failCount": 5,
-          "optionalFailCount": 12,
+          "passCount": 88,
+          "failCount": 16,
+          "optionalFailCount": 0,
           "requirements": [
             {
               "requirement": "api-version",
@@ -1436,6 +1436,182 @@
               "action": "Investigate in the owning feature phase; never expose early"
             },
             {
+              "requirement": "VK_KHR_load_store_op_none",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_load_store_op_none",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_maintenance6",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_maintenance6",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_maintenance7",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_maintenance7",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_present_id",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_present_id",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_present_wait",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_present_wait",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_swapchain_mutable_format",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_swapchain_mutable_format",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_line_rasterization",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_line_rasterization",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_swapchain_maintenance1",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_swapchain_maintenance1",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "wideLines",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceFeatures.wideLines",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "shaderInt16",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceVulkan11Features.shaderInt16",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "storagePushConstant16",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "maintenance6",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceMaintenance6FeaturesKHR.maintenance6",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "maintenance7",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "presentId",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDevicePresentIdFeaturesKHR.presentId",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "presentWait",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDevicePresentWaitFeaturesKHR.presentWait",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "rectangularLines",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
               "requirement": "VK_EXT_robustness2",
               "current": 1,
               "required": 1,
@@ -1568,6 +1744,226 @@
               "action": "None"
             },
             {
+              "requirement": "VK_EXT_vertex_attribute_divisor",
+              "current": 3,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_vertex_attribute_divisor",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_depth_bias_control",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_depth_bias_control",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_depth_clip_enable",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_depth_clip_enable",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_custom_border_color",
+              "current": 12,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_custom_border_color",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_attachment_feedback_loop_layout",
+              "current": 2,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_attachment_feedback_loop_layout",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_non_seamless_cube_map",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_non_seamless_cube_map",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "samplerAnisotropy",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceFeatures.samplerAnisotropy",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "vertexAttributeInstanceRateDivisor",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "vertexAttributeInstanceRateZeroDivisor",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "depthBiasControl",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "depthBiasExact",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "depthClipEnable",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthClipEnableFeaturesEXT.depthClipEnable",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "customBorderColors",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "customBorderColorWithoutFormat",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "attachmentFeedbackLoopLayout",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT.attachmentFeedbackLoopLayout",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "nonSeamlessCubeMap",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceNonSeamlessCubeMapFeaturesEXT.nonSeamlessCubeMap",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "VK_EXT_pageable_device_local_memory",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_pageable_device_local_memory",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "smoothLines",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "pageableDeviceLocalMemory",
+              "current": null,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+              "upstreamPanVK": "UNKNOWN",
+              "implementationStatus": "UNKNOWN",
+              "action": "Extend capture before claiming support"
+            },
+            {
+              "requirement": "swapchainMaintenance1",
+              "current": null,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT.swapchainMaintenance1",
+              "upstreamPanVK": "UNKNOWN",
+              "implementationStatus": "UNKNOWN",
+              "action": "Extend capture before claiming support"
+            },
+            {
               "requirement": "geometryShader",
               "current": false,
               "required": true,
@@ -1621,21 +2017,95 @@
               "upstreamPanVK": "Hardware-dependent; G615 BC mask is 0. No complete PanVK emulation (P9)",
               "implementationStatus": "UNSUPPORTED_NATIVE",
               "action": "Keep false until transparent BC contract PASSes. Never advertise early."
+            },
+            {
+              "requirement": "VK_EXT_memory_priority",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_memory_priority",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "depthBounds",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceFeatures.depthBounds",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "vertexPipelineStoresAndAtomics",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "pipelineStatisticsQuery",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "memoryPriority",
+              "current": null,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+              "upstreamPanVK": "UNKNOWN",
+              "implementationStatus": "UNKNOWN",
+              "action": "Extend capture before claiming support"
+            },
+            {
+              "requirement": "leastRepresentableValueForceUnormRepresentation",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "floatRepresentation",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "2.7.1",
+              "source": "v2.7.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.floatRepresentation",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
             }
           ],
           "blockers": [
+            "VK_EXT_pageable_device_local_memory",
+            "smoothLines",
+            "pageableDeviceLocalMemory",
+            "swapchainMaintenance1",
             "geometryShader",
             "fillModeNonSolid",
             "shaderClipDistance",
             "shaderCullDistance",
-            "textureCompressionBC"
-          ],
-          "optionalFails": [
-            "VK_EXT_pageable_device_local_memory",
-            "shaderInt16",
-            "smoothLines",
-            "pageableDeviceLocalMemory",
-            "swapchainMaintenance1",
+            "textureCompressionBC",
             "VK_EXT_memory_priority",
             "depthBounds",
             "vertexPipelineStoresAndAtomics",
@@ -1643,7 +2113,8 @@
             "memoryPriority",
             "leastRepresentableValueForceUnormRepresentation",
             "floatRepresentation"
-          ]
+          ],
+          "optionalFails": []
         }
       },
       "blockers": [
@@ -1676,7 +2147,7 @@
       "stockDxvkSmoke": "BLOCKED",
       "passCount": 71,
       "failCount": 5,
-      "optionalFailCount": 19,
+      "optionalFailCount": 0,
       "profiles": {
         "VP_DXVK_d3d9_baseline": {
           "label": "DXVK D3D9 Baseline profile",
@@ -2554,9 +3025,9 @@
             "d3d9_optional"
           ],
           "status": "FAIL",
-          "passCount": 71,
-          "failCount": 5,
-          "optionalFailCount": 19,
+          "passCount": 117,
+          "failCount": 24,
+          "optionalFailCount": 0,
           "requirements": [
             {
               "requirement": "api-version",
@@ -3208,6 +3679,369 @@
               "action": "Investigate in the owning feature phase; never expose early"
             },
             {
+              "requirement": "VK_KHR_maintenance7",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_maintenance7",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_maintenance8",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_maintenance8",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_maintenance9",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_maintenance9",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_present_id2",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_present_id2",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_present_wait2",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_present_wait2",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_shader_subgroup_uniform_control_flow",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_shader_subgroup_uniform_control_flow",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_swapchain_maintenance1",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_swapchain_maintenance1",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_swapchain_mutable_format",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_swapchain_mutable_format",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_unified_image_layouts",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_unified_image_layouts",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_border_color_swizzle",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_border_color_swizzle",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_dynamic_rendering_unused_attachments",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_dynamic_rendering_unused_attachments",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_extended_dynamic_state3",
+              "current": 2,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_extended_dynamic_state3",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_line_rasterization",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_line_rasterization",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "largePoints",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceFeatures.largePoints",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "wideLines",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceFeatures.wideLines",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "storagePushConstant16",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceVulkan11Features.storagePushConstant16",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "storagePushConstant8",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceVulkan12Features.storagePushConstant8",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "maintenance7",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceMaintenance7FeaturesKHR.maintenance7",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "maintenance8",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceMaintenance8FeaturesKHR.maintenance8",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "maintenance9",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceMaintenance9FeaturesKHR.maintenance9",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "presentId2",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDevicePresentId2FeaturesKHR.presentId2",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "presentWait2",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDevicePresentWait2FeaturesKHR.presentWait2",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "swapchainMaintenance1",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR.swapchainMaintenance1",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "borderColorSwizzle",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceBorderColorSwizzleFeaturesEXT.borderColorSwizzle",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "extendedDynamicState3AlphaToCoverageEnable",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3AlphaToCoverageEnable",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "extendedDynamicState3DepthClipEnable",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3DepthClipEnable",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "extendedDynamicState3RasterizationSamples",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3RasterizationSamples",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "extendedDynamicState3SampleMask",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleMask",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "extendedDynamicState3LineRasterizationMode",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3LineRasterizationMode",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "rectangularLines",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceLineRasterizationFeaturesEXT.rectangularLines",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "unifiedImageLayouts",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR.unifiedImageLayouts",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "shaderSubgroupUniformControlFlow",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceShaderSubgroupUniformControlFlowFeaturesKHR.shaderSubgroupUniformControlFlow",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "dynamicRenderingUnusedAttachments",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT.dynamicRenderingUnusedAttachments",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
               "requirement": "VK_EXT_robustness2",
               "current": 1,
               "required": 1,
@@ -3340,6 +4174,270 @@
               "action": "None"
             },
             {
+              "requirement": "VK_EXT_vertex_attribute_divisor",
+              "current": 3,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_vertex_attribute_divisor",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_depth_bias_control",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_depth_bias_control",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_custom_border_color",
+              "current": 12,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_custom_border_color",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_attachment_feedback_loop_layout",
+              "current": 2,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_attachment_feedback_loop_layout",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_non_seamless_cube_map",
+              "current": 1,
+              "required": 1,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_non_seamless_cube_map",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "vertexAttributeInstanceRateDivisor",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateDivisor",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "vertexAttributeInstanceRateZeroDivisor",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT.vertexAttributeInstanceRateZeroDivisor",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "depthBiasControl",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasControl",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "depthBiasExact",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.depthBiasExact",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "customBorderColors",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColors",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "customBorderColorWithoutFormat",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceCustomBorderColorFeaturesEXT.customBorderColorWithoutFormat",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "attachmentFeedbackLoopLayout",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT.attachmentFeedbackLoopLayout",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "nonSeamlessCubeMap",
+              "current": true,
+              "required": true,
+              "status": "PASS",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceNonSeamlessCubeMapFeaturesEXT.nonSeamlessCubeMap",
+              "upstreamPanVK": "Present in pinned G615 capture",
+              "implementationStatus": "IMPLEMENTED",
+              "action": "None"
+            },
+            {
+              "requirement": "VK_KHR_incremental_present",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_incremental_present",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_maintenance10",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_maintenance10",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_KHR_maintenance11",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_KHR_maintenance11",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_descriptor_heap",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_descriptor_heap",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_pageable_device_local_memory",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / extensions.VK_EXT_pageable_device_local_memory",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "maintenance10",
+              "current": null,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceMaintenance10FeaturesKHR.maintenance10",
+              "upstreamPanVK": "UNKNOWN",
+              "implementationStatus": "UNKNOWN",
+              "action": "Extend capture before claiming support"
+            },
+            {
+              "requirement": "maintenance11",
+              "current": null,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceMaintenance11FeaturesKHR.maintenance11",
+              "upstreamPanVK": "UNKNOWN",
+              "implementationStatus": "UNKNOWN",
+              "action": "Extend capture before claiming support"
+            },
+            {
+              "requirement": "descriptorHeap",
+              "current": null,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceDescriptorHeapFeaturesEXT.descriptorHeap",
+              "upstreamPanVK": "UNKNOWN",
+              "implementationStatus": "UNKNOWN",
+              "action": "Extend capture before claiming support"
+            },
+            {
+              "requirement": "extendedDynamicState3SampleLocationsEnable",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceExtendedDynamicState3FeaturesEXT.extendedDynamicState3SampleLocationsEnable",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "smoothLines",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDeviceLineRasterizationFeaturesEXT.smoothLines",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "pageableDeviceLocalMemory",
+              "current": null,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / dxvk_common_optional / features.VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT.pageableDeviceLocalMemory",
+              "upstreamPanVK": "UNKNOWN",
+              "implementationStatus": "UNKNOWN",
+              "action": "Extend capture before claiming support"
+            },
+            {
               "requirement": "geometryShader",
               "current": false,
               "required": true,
@@ -3393,16 +4491,97 @@
               "upstreamPanVK": "Hardware-dependent; G615 BC mask is 0. No complete PanVK emulation (P9)",
               "implementationStatus": "UNSUPPORTED_NATIVE",
               "action": "Keep false until transparent BC contract PASSes. Never advertise early."
+            },
+            {
+              "requirement": "VK_EXT_memory_priority",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_memory_priority",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "VK_EXT_sample_locations",
+              "current": 0,
+              "required": 1,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / extensions.VK_EXT_sample_locations",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "depthBounds",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceFeatures.depthBounds",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "vertexPipelineStoresAndAtomics",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "pipelineStatisticsQuery",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceFeatures.pipelineStatisticsQuery",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "memoryPriority",
+              "current": null,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceMemoryPriorityFeaturesEXT.memoryPriority",
+              "upstreamPanVK": "UNKNOWN",
+              "implementationStatus": "UNKNOWN",
+              "action": "Extend capture before claiming support"
+            },
+            {
+              "requirement": "leastRepresentableValueForceUnormRepresentation",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.leastRepresentableValueForceUnormRepresentation",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
+            },
+            {
+              "requirement": "floatRepresentation",
+              "current": false,
+              "required": true,
+              "status": "FAIL",
+              "sourceVersion": "3.1.1",
+              "source": "v3.1.1 VP_DXVK_requirements.json VP_DXVK_d3d9_optimal / d3d9_optional / features.VkPhysicalDeviceDepthBiasControlFeaturesEXT.floatRepresentation",
+              "upstreamPanVK": "Pinned runtime does not satisfy",
+              "implementationStatus": "NOT_SATISFIED",
+              "action": "Investigate in the owning feature phase; never expose early"
             }
           ],
           "blockers": [
-            "geometryShader",
-            "fillModeNonSolid",
-            "shaderClipDistance",
-            "shaderCullDistance",
-            "textureCompressionBC"
-          ],
-          "optionalFails": [
             "VK_KHR_incremental_present",
             "VK_KHR_maintenance10",
             "VK_KHR_maintenance11",
@@ -3414,6 +4593,11 @@
             "extendedDynamicState3SampleLocationsEnable",
             "smoothLines",
             "pageableDeviceLocalMemory",
+            "geometryShader",
+            "fillModeNonSolid",
+            "shaderClipDistance",
+            "shaderCullDistance",
+            "textureCompressionBC",
             "VK_EXT_memory_priority",
             "VK_EXT_sample_locations",
             "depthBounds",
@@ -3422,7 +4606,8 @@
             "memoryPriority",
             "leastRepresentableValueForceUnormRepresentation",
             "floatRepresentation"
-          ]
+          ],
+          "optionalFails": []
         }
       },
       "blockers": [

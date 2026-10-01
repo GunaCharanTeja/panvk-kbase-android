@@ -6,13 +6,15 @@ import subprocess
 import sys
 import unittest
 
+from _mesa_tree import mesa_root
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/evaluate-dxvk-vkd3d-compliance-matrix.py"
 JSON_OUT = ROOT / "validation/g615-v11-csf/p23-dxvk-vkd3d-compliance-matrix.json"
 MD_OUT = ROOT / "validation/g615-v11-csf/P23-DXVK-VKD3D-COMPLIANCE-MATRIX.md"
 CAPS = ROOT / "validation/g615-v11-csf/consumer-capabilities.json"
-# Integration worktree (dx-integrate): fresh pin + csf-v11 up to 072.
-PHYSICAL = ROOT / "work/mesa-dxint/src/panfrost/vulkan/panvk_vX_physical_device.c"
+# Integrated tree. Patches 069-073 may be absent at this HEAD.
+PHYSICAL = mesa_root() / "src/panfrost/vulkan/panvk_vX_physical_device.c"
 DXVK_PROOF = ROOT / "validation/g615-v11-csf/dxvk"
 P13 = ROOT / "validation/g615-v11-csf/p13-d3d9.json"
 P16 = ROOT / "validation/g615-v11-csf/p16-d3d10.json"

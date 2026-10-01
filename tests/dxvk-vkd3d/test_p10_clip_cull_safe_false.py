@@ -3,9 +3,10 @@ import pathlib
 import re
 import unittest
 
+from _mesa_tree import mesa_root
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-MESA = ROOT / "work" / "mesa"
+MESA = mesa_root()
 PHYSICAL_DEVICE = (
     MESA / "src/panfrost/vulkan/panvk_vX_physical_device.c"
 )

@@ -1,5 +1,47 @@
 # P23 Final DXVK/vkd3d compliance matrix
 
+## Beta.5 status (current)
+
+Release `g615-v11-csf-v0.1.0-beta.5`. Patches through `073`.
+
+Matrix rows below are evaluated from the beta.3-era consumer-capabilities.json capture; features listed here are device-proven in beta.5 but await a fresh capture
+
+Exposed since the beta.3 capture:
+
+| Feature | Patch | CTS |
+|---|---|---|
+| `VK_EXT_memory_priority + VK_EXT_pageable_device_local_memory` | `069` | 224/0, 202/0; api.info 7799/0 |
+| `alphaToOne` | `070` | 123/0 |
+| `maxGeometryShaderInvocations` | `071` | geometry 193/0, instanced 20/0 |
+| `VK_EXT_multi_draw` | `072` | 12704/0 |
+| `VK_EXT_primitives_generated_query` | `073` | 75206/0 |
+| `geometryShader` | `before-beta.5` | geometry 193/0, instanced 20/0 |
+| `tessellationShader` | `before-beta.5` | 526/0 |
+| `VK_EXT_transform_feedback` | `before-beta.5` | 15793/0, 2 intermittent DeviceLost |
+| `textureCompressionBC` | `before-beta.5` | 1863/0, copy_and_blit 9620/0 |
+| `shaderClipDistance` | `before-beta.5` | device matrix 0 fail |
+| `shaderCullDistance` | `before-beta.5` | device matrix 0 fail |
+| `multiViewport` | `before-beta.5` | device matrix 0 fail |
+| `fillModeNonSolid` | `before-beta.5` | device matrix 0 fail |
+| `pipelineStatisticsQuery` | `049-054` | statistics_query 15374/0 |
+
+Open items:
+
+- GS primitive drop
+- VMR (vertexPipelineStoresAndAtomics / FL11_1, worktree dx-vpsa)
+- JICA98 0005 (same-queue semaphore waits) review
+- swapchain test (in progress elsewhere)
+- depthBounds
+- shaderOutputViewportIndex (GS-written viewport index dropped)
+- XFB intermittent DeviceLost
+- XFB 65536-record cap per non-tess draw
+- robustImageAccess2 (vkd3d-proton device-create blocker)
+
+Deferred:
+
+- vkd3d/D3D12
+- FL12 (sparse NO-GO on kbase)
+
 ## Result
 
 `FAIL`

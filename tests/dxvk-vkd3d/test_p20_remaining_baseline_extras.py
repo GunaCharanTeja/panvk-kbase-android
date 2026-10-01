@@ -3,12 +3,12 @@ import json
 import pathlib
 import unittest
 
+from _mesa_tree import mesa_root
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EXTRAS = ROOT / "validation/g615-v11-csf/p20-remaining-baseline-extras.json"
 CAPS = ROOT / "validation/g615-v11-csf/consumer-capabilities.json"
-PHYSICAL = (
-    ROOT / "work/mesa/src/panfrost/vulkan/panvk_vX_physical_device.c"
-)
+PHYSICAL = mesa_root() / "src/panfrost/vulkan/panvk_vX_physical_device.c"
 P19 = ROOT / "validation/g615-v11-csf/p19-vkd3d-profile-baseline.json"
 
 P20_OWNED = {"pipelineStatisticsQuery"}
@@ -38,9 +38,13 @@ class P20RemainingBaselineExtrasTest(unittest.TestCase):
         cls.p19 = json.loads(P19.read_text())
 
     def test_bit_stays_false(self):
+        # consumer-capabilities.json and the P20 extras capture are historical.
+        # The integrated tree exposes the bit on v10+.
         self.assertIs(self.caps["features"]["pipelineStatisticsQuery"], False)
         source = PHYSICAL.read_text()
-        self.assertRegex(source, r"\.pipelineStatisticsQuery\s*=\s*false,")
+        self.assertRegex(
+            source, r"\.pipelineStatisticsQuery\s*=\s*PAN_ARCH >= 10,"
+        )
         self.assertNotRegex(source, r"\.pipelineStatisticsQuery\s*=\s*true")
         self.assertIs(self.extras["pipelineStatisticsQuery"], False)
         self.assertEqual(self.extras["result"], "BLOCKED_SAFE_FALSE")
@@ -86,20 +90,23 @@ class P20RemainingBaselineExtrasTest(unittest.TestCase):
 
     def test_no_feature_bit_flip_in_mesa(self):
         source = PHYSICAL.read_text()
+        exposed = {
+            "geometryShader": r"PAN_ARCH >= 10 && !PANVK_DEBUG\(NO_GS\)",
+            "tessellationShader": r"PAN_ARCH >= 10",
+            "pipelineStatisticsQuery": r"PAN_ARCH >= 10",
+            "fillModeNonSolid": r"PAN_ARCH >= 10",
+            "multiViewport": r"PAN_ARCH >= 10",
+            "shaderClipDistance": r"PAN_ARCH >= 10",
+            "shaderCullDistance": r"PAN_ARCH >= 10",
+        }
+        for name, expr in exposed.items():
+            self.assertRegex(source, rf"\.{name}\s*=\s*{expr},", name)
         for name in (
-            "geometryShader",
-            "tessellationShader",
-            "pipelineStatisticsQuery",
+            "robustImageAccess2",
+            "depthBounds",
+            "shaderOutputViewportIndex",
         ):
-            self.assertRegex(source, rf"\.{name}\s*=\s*false,")
-        # DX7 device-proven bits (validation/g615-v11-csf/dxvk/DX7-*.md).
-        for name in (
-            "fillModeNonSolid",
-            "multiViewport",
-            "shaderClipDistance",
-            "shaderCullDistance",
-        ):
-            self.assertRegex(source, rf"\.{name}\s*=\s*PAN_ARCH >= 10,")
+            self.assertRegex(source, rf"\.{name}\s*=\s*false,", name)
 
 
 if __name__ == "__main__":

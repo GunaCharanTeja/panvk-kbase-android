@@ -26,7 +26,14 @@ SHA256SUMS.txt
 *~
 .DS_Store
 tests/android-loader-app/build-temp/
+# local session transcripts
+session-ses_*.md
+# generated SPIR-V and local Vulkan header symlinks (into work/mesa*)
+tests/dxvk/vulkan/vert.spv
+tests/dxvk/vulkan/vulkan
+tests/dxvk/vulkan/vk_video
 # secrets / signing
 *.keystore
 *.jks
 local.properties
+tmp/

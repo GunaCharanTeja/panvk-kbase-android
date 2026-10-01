@@ -5,12 +5,14 @@ import subprocess
 import sys
 import unittest
 
+from _mesa_tree import mesa_root
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/evaluate-vkd3d-d3d12-feature-level.py"
 JSON_OUT = ROOT / "validation/g615-v11-csf/p21-d3d12-feature-level.json"
 MD_OUT = ROOT / "validation/g615-v11-csf/P21-D3D12-FEATURE-LEVEL.md"
 CAPS = ROOT / "validation/g615-v11-csf/consumer-capabilities.json"
-PHYSICAL = ROOT / "work/mesa/src/panfrost/vulkan/panvk_vX_physical_device.c"
+PHYSICAL = mesa_root() / "src/panfrost/vulkan/panvk_vX_physical_device.c"
 FALSE_BITS = (
     "geometryShader",
     "fillModeNonSolid",
@@ -72,21 +74,35 @@ class P21D3D12FeatureLevelTest(unittest.TestCase):
         for name in FALSE_BITS:
             self.assertIs(self.caps["features"][name], False, name)
             self.assertIs(self.doc["featureBitsUnchanged"][name], False, name)
+        # Caps JSON above is the historical capture. Driver source exposes
+        # the device-proven bits; sparse and the v10-off bits stay false.
         source = PHYSICAL.read_text()
+        exposed = {
+            "geometryShader": r"PAN_ARCH >= 10 && !PANVK_DEBUG\(NO_GS\)",
+            "tessellationShader": r"PAN_ARCH >= 10",
+            "pipelineStatisticsQuery": r"PAN_ARCH >= 10",
+            "transformFeedback": r"PAN_ARCH >= 10",
+            "geometryStreams": r"PAN_ARCH >= 10 && !PANVK_DEBUG\(NO_GS\)",
+            "fillModeNonSolid": r"PAN_ARCH >= 10",
+            "multiViewport": r"PAN_ARCH >= 10",
+            "shaderClipDistance": r"PAN_ARCH >= 10",
+            "shaderCullDistance": r"PAN_ARCH >= 10",
+        }
+        for name, expr in exposed.items():
+            self.assertRegex(source, rf"\.{name}\s*=\s*{expr},", name)
         for name in (
-            "geometryShader",
-            "tessellationShader",
-            "pipelineStatisticsQuery",
+            "robustImageAccess2",
+            "vertexPipelineStoresAndAtomics",
+            "depthBounds",
+            "shaderOutputViewportIndex",
         ):
-            self.assertRegex(source, rf"\.{name}\s*=\s*false,")
-        # DX7 device-proven bits (validation/g615-v11-csf/dxvk/DX7-*.md).
-        for name in (
-            "fillModeNonSolid",
-            "multiViewport",
-            "shaderClipDistance",
-            "shaderCullDistance",
-        ):
-            self.assertRegex(source, rf"\.{name}\s*=\s*PAN_ARCH >= 10,")
+            if name == "vertexPipelineStoresAndAtomics":
+                self.assertRegex(
+                    source,
+                    r"\.vertexPipelineStoresAndAtomics\s*=\s*\n\s*\(PAN_ARCH >= 13",
+                )
+                continue
+            self.assertRegex(source, rf"\.{name}\s*=\s*false,", name)
         self.assertNotRegex(source, r"\.sparseBinding\s*=\s*true")
 
     def test_gates_stay_separate(self):

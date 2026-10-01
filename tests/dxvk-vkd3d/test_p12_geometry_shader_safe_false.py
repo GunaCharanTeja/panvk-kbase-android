@@ -3,8 +3,10 @@ import pathlib
 import re
 import unittest
 
+from _mesa_tree import mesa_root
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-MESA = ROOT / "work" / "mesa"
+MESA = mesa_root()
 PHYSICAL_DEVICE = MESA / "src/panfrost/vulkan/panvk_vX_physical_device.c"
 SHADER = MESA / "src/panfrost/vulkan/panvk_vX_shader.c"
 VALHALL_XML = MESA / "src/panfrost/genxml/v11.xml"
@@ -13,26 +15,46 @@ COMPILER = MESA / "src/panfrost/compiler"
 GALLIUM = MESA / "src/gallium/drivers/panfrost"
 
 
+# geometryShader is exposed on v10+ unless PANVK_DEBUG=NO_GS. The stage runs
+# as compute on the gpu_prerast path. Valhall's hardware shader-stage enum
+# stays vertex/fragment/compute. csf-v11/071 (maxGeometryShaderInvocations
+# 64) is not in mesa-dxint HEAD; this tree advertises 32.
 class GeometryShaderSafeFalseTest(unittest.TestCase):
     def test_features_remain_disabled(self):
         source = PHYSICAL_DEVICE.read_text()
-        self.assertRegex(source, r"\.geometryShader\s*=\s*false,")
         self.assertRegex(
-            source, r"\.shaderTessellationAndGeometryPointSize\s*=\s*false,"
+            source,
+            r"\.geometryShader\s*=\s*PAN_ARCH >= 10 && !PANVK_DEBUG\(NO_GS\),",
+        )
+        self.assertRegex(
+            source,
+            r"\.shaderTessellationAndGeometryPointSize\s*=\s*PAN_ARCH >= 10,",
         )
         self.assertNotRegex(source, r"\.geometryShader\s*=\s*true,")
-        self.assertRegex(source, r"Geometry shaders not supported\.")
-        self.assertRegex(source, r"\.maxGeometryShaderInvocations\s*=\s*0,")
-        self.assertRegex(source, r"\.maxGeometryInputComponents\s*=\s*0,")
-        self.assertRegex(source, r"\.maxGeometryOutputComponents\s*=\s*0,")
-        self.assertRegex(source, r"\.maxGeometryOutputVertices\s*=\s*0,")
-        self.assertRegex(source, r"\.maxGeometryTotalOutputComponents\s*=\s*0,")
+        self.assertNotRegex(source, r"Geometry shaders not supported\.")
+        self.assertRegex(
+            source, r"\.maxGeometryShaderInvocations\s*=\s*PAN_ARCH >= 10 \? 32 : 0,"
+        )
+        self.assertRegex(
+            source, r"\.maxGeometryInputComponents\s*=\s*PAN_ARCH >= 10 \? 64 : 0,"
+        )
+        self.assertRegex(
+            source, r"\.maxGeometryOutputComponents\s*=\s*PAN_ARCH >= 10 \? 128 : 0,"
+        )
+        self.assertRegex(
+            source, r"\.maxGeometryOutputVertices\s*=\s*PAN_ARCH >= 10 \? 256 : 0,"
+        )
+        self.assertRegex(
+            source,
+            r"\.maxGeometryTotalOutputComponents\s*=\s*PAN_ARCH >= 10 \? 1024 : 0,",
+        )
 
     def test_panvk_compile_rejects_geometry_stage(self):
         source = SHADER.read_text()
+        self.assertIn("case MESA_SHADER_GEOMETRY:", source)
+        self.assertIn("panvk_gpu_prerast_lower_gs", source)
         self.assertIn('UNREACHABLE("Unknown shader stage")', source)
         self.assertIn('assert(!"Unsupported stage")', source)
-        self.assertNotIn("MESA_SHADER_GEOMETRY", source)
 
     def test_panvk_has_no_gs_lowering(self):
         patterns = (
@@ -48,8 +70,12 @@ class GeometryShaderSafeFalseTest(unittest.TestCase):
                 if pattern.search(source):
                     matches.append(f"{path.relative_to(MESA)}: {pattern.pattern}")
         self.assertEqual(
-            matches,
-            [],
+            sorted(matches),
+            [
+                "src/panfrost/vulkan/panvk_shader.h: MESA_SHADER_GEOMETRY",
+                "src/panfrost/vulkan/panvk_vX_nir_lower_descriptors.c: MESA_SHADER_GEOMETRY",
+                "src/panfrost/vulkan/panvk_vX_shader.c: MESA_SHADER_GEOMETRY",
+            ],
             "unexpected PanVK GS path; reassess P12:\n" + "\n".join(matches),
         )
 
@@ -98,6 +124,7 @@ class GeometryShaderSafeFalseTest(unittest.TestCase):
             "poly GS lowering now consumed by Panfrost; reassess P12:\n"
             + "\n".join(matches),
         )
+        self.assertIn("panvk_gpu_prerast_lower_gs", SHADER.read_text())
 
 
 if __name__ == "__main__":

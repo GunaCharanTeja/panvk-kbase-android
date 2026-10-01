@@ -3,8 +3,10 @@ import pathlib
 import re
 import unittest
 
+from _mesa_tree import mesa_root
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-MESA = ROOT / "work" / "mesa"
+MESA = mesa_root()
 PHYSICAL_DEVICE = MESA / "src/panfrost/vulkan/panvk_vX_physical_device.c"
 SHADER = MESA / "src/panfrost/vulkan/panvk_vX_shader.c"
 SHADER_H = MESA / "src/panfrost/vulkan/panvk_shader.h"
@@ -16,49 +18,66 @@ GALLIUM = MESA / "src/gallium/drivers/panfrost"
 PAN_SHADER_H = MESA / "src/panfrost/lib/pan_shader.h"
 
 
+# tessellationShader is exposed on v10+. TCS/TES run as compute on the
+# gpu_prerast path. multiviewTessellationShader stays false. Valhall v11
+# has no tess hardware stage; v12 IDVS names stay v12-only.
 class TessellationShaderSafeFalseTest(unittest.TestCase):
     def test_features_remain_disabled(self):
         source = PHYSICAL_DEVICE.read_text()
-        self.assertRegex(source, r"\.tessellationShader\s*=\s*false,")
+        self.assertRegex(source, r"\.tessellationShader\s*=\s*PAN_ARCH >= 10,")
         self.assertRegex(
-            source, r"\.shaderTessellationAndGeometryPointSize\s*=\s*false,"
+            source,
+            r"\.shaderTessellationAndGeometryPointSize\s*=\s*PAN_ARCH >= 10,",
         )
         self.assertRegex(source, r"\.multiviewTessellationShader\s*=\s*false,")
         self.assertNotRegex(source, r"\.tessellationShader\s*=\s*true,")
-        self.assertRegex(source, r"Tesselation shaders not supported\.")
-        self.assertRegex(source, r"\.maxTessellationGenerationLevel\s*=\s*0,")
-        self.assertRegex(source, r"\.maxTessellationPatchSize\s*=\s*0,")
+        self.assertNotRegex(source, r"Tesselation shaders not supported\.")
         self.assertRegex(
-            source, r"\.maxTessellationControlPerVertexInputComponents\s*=\s*0,"
+            source, r"\.maxTessellationGenerationLevel\s*=\s*PAN_ARCH >= 10 \? 64 : 0,"
         )
         self.assertRegex(
-            source, r"\.maxTessellationControlPerVertexOutputComponents\s*=\s*0,"
+            source, r"\.maxTessellationPatchSize\s*=\s*PAN_ARCH >= 10 \? 32 : 0,"
         )
         self.assertRegex(
-            source, r"\.maxTessellationControlPerPatchOutputComponents\s*=\s*0,"
+            source,
+            r"\.maxTessellationControlPerVertexInputComponents\s*=\s*PAN_ARCH >= 10 \? 128 : 0,",
         )
         self.assertRegex(
-            source, r"\.maxTessellationControlTotalOutputComponents\s*=\s*0,"
+            source,
+            r"\.maxTessellationControlPerVertexOutputComponents\s*=\s*PAN_ARCH >= 10 \? 128 : 0,",
         )
         self.assertRegex(
-            source, r"\.maxTessellationEvaluationInputComponents\s*=\s*0,"
+            source,
+            r"\.maxTessellationControlPerPatchOutputComponents\s*=\s*PAN_ARCH >= 10 \? 120 : 0,",
         )
         self.assertRegex(
-            source, r"\.maxTessellationEvaluationOutputComponents\s*=\s*0,"
+            source,
+            r"\.maxTessellationControlTotalOutputComponents\s*=\s*PAN_ARCH >= 10 \? 4096 : 0,",
+        )
+        self.assertRegex(
+            source,
+            r"\.maxTessellationEvaluationInputComponents\s*=\s*PAN_ARCH >= 10 \? 128 : 0,",
+        )
+        self.assertRegex(
+            source,
+            r"\.maxTessellationEvaluationOutputComponents\s*=\s*PAN_ARCH >= 10 \? 128 : 0,",
         )
 
     def test_panvk_compile_rejects_tess_stage(self):
         source = SHADER.read_text()
+        self.assertIn("case MESA_SHADER_TESS_CTRL:", source)
+        self.assertIn("case MESA_SHADER_TESS_EVAL:", source)
+        self.assertIn("poly_nir_lower_tcs", source)
+        self.assertIn("poly_nir_lower_tes", source)
+        self.assertIn("panvk_lower_tes", source)
         self.assertIn('UNREACHABLE("Unknown shader stage")', source)
         self.assertIn('assert(!"Unsupported stage")', source)
-        self.assertNotIn("MESA_SHADER_TESS_CTRL", source)
-        self.assertNotIn("MESA_SHADER_TESS_EVAL", source)
-        self.assertNotIn("poly_nir_lower_tcs", source)
-        self.assertNotIn("poly_nir_lower_tes", source)
 
     def test_vs_variant_is_hw_only(self):
         source = SHADER_H.read_text()
         self.assertIn("PANVK_VS_VARIANT_HW", source)
+        self.assertIn("PANVK_VS_VARIANT_GPU_LOWERED", source)
+        self.assertIn("MESA_SHADER_TESS_EVAL", source)
         self.assertNotIn("PANVK_VS_VARIANT_TCS", source)
         self.assertNotIn("PANVK_VS_VARIANT_TES", source)
 
@@ -78,8 +97,14 @@ class TessellationShaderSafeFalseTest(unittest.TestCase):
                 if pattern.search(source):
                     matches.append(f"{path.relative_to(MESA)}: {pattern.pattern}")
         self.assertEqual(
-            matches,
-            [],
+            sorted(matches),
+            [
+                "src/panfrost/vulkan/panvk_shader.h: MESA_SHADER_TESS_EVAL",
+                "src/panfrost/vulkan/panvk_vX_nir_lower_descriptors.c: MESA_SHADER_TESS_CTRL",
+                "src/panfrost/vulkan/panvk_vX_shader.c: MESA_SHADER_TESS_CTRL",
+                "src/panfrost/vulkan/panvk_vX_shader.c: MESA_SHADER_TESS_EVAL",
+                "src/panfrost/vulkan/panvk_vX_shader.c: poly_nir_lower_tes\\s*\\(",
+            ],
             "unexpected PanVK tess path; reassess P17:\n" + "\n".join(matches),
         )
 
@@ -167,10 +192,13 @@ class TessellationShaderSafeFalseTest(unittest.TestCase):
                 if pattern.search(path.read_text(errors="replace")):
                     matches.append(str(path.relative_to(MESA)))
         self.assertEqual(
-            matches,
-            [],
-            "poly tess lowering now consumed by Panfrost; reassess P17:\n"
-            + "\n".join(matches),
+            sorted(matches),
+            [
+                "src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c",
+                "src/panfrost/vulkan/panvk_gpu_prerast.h",
+                "src/panfrost/vulkan/panvk_vX_shader.c",
+            ],
+            "unexpected poly tess wiring; reassess P17:\n" + "\n".join(matches),
         )
 
 

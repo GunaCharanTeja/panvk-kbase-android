@@ -4,17 +4,20 @@ import pathlib
 import re
 import unittest
 
+from _mesa_tree import mesa_root
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/KBASE-SPARSE-FEASIBILITY.md"
 JSON_OUT = ROOT / "validation/g615-v11-csf/p22-kbase-sparse-feasibility.json"
 MD_OUT = ROOT / "validation/g615-v11-csf/P22-KBASE-SPARSE-FEASIBILITY.md"
 CAPS = ROOT / "validation/g615-v11-csf/consumer-capabilities.json"
-PHYSICAL = ROOT / "work/mesa/src/panfrost/vulkan/panvk_vX_physical_device.c"
-KBASE_KMOD = ROOT / "work/mesa/src/panfrost/lib/kmod/kbase_kmod.c"
+_MESA = mesa_root()
+PHYSICAL = _MESA / "src/panfrost/vulkan/panvk_vX_physical_device.c"
+KBASE_KMOD = _MESA / "src/panfrost/lib/kmod/kbase_kmod.c"
 KBASE_KMOD_PATCH = (
     ROOT / "patches/kbase-common/files/src/panfrost/lib/kmod/kbase_kmod.c"
 )
-DEVICE_C = ROOT / "work/mesa/src/panfrost/vulkan/panvk_vX_device.c"
+DEVICE_C = _MESA / "src/panfrost/vulkan/panvk_vX_device.c"
 GATE_PATCH = ROOT / "patches/kbase-common/006-device-queue-wsi-kbase.patch"
 
 FALSE_BITS = (

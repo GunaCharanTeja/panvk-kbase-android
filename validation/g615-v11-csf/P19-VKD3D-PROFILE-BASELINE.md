@@ -111,7 +111,7 @@ Pass `78` / fail `15`.
 
 | Requirement | Current | Required | Status | Source version | Source file/profile | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|---|---|---|
-| `VK_EXT_transform_feedback` | `None` | `1` | FAIL | `2.14.1` | `v2.14.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / extensions.VK_EXT_transform_feedback` | ABSENT at pinned 5a07217 and origin/main e1f3f372; PanVK get_device_extensions omits it (P15 BLOCKED_SAFE_FALSE) | NOT_IMPLEMENTED | Keep absent. Complete no-IDVS XFB variant, then CTS. Never expose early. |
+| `VK_EXT_transform_feedback` | `0` | `1` | FAIL | `2.14.1` | `v2.14.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / extensions.VK_EXT_transform_feedback` | ABSENT at pinned 5a07217 and origin/main e1f3f372; PanVK get_device_extensions omits it (P15 BLOCKED_SAFE_FALSE) | NOT_IMPLEMENTED | Keep absent. Complete no-IDVS XFB variant, then CTS. Never expose early. |
 | `robustImageAccess2` | `False` | `True` | FAIL | `2.14.1` | `v2.14.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / features.VkPhysicalDeviceRobustness2FeaturesEXT.robustImageAccess2` | Pinned and origin/main e1f3f372 still report false (P6 PARTIAL / UNSUPPORTED) | UNSUPPORTED | Keep false. Complete robustImageAccess2 semantics, then CTS. Never expose early. |
 | `transformFeedback` | `False` | `True` | FAIL | `2.14.1` | `v2.14.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | ABSENT at pinned 5a07217 and origin/main e1f3f372; PanVK omits EXT_transform_feedback (P15 BLOCKED_SAFE_FALSE) | NOT_IMPLEMENTED | Keep false. Complete no-IDVS XFB variant, then CTS. Never expose early. |
 | `geometryStreams` | `False` | `True` | FAIL | `2.14.1` | `v2.14.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | ABSENT at pinned and origin/main; XFB streams need GS (P15 BLOCKED_SAFE_FALSE, waits on P12) | NOT_IMPLEMENTED | Keep false. Complete XFB plus geometryShader, then CTS. Never expose early. |
@@ -152,9 +152,9 @@ D3D_FEATURE_LEVEL is not available because DEVICE_CREATE fails. Stock vkd3d neve
 |---|---|---:|---:|
 | `VP_D3D12_FL_11_0_baseline` | FAIL | 78 | 15 |
 | `VP_D3D12_FL_11_1_baseline` | FAIL | 79 | 16 |
-| `VP_D3D12_FL_12_0_baseline` | FAIL | 81 | 34 |
-| `VP_D3D12_FL_12_1_baseline` | FAIL | 82 | 37 |
-| `VP_D3D12_FL_12_2_baseline` | FAIL | 86 | 81 |
+| `VP_D3D12_FL_12_0_baseline` | FAIL | 83 | 31 |
+| `VP_D3D12_FL_12_1_baseline` | FAIL | 84 | 34 |
+| `VP_D3D12_FL_12_2_baseline` | FAIL | 88 | 65 |
 
 Machine-evaluated FL profiles do not become a D3D feature level.
 
@@ -207,7 +207,7 @@ Pass `80` / fail `15`.
 
 | Requirement | Current | Required | Status | Source version | Source file/profile | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|---|---|---|
-| `VK_EXT_transform_feedback` | `None` | `1` | FAIL | `3.0.1` | `v3.0.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / extensions.VK_EXT_transform_feedback` | ABSENT at pinned 5a07217 and origin/main e1f3f372; PanVK get_device_extensions omits it (P15 BLOCKED_SAFE_FALSE) | NOT_IMPLEMENTED | Keep absent. Complete no-IDVS XFB variant, then CTS. Never expose early. |
+| `VK_EXT_transform_feedback` | `0` | `1` | FAIL | `3.0.1` | `v3.0.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / extensions.VK_EXT_transform_feedback` | ABSENT at pinned 5a07217 and origin/main e1f3f372; PanVK get_device_extensions omits it (P15 BLOCKED_SAFE_FALSE) | NOT_IMPLEMENTED | Keep absent. Complete no-IDVS XFB variant, then CTS. Never expose early. |
 | `robustImageAccess2` | `False` | `True` | FAIL | `3.0.1` | `v3.0.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / features.VkPhysicalDeviceRobustness2FeaturesEXT.robustImageAccess2` | Pinned and origin/main e1f3f372 still report false (P6 PARTIAL / UNSUPPORTED) | UNSUPPORTED | Keep false. Complete robustImageAccess2 semantics, then CTS. Never expose early. |
 | `transformFeedback` | `False` | `True` | FAIL | `3.0.1` | `v3.0.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | ABSENT at pinned 5a07217 and origin/main e1f3f372; PanVK omits EXT_transform_feedback (P15 BLOCKED_SAFE_FALSE) | NOT_IMPLEMENTED | Keep false. Complete no-IDVS XFB variant, then CTS. Never expose early. |
 | `geometryStreams` | `False` | `True` | FAIL | `3.0.1` | `v3.0.1 VP_D3D12_VKD3D_PROTON_profile.json VP_D3D12_FL_11_0_baseline / baseline_features / features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | ABSENT at pinned and origin/main; XFB streams need GS (P15 BLOCKED_SAFE_FALSE, waits on P12) | NOT_IMPLEMENTED | Keep false. Complete XFB plus geometryShader, then CTS. Never expose early. |
@@ -248,9 +248,9 @@ D3D_FEATURE_LEVEL is not available because DEVICE_CREATE fails. Stock vkd3d neve
 |---|---|---:|---:|
 | `VP_D3D12_FL_11_0_baseline` | FAIL | 80 | 15 |
 | `VP_D3D12_FL_11_1_baseline` | FAIL | 81 | 16 |
-| `VP_D3D12_FL_12_0_baseline` | FAIL | 83 | 34 |
-| `VP_D3D12_FL_12_1_baseline` | FAIL | 84 | 37 |
-| `VP_D3D12_FL_12_2_baseline` | FAIL | 88 | 81 |
+| `VP_D3D12_FL_12_0_baseline` | FAIL | 85 | 31 |
+| `VP_D3D12_FL_12_1_baseline` | FAIL | 86 | 34 |
+| `VP_D3D12_FL_12_2_baseline` | FAIL | 90 | 65 |
 
 Machine-evaluated FL profiles do not become a D3D feature level.
 

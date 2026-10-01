@@ -69,6 +69,88 @@ INDEXING_BITS = (
     "runtimeDescriptorArray",
 )
 
+# Overlay only. Evaluation still reads the beta.3-era capture. Do not gate on this.
+BETA5_STATUS = {
+    "release": "g615-v11-csf-v0.1.0-beta.5",
+    "patchesUpTo": "073",
+    "exposedSinceCapture": [
+        {
+            "feature": "VK_EXT_memory_priority + VK_EXT_pageable_device_local_memory",
+            "patch": "069",
+            "cts": "224/0, 202/0; api.info 7799/0",
+        },
+        {"feature": "alphaToOne", "patch": "070", "cts": "123/0"},
+        {
+            "feature": "maxGeometryShaderInvocations",
+            "patch": "071",
+            "cts": "geometry 193/0, instanced 20/0",
+        },
+        {"feature": "VK_EXT_multi_draw", "patch": "072", "cts": "12704/0"},
+        {
+            "feature": "VK_EXT_primitives_generated_query",
+            "patch": "073",
+            "cts": "75206/0",
+        },
+        {
+            "feature": "geometryShader",
+            "patch": "before-beta.5",
+            "cts": "geometry 193/0, instanced 20/0",
+        },
+        {"feature": "tessellationShader", "patch": "before-beta.5", "cts": "526/0"},
+        {
+            "feature": "VK_EXT_transform_feedback",
+            "patch": "before-beta.5",
+            "cts": "15793/0, 2 intermittent DeviceLost",
+        },
+        {
+            "feature": "textureCompressionBC",
+            "patch": "before-beta.5",
+            "cts": "1863/0, copy_and_blit 9620/0",
+        },
+        {
+            "feature": "shaderClipDistance",
+            "patch": "before-beta.5",
+            "cts": "device matrix 0 fail",
+        },
+        {
+            "feature": "shaderCullDistance",
+            "patch": "before-beta.5",
+            "cts": "device matrix 0 fail",
+        },
+        {"feature": "multiViewport", "patch": "before-beta.5", "cts": "device matrix 0 fail"},
+        {
+            "feature": "fillModeNonSolid",
+            "patch": "before-beta.5",
+            "cts": "device matrix 0 fail",
+        },
+        {
+            "feature": "pipelineStatisticsQuery",
+            "patch": "049-054",
+            "cts": "statistics_query 15374/0",
+        },
+    ],
+    "openItems": [
+        "GS primitive drop",
+        "VMR (vertexPipelineStoresAndAtomics / FL11_1, worktree dx-vpsa)",
+        "JICA98 0005 (same-queue semaphore waits) review",
+        "swapchain test (in progress elsewhere)",
+        "depthBounds",
+        "shaderOutputViewportIndex (GS-written viewport index dropped)",
+        "XFB intermittent DeviceLost",
+        "XFB 65536-record cap per non-tess draw",
+        "robustImageAccess2 (vkd3d-proton device-create blocker)",
+    ],
+    "deferred": [
+        "vkd3d/D3D12",
+        "FL12 (sparse NO-GO on kbase)",
+    ],
+    "note": (
+        "Matrix rows below are evaluated from the beta.3-era "
+        "consumer-capabilities.json capture; features listed here are "
+        "device-proven in beta.5 but await a fresh capture"
+    ),
+}
+
 
 def load_evaluator():
     spec = importlib.util.spec_from_file_location(
@@ -442,6 +524,37 @@ def render_report_block(report):
     return "\n".join(lines)
 
 
+def render_beta5_section(status):
+    rows = [
+        "| Feature | Patch | CTS |",
+        "|---|---|---|",
+    ]
+    for item in status["exposedSinceCapture"]:
+        rows.append(f"| `{item['feature']}` | `{item['patch']}` | {item['cts']} |")
+    open_items = "\n".join(f"- {item}" for item in status["openItems"])
+    deferred = "\n".join(f"- {item}" for item in status["deferred"])
+    body = [
+        "## Beta.5 status (current)",
+        "",
+        f"Release `{status['release']}`. Patches through `{status['patchesUpTo']}`.",
+        "",
+        status["note"],
+        "",
+        "Exposed since the beta.3 capture:",
+        "",
+        *rows,
+        "",
+        "Open items:",
+        "",
+        open_items,
+        "",
+        "Deferred:",
+        "",
+        deferred,
+    ]
+    return "\n".join(body)
+
+
 def render_md(doc):
     dxvk = doc["dxvk"]
     vkd3d = doc["vkd3d"]
@@ -450,6 +563,8 @@ def render_md(doc):
     return "\n".join(
         [
             "# P23 Final DXVK/vkd3d compliance matrix",
+            "",
+            render_beta5_section(doc["beta5Status"]),
             "",
             "## Result",
             "",
@@ -609,6 +724,7 @@ def main():
         "schemaVersion": 1,
         "phase": "P23",
         "date": "2026-09-20",
+        "beta5Status": BETA5_STATUS,
         "result": "FAIL",
         "smoke": "BLOCKED",
         "pinnedMesa": PINNED_MESA,

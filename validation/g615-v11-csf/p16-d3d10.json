@@ -1157,7 +1157,7 @@
               },
               {
                 "requirement": "VK_EXT_transform_feedback",
-                "current": null,
+                "current": 0,
                 "required": 1,
                 "status": "FAIL",
                 "sourceVersion": "2.7.1",
@@ -1949,7 +1949,7 @@
               },
               {
                 "requirement": "VK_EXT_transform_feedback",
-                "current": null,
+                "current": 0,
                 "required": 1,
                 "status": "FAIL",
                 "sourceVersion": "2.7.1",
@@ -2897,7 +2897,7 @@
               },
               {
                 "requirement": "VK_EXT_transform_feedback",
-                "current": null,
+                "current": 0,
                 "required": 1,
                 "status": "FAIL",
                 "sourceVersion": "3.1.1",
@@ -3810,7 +3810,7 @@
               },
               {
                 "requirement": "VK_EXT_transform_feedback",
-                "current": null,
+                "current": 0,
                 "required": 1,
                 "status": "FAIL",
                 "sourceVersion": "3.1.1",

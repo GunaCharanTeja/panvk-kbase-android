@@ -10,8 +10,16 @@ while [ $# -gt 0 ]; do case "$1" in
 NDK_BIN="$(ls -d "$NDK"/*/toolchains/llvm/prebuilt/linux-x86_64/bin 2>/dev/null | sort -V | tail -n1)"
 if [ -z "$NDK_BIN" ]; then NDK_BIN="$(ls -d "$NDK"/toolchains/llvm/prebuilt/linux-x86_64/bin 2>/dev/null | head -n1)"; fi
 [ -n "$NDK_BIN" ] || { echo "NDK toolchain not found under $NDK" >&2; exit 1; }
-export PATH="${HOST_TOOLS:-$ROOT/build/host-tools/bin}:$NDK_BIN:$PATH"
 MESA="${MESA:-$ROOT/work/mesa}"; BDIR="${BDIR:-$ROOT/build/android-bionic}"; DDIR="${DDIR:-$ROOT/dist/android-$PROFILE}"
+if [ -z "${HOST_TOOLS:-}" ]; then
+  n="$(basename "$MESA")"
+  HT="$ROOT/build/host-tools${n#mesa}"
+  if [ -f "$HT/build.ninja" ] || [ ! -x "$HT/bin/mesa_clc" ]; then
+    "$ROOT/scripts/bootstrap-host-tools.sh" --mesa "$MESA" --out "$HT" >&2
+  fi
+  HOST_TOOLS="$HT/bin"
+fi
+export PATH="$HOST_TOOLS:$NDK_BIN:$PATH"
 CC_TRIPLE="aarch64-linux-android$API-clang"
 mkdir -p "$BDIR"
 sed "s/aarch64-linux-android[0-9]*-clang/$CC_TRIPLE/g" "$ROOT/meson/android-aarch64.ini" > "$BDIR.cross.ini"
@@ -31,9 +39,8 @@ EOF
 fi
 export PKG_CONFIG_PATH="$DEPS_PCDIR:${PKG_CONFIG_PATH:-}"
 mkdir -p "$DDIR"
-# Host codegen tools (mesa_clc, vtn_bindgen2) must come from a native build:
-# export PATH with build/host-tools/bin (see bootstrap-host-tools.sh) or pass
-# --native-file with [binaries] mesa_clc/vtn_bindgen2 paths.
+# Host codegen tools (mesa_clc, vtn_bindgen2, panfrost_compile) must come from a native build:
+# default is derived from MESA (see bootstrap-host-tools.sh) and HOST_TOOLS overrides it.
 LOG="$BDIR.log"; RECONF=""; [ -f "$BDIR/build.ninja" ] && RECONF="--reconfigure"
 meson setup $RECONF "$BDIR" "$MESA" --cross-file "$BDIR.cross.ini" \
   -Dbuildtype=release -Dplatforms=android -Dandroid-stub=true -Dandroid-strict=false \

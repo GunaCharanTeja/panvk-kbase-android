@@ -3,8 +3,10 @@ import pathlib
 import re
 import unittest
 
+from _mesa_tree import mesa_root
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-MESA = ROOT / "work" / "mesa"
+MESA = mesa_root()
 PHYSICAL_DEVICE = MESA / "src/panfrost/vulkan/panvk_vX_physical_device.c"
 QUERY_POOL = MESA / "src/panfrost/vulkan/panvk_vX_query_pool.c"
 CSF_QUERY = MESA / "src/panfrost/vulkan/csf/panvk_vX_cmd_query.c"
@@ -19,10 +21,15 @@ PIPELINE_STATS = re.compile(r"VK_QUERY_TYPE_PIPELINE_STATISTICS")
 STATS_FEATURE_TRUE = re.compile(r"\.pipelineStatisticsQuery\s*=\s*true")
 
 
+# pipelineStatisticsQuery is exposed on v10+. CSF records counters in
+# panvk_pstats_query_state. JM has no pipeline-statistics query.
+# VK_EXT_primitives_generated_query (csf-v11/073) is not in this HEAD.
 class PipelineStatisticsSafeFalseTest(unittest.TestCase):
     def test_feature_remains_disabled(self):
         source = PHYSICAL_DEVICE.read_text()
-        self.assertRegex(source, r"\.pipelineStatisticsQuery\s*=\s*false,")
+        self.assertRegex(
+            source, r"\.pipelineStatisticsQuery\s*=\s*PAN_ARCH >= 10,"
+        )
         self.assertNotRegex(source, STATS_FEATURE_TRUE)
         self.assertRegex(source, r"\.occlusionQueryPrecise\s*=\s*true,")
 
@@ -31,12 +38,16 @@ class PipelineStatisticsSafeFalseTest(unittest.TestCase):
         self.assertIn("VK_QUERY_TYPE_OCCLUSION", source)
         self.assertIn("VK_QUERY_TYPE_TIMESTAMP", source)
         self.assertIn("VK_QUERY_TYPE_PRIMITIVES_GENERATED_EXT", source)
-        self.assertNotIn("VK_QUERY_TYPE_PIPELINE_STATISTICS", source)
+        self.assertIn("VK_QUERY_TYPE_PIPELINE_STATISTICS", source)
+        self.assertIn("panvk_pstats_query_state", source)
         self.assertIn('UNREACHABLE("Unsupported query type")', source)
 
     def test_csf_begin_end_copy_have_no_pipeline_statistics(self):
         source = CSF_QUERY.read_text()
-        self.assertNotIn("VK_QUERY_TYPE_PIPELINE_STATISTICS", source)
+        self.assertIn("VK_QUERY_TYPE_PIPELINE_STATISTICS", source)
+        self.assertIn("panvk_cmd_begin_pstats_query", source)
+        self.assertIn("panvk_cmd_end_pstats_query", source)
+        self.assertIn("panvk_copy_pstats_query_results", source)
         self.assertIn("VK_QUERY_TYPE_OCCLUSION", source)
         self.assertIn("VK_QUERY_TYPE_PRIMITIVES_GENERATED_EXT", source)
         self.assertIn('UNREACHABLE("Unsupported query type")', source)
@@ -49,7 +60,8 @@ class PipelineStatisticsSafeFalseTest(unittest.TestCase):
         source = CMD_QUERY_H.read_text()
         self.assertIn("panvk_occlusion_query_state", source)
         self.assertIn("panvk_prims_generated_query_state", source)
-        self.assertNotIn("pipeline_stat", source)
+        self.assertIn("panvk_pstats_query_state", source)
+        self.assertIn("panvk_pstats_counter_addr", source)
         self.assertNotIn("PIPELINE_STATISTICS", source)
 
     def test_panvk_has_no_pipeline_statistics_type(self):
@@ -59,9 +71,12 @@ class PipelineStatisticsSafeFalseTest(unittest.TestCase):
             if PIPELINE_STATS.search(text):
                 matches.append(str(path.relative_to(MESA)))
         self.assertEqual(
-            matches,
-            [],
-            "PanVK now has PIPELINE_STATISTICS; reassess P20:\n"
+            sorted(matches),
+            [
+                "src/panfrost/vulkan/csf/panvk_vX_cmd_query.c",
+                "src/panfrost/vulkan/panvk_vX_query_pool.c",
+            ],
+            "unexpected PIPELINE_STATISTICS files; reassess P20:\n"
             + "\n".join(matches),
         )
 
@@ -82,10 +97,12 @@ class PipelineStatisticsSafeFalseTest(unittest.TestCase):
                             f"{path.relative_to(MESA)}: {pattern.pattern}"
                         )
         self.assertEqual(
-            matches,
-            [],
-            "software pipeline-stat path now present; reassess P20:\n"
-            + "\n".join(matches),
+            sorted(matches),
+            [
+                "src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c: VK_QUERY_PIPELINE_STATISTIC_",
+                "src/panfrost/vulkan/csf/panvk_vX_cmd_query.c: VK_QUERY_PIPELINE_STATISTIC_",
+            ],
+            "unexpected pipeline-stat path; reassess P20:\n" + "\n".join(matches),
         )
 
     def test_mali_perf_is_not_wired_into_panvk_queries(self):
