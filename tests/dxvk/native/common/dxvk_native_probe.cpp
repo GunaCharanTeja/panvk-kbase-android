@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
 
 #include <SDL.h>
 #include <d3d9.h>
@@ -69,8 +70,13 @@ static int probe_d3d9(SDL_Window *window, bool workload, bool do_present) {
                   center[0] <= 5 && center[1] <= 5 && center[2] >= 250;
       readback->UnlockRect();
     }
-    if (SUCCEEDED(work) && pixels_ok && do_present)
+    const char *frames_env = std::getenv("PROBE_PRESENT_FRAMES");
+    const int frames = frames_env ? std::atoi(frames_env) : 1;
+    int presented = 0;
+    for (; SUCCEEDED(work) && pixels_ok && do_present && presented < frames; presented++)
       work = device->Present(nullptr, nullptr, nullptr, nullptr);
+    if (do_present)
+      std::printf("D3D9_PRESENT FRAMES=%d\n", presented);
     std::printf("D3D9_WORKLOAD HRESULT=0x%08x triangle_pixel=%d\n",
                 static_cast<unsigned>(work), pixels_ok);
     std::fflush(stdout);

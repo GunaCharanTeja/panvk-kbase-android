@@ -1,0 +1,41 @@
+# vkd3d-proton tests/d3d12 smoke subset (one VKD3D_TEST_MATCH run each).
+# device create / object creation
+test_create_device
+test_check_feature_support
+test_create_command_queue
+test_create_root_signature
+test_create_compute_pipeline_state
+test_create_graphics_pipeline_state
+test_create_fence
+test_fence_values
+test_map_resource
+# offscreen draw
+test_clear_render_target_view
+test_draw_instanced
+test_draw_indexed_instanced
+test_fragment_coords
+test_draw_depth_only
+test_root_constants
+test_descriptor_tables
+test_sample_instructions
+# dispatch
+test_compute_shader_registers
+test_dispatch_zero_thread_groups
+test_clear_unordered_access_view_buffer
+test_update_compute_descriptor_tables
+# copy
+test_copy_texture
+test_copy_texture_buffer
+# null descriptors / robustness
+test_null_cbv
+test_null_srv
+test_null_uav
+test_null_rtv
+test_null_vbv
+test_uav_robustness_oob_structure_element_dxil
+# queries / stream output
+test_create_query_heap
+test_query_timestamp
+test_query_occlusion
+test_query_pipeline_statistics
+test_vertex_shader_stream_output_dxil

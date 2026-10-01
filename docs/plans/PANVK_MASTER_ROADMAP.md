@@ -2,7 +2,7 @@
 
 **Roadmap revision:** 2026-09-20  
 **Repository:** `abhay-byte/panvk-kbase-android`  
-**Owner-directed sequence:** DXVK → vkd3d-proton → universal Mali loading/support → beta-to-RC qualification → stable  
+**Owner-directed sequence:** DXVK → vkd3d-proton → Wine/consumer testing → universal Mali loading/support → beta-to-RC qualification → stable  
 **Active implementation phase:** M1 — DXVK on the G615 reference target  
 **Execution constraint:** GPU-only graphics implementation; no CPU graphics fallback.
 
@@ -70,7 +70,20 @@ Preserve existing sparse-feasibility evidence as input, not a permanent universa
 
 ## 5. Milestone M3 — Universal Mali loading and GPU-family coverage
 
-**Entry:** the agreed M2 milestone is verified. Universal Mali support becomes the primary implementation effort.
+**Detailed plan:** `docs/plans/PANVK_UNIVERSAL_MALI_PLAN.md` (2026-09-29). It covers:
+
+- the family matrix;
+- wave order (v9 JM moved ahead of Bifrost);
+- the patch-layout migration;
+- the adrenotools/Winlator packaging plus wrapper matrix;
+- the device-proof gates;
+- the FristOneRR adopt/avoid list.
+
+The 2026-09-25 bundle is archived in `docs/plans/universal-mali-bundle/`.
+
+**Ordering:** M3 starts only after **DXVK (M1) → vkd3d-proton (M2) → Wine/consumer testing** all pass on G615 with evidence. Until then, only documents, pins and passive source study are allowed.
+
+**Entry:** the agreed M2 milestone and the Wine testing milestone are verified. Universal Mali support becomes the primary implementation effort.
 
 The owner's target remains **any Mali GPU**. Do not silently redefine that to the handful of devices already tested. Maintain an explicit family/model inventory with `SUPPORTED`, `IN_DEVELOPMENT`, `BLOCKED_KERNEL_OR_FIRMWARE`, `UNSUPPORTED_WITH_EVIDENCE`, or `NOT_INVESTIGATED` dispositions.
 
