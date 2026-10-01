@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "profileCases": {
+    "baseline-complete": {
+      "expected": "PASS",
+      "selectedProfile": "VP_demo_baseline",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {"geometryShader": true}, "extensions": [{"name": "VK_EXT_demo", "specVersion": 2}]},
+      "profile": {"provenance": {}, "document": {"capabilities": {"demo": {"extensions": {"VK_EXT_demo": 2}, "features": {"VkPhysicalDeviceFeatures": {"geometryShader": true}}}}, "profiles": {"VP_demo_baseline": {"api-version": "1.0.0", "capabilities": ["demo"]}}}}
+    },
+    "baseline-missing-feature": {
+      "expected": "FAIL",
+      "selectedProfile": "VP_demo_baseline",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {"geometryShader": false}, "extensions": []},
+      "profile": {"provenance": {}, "document": {"capabilities": {"demo": {"features": {"VkPhysicalDeviceFeatures": {"geometryShader": true}}}}, "profiles": {"VP_demo_baseline": {"api-version": "1.0.0", "capabilities": ["demo"]}}}}
+    },
+    "optimal-optional-false": {
+      "expected": "FAIL",
+      "selectedProfile": "VP_demo_optimal",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {"geometryShader": false}, "extensions": []},
+      "profile": {"provenance": {}, "document": {"capabilities": {"demo_optional": {"features": {"VkPhysicalDeviceFeatures": {"geometryShader": true}}}}, "profiles": {"VP_demo_optimal": {"api-version": "1.0.0", "capabilities": ["demo_optional"]}}}}
+    },
+    "optimal-complete": {
+      "expected": "PASS",
+      "selectedProfile": "VP_demo_optimal",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {"geometryShader": true, "tessellationShader": true}, "extensions": []},
+      "profile": {"provenance": {}, "document": {"capabilities": {"demo": {"features": {"VkPhysicalDeviceFeatures": {"geometryShader": true}}}, "demo_optional": {"features": {"VkPhysicalDeviceFeatures": {"tessellationShader": true}}}}, "profiles": {"VP_demo_optimal": {"api-version": "1.0.0", "capabilities": ["demo", "demo_optional"]}}}}
+    },
+    "missing-captured-field": {
+      "expected": "UNKNOWN",
+      "selectedProfile": "VP_demo_baseline",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {}, "extensions": []},
+      "profile": {"provenance": {}, "document": {"capabilities": {"demo": {"features": {"VkPhysicalDeviceFeatures": {"geometryShader": true}}}}, "profiles": {"VP_demo_baseline": {"api-version": "1.0.0", "capabilities": ["demo"]}}}}
+    },
+    "api-version-low": {
+      "expected": "FAIL",
+      "selectedProfile": "VP_demo_baseline",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {}, "extensions": []},
+      "profile": {"provenance": {}, "document": {"capabilities": {}, "profiles": {"VP_demo_baseline": {"api-version": "1.1.0", "capabilities": []}}}}
+    },
+    "extension-missing": {
+      "expected": "FAIL",
+      "selectedProfile": "VP_demo_baseline",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {}, "extensions": []},
+      "profile": {"provenance": {}, "document": {"capabilities": {"demo": {"extensions": {"VK_EXT_demo": 2}}}, "profiles": {"VP_demo_baseline": {"api-version": "1.0.0", "capabilities": ["demo"]}}}}
+    },
+    "extension-too-old": {
+      "expected": "FAIL",
+      "selectedProfile": "VP_demo_baseline",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {}, "extensions": [{"name": "VK_EXT_demo", "specVersion": 1}]},
+      "profile": {"provenance": {}, "document": {"capabilities": {"demo": {"extensions": {"VK_EXT_demo": 2}}}, "profiles": {"VP_demo_baseline": {"api-version": "1.0.0", "capabilities": ["demo"]}}}}
+    },
+    "unsupported-schema": {
+      "expected": "UNKNOWN",
+      "selectedProfile": "VP_demo_baseline",
+      "capabilities": {"device": {"apiVersion": 4194304}, "features": {}, "extensions": []},
+      "profile": {"provenance": {}, "document": {"capabilities": {"demo": {"formats": {"VK_FORMAT_R8_UNORM": {}}}}, "profiles": {"VP_demo_baseline": {"api-version": "1.0.0", "capabilities": ["demo"]}}}}
+    }
+  },
+  "comparatorCases": [
+    {"name": "maximum-limit", "actual": 8, "required": 4, "comparison": "max", "expected": "PASS"},
+    {"name": "minimum-limit", "actual": 4, "required": 8, "comparison": "min", "expected": "PASS"},
+    {"name": "bitmask", "actual": 7, "required": 5, "comparison": "bitmask", "expected": "PASS"},
+    {"name": "range", "actual": [0, 10], "required": [2, 8], "comparison": "range", "expected": "PASS"},
+    {"name": "alignment", "actual": 4, "required": 16, "comparison": "alignment", "expected": "PASS"},
+    {"name": "array-exact", "actual": [1, 2], "required": [1, 2], "comparison": "array-exact", "expected": "PASS"},
+    {"name": "array-mismatch", "actual": [1, 3], "required": [1, 2], "comparison": "array-exact", "expected": "FAIL"}
+  ]
+}

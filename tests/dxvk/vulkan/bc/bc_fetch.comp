@@ -1,0 +1,23 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2DArray tex;
+layout(set = 0, binding = 1, std430) writeonly buffer Out {
+    vec4 v[];
+};
+
+layout(push_constant) uniform P {
+    int lod;
+    int layer;
+    int w;
+    int h;
+    int off;
+} p;
+
+void main()
+{
+    ivec2 c = ivec2(gl_GlobalInvocationID.xy);
+    if (c.x >= p.w || c.y >= p.h)
+        return;
+    v[p.off + c.y * p.w + c.x] = texelFetch(tex, ivec3(c, p.layer), p.lod);
+}

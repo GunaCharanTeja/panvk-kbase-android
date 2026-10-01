@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "phase": "DX3",
+  "scope": "GLIBC_RUNTIME_PARTIAL",
+  "provenance": {
+    "repositoryBase": "973b99deceb73d62196f30e47a6ea9ef60b98851",
+    "evaluatorCommit": "bf35f88",
+    "mesaCommit": "5a07217f034b3e50d8c7c7794f97a2df1742613b",
+    "patchSeries": "sha256:8d47072143f5651aeeac9e95f64dd64b389d9b2cf7a840803d2f9daf16d3810a",
+    "capabilityCaptureSha256": "f3bcff6feef5ab54b176d72fe91c89e372a5bd0d0295b1178ebeb752aa63117c",
+    "profileArtifacts": {
+      "dxvk-2.7.1": "b5a12c88cf5e40e2e4dd490bb13fddbbb707bd75197658c0f89b2ad283f867d9",
+      "dxvk-3.1.1": "4b74328bfdc1d7da3e1996fdb77bd64f41181aeb6ead2aa75f90f2f7619a8f5a"
+    },
+    "runtimeEvidenceSource": "DX0-BASELINE.md; DX2 built tooling only and ran no graphics workload"
+  },
+  "dx2": {
+    "cts": {
+      "build": "PASS_REVERIFIED",
+      "execution": "NOT_RUN",
+      "binarySha256": "5515cea5213851879c1b8f690aadae5ae6f50b117514b2d28e36f3539f2caac7",
+      "testListSha256": "3d046479d4f23f574d9bc93511d028831468184e508f5e4c981d6643450fffc0"
+    },
+    "dxvkNative": {
+      "version": "3.1.1",
+      "commit": "b1a1c99ab52b687cf950d62c88bc2fa316b41663",
+      "build": "PASS",
+      "runtime": "NOT_RUN",
+      "driverFeatureResult": "NOT_EVALUATED"
+    }
+  },
+  "dx3": {
+    "evidence": "DX3-EVIDENCE.json",
+    "candidateIcdSha256": "736f868bf720c95edd9b8bbac4a0a0b650fed67c2a9e46635dc3ee379fb0d2ca",
+    "deviceCreation": "PASS",
+    "offscreenRender": "PASS",
+    "presentation": "BLOCKED_NO_X11_OR_WAYLAND_SESSION",
+    "stockDxvkBaselineRejection": "NOT_CAPTURED_CRASH_BEFORE_REQUIREMENT_GATE",
+    "gpuSubmissionTrace": "BLOCKED_DIAGNOSTIC_MODES_SEGFAULT"
+  },
+  "rowDefaults": {
+    "implementationState": "UNSUPPORTED",
+    "queriedState": "ADVERTISED_FALSE",
+    "deviceCreation": "NOT_RUN",
+    "positiveWorkload": "NOT_RUN",
+    "cts": "NOT_RUN",
+    "stockDxvk": "NOT_RUN",
+    "testRevision": "bf35f88",
+    "timestamp": "2026-09-21"
+  },
+  "abis": {
+    "android-aarch64-bionic": {
+      "binarySha256": "576e37de9a3b60dda9a972a6f91c3a50e09238bd31a9888e04215c7b554c803a",
+      "features": {
+        "textureCompressionBC": {"stockDxvk": "BLOCKED"},
+        "shaderClipDistance": {"stockDxvk": "BLOCKED"},
+        "shaderCullDistance": {"stockDxvk": "BLOCKED"},
+        "fillModeNonSolid": {"stockDxvk": "BLOCKED"},
+        "geometryShader": {"stockDxvk": "BLOCKED"},
+        "multiViewport": {"stockDxvk": "BLOCKED"},
+        "VK_EXT_transform_feedback": {"queriedState": "NOT_ADVERTISED", "stockDxvk": "BLOCKED"},
+        "transformFeedback": {"stockDxvk": "BLOCKED"},
+        "geometryStreams": {"stockDxvk": "BLOCKED"},
+        "tessellationShader": {"stockDxvk": "BLOCKED"},
+        "vertexPipelineStoresAndAtomics": {"stockDxvk": "BLOCKED"}
+      }
+    },
+    "linux-aarch64-glibc": {
+      "binarySha256": "736f868bf720c95edd9b8bbac4a0a0b650fed67c2a9e46635dc3ee379fb0d2ca",
+      "features": {
+        "textureCompressionBC": {},
+        "shaderClipDistance": {},
+        "shaderCullDistance": {},
+        "fillModeNonSolid": {},
+        "geometryShader": {},
+        "multiViewport": {},
+        "VK_EXT_transform_feedback": {"queriedState": "NOT_ADVERTISED"},
+        "transformFeedback": {},
+        "geometryStreams": {},
+        "tessellationShader": {},
+        "vertexPipelineStoresAndAtomics": {}
+      }
+    }
+  },
+  "notes": [
+    "Each feature row inherits every rowDefaults field; listed fields override defaults.",
+    "Feature states come from the immutable beta.3 capability capture.",
+    "NOT_RUN is retained because DX1 performed no runtime action.",
+    "No previous result is represented as a current-binary rerun.",
+    "DX3 outcomes keep Vulkan creation, rendering, presentation, DXVK creation, and trace proof distinct."
+  ]
+}

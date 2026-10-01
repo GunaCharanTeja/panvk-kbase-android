@@ -1,0 +1,8 @@
+#version 450
+/* No resources: the counter depends only on the dispatch size. */
+layout(local_size_x = 4, local_size_y = 2, local_size_z = 1) in;
+shared uint s;
+void main()
+{
+   s = gl_LocalInvocationIndex;
+}

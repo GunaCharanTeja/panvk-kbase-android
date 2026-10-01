@@ -1,5 +1,9 @@
 # P20 pipelineStatisticsQuery and remaining PROFILE BASELINE extras
 
+Historical baseline audit: this `BLOCKED_SAFE_FALSE` result describes the
+original Mesa pin. The later GPU implementation and G615 results are recorded
+in [DX8-PIPELINE-STATS.md](dxvk/DX8-PIPELINE-STATS.md).
+
 ## Result
 
 `BLOCKED_SAFE_FALSE`

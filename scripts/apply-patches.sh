@@ -21,8 +21,14 @@ for fam in $SERIES; do
   for p in "$ROOT"/patches/"$fam"/*.patch; do
     [ -e "$p" ] || continue
     echo "APPLY [$fam] $(basename "$p")"
-    git -C "$MESA" apply --check "$p" || { echo "PATCH-DRIFT: $p does not apply" >&2; exit 1; }
-    git -C "$MESA" apply "$p"
+    if git -C "$MESA" apply --check "$p" 2>/dev/null; then
+      git -C "$MESA" apply "$p"
+    elif git -C "$MESA" apply --recount --check "$p"; then
+      git -C "$MESA" apply --recount "$p"
+    else
+      echo "PATCH-DRIFT: $p does not apply" >&2
+      exit 1
+    fi
     APPLIED=$((APPLIED+1))
   done
   if [ -d "$ROOT/patches/$fam/files" ]; then

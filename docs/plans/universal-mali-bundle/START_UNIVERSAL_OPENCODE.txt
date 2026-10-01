@@ -1,0 +1,36 @@
+Implement PANVK_UNIVERSAL_MALI_GPU_ONLY_WORKER.md only after the existing
+DXVK and vkd3d completion gates actually pass. Preserve the completed
+integration checkout; do not reset to the older linked branch or donor.
+
+FIRST ACTION: delegate U0.a to a real, fresh built-in general subagent.
+The main thread only dispatches; no main-thread file reads, commands,
+code, tests, Git work or checkpoints. If delegation is unavailable,
+return BLOCKED_DELEGATION instead of doing work in the parent.
+
+One active child, one small implementation/build/device-test task, then
+a fresh child. No reviewers, custom agents, parallel writers, nested
+subagents or orchestration framework. Use the plan's U0-U19 microtasks;
+never assign an entire GPU port or macro-phase to one child.
+
+Keep GPU-only graphics and truthful capability reporting. Reuse short
+script invocations; full logs stay on disk. Preserve raw exit codes.
+Use worklogs/universal-mali/NEXT.md for a compact checkpoint and return
+at most 80 words: task, change, build, device result, checkpoint, next.
+
+Stay far below 200k tokens per child/subphase. Target 50k reported
+cumulative input+output, checkpoint at 80k and hand off by 100k. Respect
+lower model limits. Without metering, report budget unmetered once and
+use at most eight working calls plus two checkpoint calls. Do not claim
+a prompt enforces an exact token cap. Do not reread the full plan.
+
+Use the pinned G720 beta.2 reference from PANVK_UNIVERSAL_REFERENCE_LOCK.json
+for selective porting, not a wholesale source replacement. Test actual
+device identity, loaded ICD and GPU result for every claimed target.
+Continue automatically between small tasks; do not ask continue. Missing
+hardware leaves device gates NOT_RUN, not PASS. Continue independent
+useful work but do not silently lower prerequisites or release scope.
+Do not publish, tag, flash, replace system libraries, weaken device
+security or promote releases without authorization.
+
+Start U0.a now. If M1 or M2 is incomplete, record the exact gate and
+return DEFERRED_WAITING_FOR_DXVK_VKD3D without starting universal code.

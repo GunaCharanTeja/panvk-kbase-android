@@ -1,0 +1,22 @@
+COUNTER_DEFINITIONS:
+submitted_jobs=kbase CSF ring jobs emitted by kbase_subqueue_emit_job
+completed_jobs=emitted job sequence numbers observed complete by kbase_subqueue_wait_seqno
+successful_waits=completed kbase queue waits reported by kbase_queue_wait_current
+
+SAFE_RUN:
+submitted_jobs=unavailable
+completed_jobs=unavailable
+successful_waits=1
+render_readback=PASS
+
+PANVK_DEBUG=kbase_diag:
+Segmentation fault
+EXIT=139
+emitted_jobs=0
+completed_jobs=0
+
+PANVK_DEBUG=trace:
+Segmentation fault
+EXIT=139
+
+RESULT=BLOCKED_DIAGNOSTIC_MODES_SEGFAULT

@@ -46,7 +46,7 @@ diff --git a/src/panfrost/vulkan/panvk_instance.c b/src/panfrost/vulkan/panvk_in
 diff --git a/src/panfrost/vulkan/panvk_wsi.c b/src/panfrost/vulkan/panvk_wsi.c
 --- a/src/panfrost/vulkan/panvk_wsi.c
 +++ b/src/panfrost/vulkan/panvk_wsi.c
-@@ -47,6 +47,404 @@
+@@ -47,6 +47,451 @@
     return match;
  }
  
@@ -498,7 +498,7 @@ diff --git a/src/panfrost/vulkan/panvk_wsi.c b/src/panfrost/vulkan/panvk_wsi.c
  VkResult
  panvk_wsi_init(struct panvk_physical_device *physical_device)
  {
-@@ -106,6 +504,10 @@
+@@ -106,6 +551,10 @@
  
     physical_device->vk.wsi_device = &physical_device->wsi_device;
  

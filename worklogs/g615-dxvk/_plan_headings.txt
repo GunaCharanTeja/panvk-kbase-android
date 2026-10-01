@@ -1,0 +1,127 @@
+1:# WORKER.md — G615 PanVK: DXVK completion with GPU-only feature execution
+8:## Non-negotiable execution contract
+46:## Mission
+90:# 0. Start point — current repository state
+152:## 0.1 Reconfirm provenance before editing
+168:## 0.2 Current-state evidence, not new implementation
+182:## 0.3 Build hygiene gate
+196:# 1. Review of what the previous worker actually completed
+274:## 1.1 Source-level boundaries already identified
+302:# 2. Explicitly defer work that is NOT needed for DXVK baseline
+306:## 2.1 Do not block on the 1M descriptor test
+328:## 2.2 robustImageAccess2
+351:## 2.3 pipelineStatisticsQuery
+372:## 2.4 Sparse support
+397:## 2.5 Deferral does not certify advertised limits
+412:# 3. Exact current DXVK target
+449:## 3.1 Treat profiles as exact requirements, not names
+463:# 4. Current DXVK 3.1.1 COMMON gate
+515:# 5. Exact missing baseline capabilities
+517:## 5.1 D3D9 baseline
+535:## 5.2 D3D10 / D3D11 FL10.x baseline
+547:## 5.3 D3D11 FL11.0
+562:## 5.4 D3D11 FL11.1
+586:# 6. Important architectural conclusion from P9-P17
+630:## 6.1 Architectural confidence and limits
+644:# 7. Workstream A — create the shared GPU pre-raster infrastructure
+661:## 7.1 High-level GPU-lowered path
+704:## 7.2 Reuse Mesa infrastructure
+741:## 7.3 Build integration
+753:## 7.4 Vertex record layout
+774:## 7.5 Synthetic final VS
+791:## 7.6 Draw semantics
+810:## 7.7 Synchronization
+826:## 7.8 Memory lifecycle
+843:## 7.9 Fast-path rule
+860:## 7.10 First vertical slice: a generated draw, not all features at once
+879:## 7.11 Shader execution and side effects are an initial design contract
+899:## 7.12 Driver-internal state, synchronization, and rendering scopes
+920:## 7.13 Allocation, overflow, and execution lifetime
+936:# 8. Workstream B — install a real Vulkan CTS path now
+1013:## 8.1 Eliminate skipped-test false success
+1033:# 9. Workstream C — create the missing tests/dxvk/ tree
+1083:## 9.1 First code repair: profile evaluator correctness
+1127:## 9.2 Evidence ledger
+1137:# 10. Workstream D — transparent BC1–BC7 emulation
+1159:## 10.1 Do not use the Vulkan layer as the final solution
+1167:## 10.2 Use an internal virtual-BC image representation
+1200:## 10.3 Preserve compressed transfer semantics
+1235:## 10.4 Decode implementation — GPU only
+1247:## 10.5 Format properties — complete the feature contract
+1281:## 10.6 BC tests
+1337:## 10.7 Memory and update cost
+1352:# 11. Workstream E — shaderClipDistance + shaderCullDistance
+1364:## 11.1 ClipDistance
+1381:## 11.2 CullDistance
+1391:## 11.3 Metadata
+1403:## 11.4 Tests
+1428:## 11.5 Additional semantic checks
+1442:# 12. Workstream F — fillModeNonSolid
+1525:## 12.1 Do not confuse triangle-to-lines with complete polygon mode
+1542:# 13. Workstream G — geometryShader using Mesa poly
+1558:## 13.1 PanVK poly integration
+1570:## 13.2 VS-before-GS
+1576:## 13.3 GS processing
+1592:## 13.4 Preserve semantics
+1626:## 13.5 Geometry limits
+1635:## 13.6 Tests
+1662:## 13.7 Poly portability proof
+1678:# 14. Milestone 1 — make DXVK 3.1.1 D3D9 baseline PASS
+1709:## 14.1 Run the real D3D9 milestone now
+1722:# 15. Workstream H — multiViewport with sample-accurate, GPU-only routing
+1733:## 15.1 Architecture decision gate
+1759:## 15.2 Transform, clipping, and depth
+1770:## 15.3 Coverage, ordering, and test matrix
+1795:# 16. Workstream I — VK_EXT_transform_feedback
+1813:## 16.1 Capture point
+1828:## 16.2 NIR
+1841:## 16.3 API commands
+1863:## 16.4 Buffer/counter semantics
+1880:## 16.5 Indexed draws
+1896:## 16.6 Geometry streams
+1910:## 16.7 Tests
+1935:## 16.8 Primitive-complete capture and API correctness
+1950:# 17. Milestone 2 — D3D10 / D3D11 FL10.x baseline PASS
+1979:# 18. Workstream J — tessellationShader using Mesa poly
+1991:## 18.1 TCS
+2010:## 18.2 Tessellator
+2030:## 18.3 TES
+2052:## 18.4 Patch input assembly
+2068:## 18.5 Tests
+2101:## 18.6 Valhall-specific tessellation proof
+2118:# 19. Milestone 3 — D3D11 FL11.0 baseline PASS
+2147:# 20. Workstream K — vertexPipelineStoresAndAtomics for FL11.1
+2170:## 20.1 VS side effects
+2189:## 20.2 Tessellation/geometry side effects
+2201:## 20.3 Synchronization
+2212:## 20.4 Tests
+2236:## 20.5 Integration tests, not isolated atomic-only success
+2247:# 21. Milestone 4 — DXVK D3D11 FL11.1 baseline PASS
+2279:# 22. Workstream L — real DXVK Native, established early and run at every tier
+2306:## 22.1 Pin source
+2323:## 22.2 Build native AArch64
+2356:## 22.3 Force PanVK glibc ICD
+2382:## 22.4 Native D3D9 test
+2412:## 22.5 Native D3D11 FL10.1 test
+2430:## 22.6 Native D3D11 FL11.0 test
+2449:## 22.7 Native D3D11 FL11.1-oriented feature test
+2462:## 22.8 Stability
+2481:## 22.9 Run order and environment checks
+2509:# 23. DXVK 2.7.1 backward verification
+2540:# 24. DXVK 1.10.3 backward verification
+2569:# 25. Optional / optimal DXVK work after baseline
+2623:# 26. FL12.0 / FL12.1 policy
+2674:# 27. Development order — corrected dependency and validation sequence
+2748:# 28. Commit discipline
+2796:# 29. Performance requirements
+2827:## 29.1 GPU-only proof and regression acceptance
+2860:# 30. Safety, correctness, and candidate exposure rules
+2866:## 30.1 Correct development-to-release sequence
+2890:## 30.2 Success is the conjunction of independent evidence
+2911:# 31. Regression gates from beta.3
+2961:# 32. Required final files
+3017:# 33. Required final result format
+3140:# 34. Definition of success
+3187:## Reviewed sources and authority
+TOTAL 3212
+SHA256 a8c0a2fe63775bc1e2497d5c4e17bc366ca372ed3db10f529c517b3bddb3d9b2

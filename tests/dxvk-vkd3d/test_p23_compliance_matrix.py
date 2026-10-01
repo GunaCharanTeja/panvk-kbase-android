@@ -11,7 +11,9 @@ SCRIPT = ROOT / "scripts/evaluate-dxvk-vkd3d-compliance-matrix.py"
 JSON_OUT = ROOT / "validation/g615-v11-csf/p23-dxvk-vkd3d-compliance-matrix.json"
 MD_OUT = ROOT / "validation/g615-v11-csf/P23-DXVK-VKD3D-COMPLIANCE-MATRIX.md"
 CAPS = ROOT / "validation/g615-v11-csf/consumer-capabilities.json"
-PHYSICAL = ROOT / "work/mesa/src/panfrost/vulkan/panvk_vX_physical_device.c"
+# Integration worktree (dx-integrate): fresh pin + csf-v11 up to 072.
+PHYSICAL = ROOT / "work/mesa-dxint/src/panfrost/vulkan/panvk_vX_physical_device.c"
+DXVK_PROOF = ROOT / "validation/g615-v11-csf/dxvk"
 P13 = ROOT / "validation/g615-v11-csf/p13-d3d9.json"
 P16 = ROOT / "validation/g615-v11-csf/p16-d3d10.json"
 P18 = ROOT / "validation/g615-v11-csf/p18-d3d11-fl11.json"
@@ -92,19 +94,36 @@ class P23ComplianceMatrixTest(unittest.TestCase):
         for name in FALSE_BITS:
             self.assertIs(self.caps["features"][name], False, name)
             self.assertIs(self.doc["featureBitsUnchanged"][name], False, name)
+        # consumer-capabilities.json above is the historical P-series capture.
+        # The driver source below exposes a bit only with a G615 device proof.
         source = PHYSICAL.read_text()
-        for name in (
-            "geometryShader",
-            "tessellationShader",
-            "fillModeNonSolid",
-            "multiViewport",
-            "shaderClipDistance",
-            "shaderCullDistance",
-            "pipelineStatisticsQuery",
-        ):
-            self.assertRegex(source, rf"\.{name}\s*=\s*false,")
+        proven = {
+            "tessellationShader": (r"PAN_ARCH >= 10", "DX10-TESSELLATION.md",
+                                   "TESSELLATION_FAILS=0"),
+            "transformFeedback": (r"PAN_ARCH >= 10", "DX9-TRANSFORM-FEEDBACK.md",
+                                  "XFB_FAILS=0"),
+            "geometryStreams": (r"PAN_ARCH >= 10 && !PANVK_DEBUG\(NO_GS\)",
+                                "DX9-TRANSFORM-FEEDBACK.md", "XFB_FAILS=0"),
+            "geometryShader": (r"PAN_ARCH >= 10 && !PANVK_DEBUG\(NO_GS\)",
+                               "DX7-GS.md", "GEOMETRY_FAILS=0"),
+            "fillModeNonSolid": (r"PAN_ARCH >= 10", "DX7-FILL-MODE.md",
+                                 "FILL_MODE_FAILS=0"),
+            "multiViewport": (r"PAN_ARCH >= 10", "DX7-MULTIVIEWPORT.md",
+                              "MULTI_VIEWPORT_FAILS=0"),
+            "shaderClipDistance": (r"PAN_ARCH >= 10", "DX7-CLIP-CULL.md",
+                                   "CLIP_CULL_FAILS=0"),
+            "shaderCullDistance": (r"PAN_ARCH >= 10", "DX7-CLIP-CULL.md",
+                                   "CLIP_CULL_FAILS=0"),
+            "textureCompressionBC": (
+                r"has_texture_compression_bc\(device\) \|\|\s*panvk_bc_emul_enabled\(device\)",
+                "DX6-BC-GPU-DECODE.md", "BC_DEVICE_FAILS=0"),
+            "pipelineStatisticsQuery": (r"PAN_ARCH >= 10", "DX8-PIPELINE-STATS.md",
+                                        "PIPELINE_STATS_FAILS=0"),
+        }
+        for name, (expr, doc, marker) in proven.items():
+            self.assertRegex(source, rf"\.{name}\s*=\s*{expr},", name)
+            self.assertIn(marker, (DXVK_PROOF / doc).read_text(), name)
         self.assertNotRegex(source, r"\.sparseBinding\s*=\s*true")
-        self.assertNotRegex(source, r"\.textureCompressionBC\s*=\s*true")
 
     def test_gates_stay_unmerged(self):
         self.assertEqual(

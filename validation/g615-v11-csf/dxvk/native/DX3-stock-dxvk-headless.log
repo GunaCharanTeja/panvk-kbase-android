@@ -1,0 +1,10 @@
+COMMAND: VK_DRIVER_FILES=/tmp/dx3-panfrost_icd.aarch64.json DXVK_WSI_DRIVER=SDL2 DXVK_LOG_LEVEL=info /tmp/dxvk-native-probe-dx3 d3d11-headless
+info:  Game: dxvk-native-probe-dx3
+info:  DXVK: v3.1.1
+info:  Build: aarch64 gcc 15.2.0
+info:  Vulkan: Found vkGetInstanceProcAddr in libvulkan.so.1 @ 0x7170da16e0
+info:  Extension providers:
+info:    Platform WSI
+Segmentation fault
+EXIT=139
+RESULT=CRASH_BEFORE_REQUIREMENT_GATE

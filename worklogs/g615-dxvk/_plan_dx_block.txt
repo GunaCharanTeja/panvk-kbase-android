@@ -1,0 +1,58 @@
+DX0  Resolve current main, branch, reconstruct pinned Mesa+patches cleanly.
+     Capture BOTH ABI identities, current capabilities, and baseline regressions.
+
+DX1  Repair evaluator semantics, add selected-profile CLI failure gates and tests.
+     Create tests/dxvk and provenance/evidence ledgers; preserve old guards.
+
+DX2  Pin/build CTS and stock DXVK Native AArch64 with recursive dependencies.
+     Keep build/runtime failures distinct from missing driver feature results.
+
+DX3  Prove same-ICD glibc Vulkan offscreen + presentation; capture expected stock
+     DXVK baseline rejection. Establish GPU-execution trace instrumentation.
+
+DX4  Write and test GPU pre-raster ABI, side-effect, synchronization, allocation,
+     render-scope, and output-order contracts. Compile the first lowered VS.
+
+DX5  Prove GPU VS -> records -> generated indirect draw -> IDVS/FS vertical slice.
+     Include indexed/instanced/restart/replay/state-restore tests. No new exposure.
+
+DX6  Implement BC1-BC7 GPU decode + compressed shadow + required format/transfer/
+     blit/view semantics. This work may run in parallel with DX4-DX5.
+
+DX7  Implement GS GPU lowering, clip/cull, and non-solid modes on the proven
+     infrastructure, in separately reviewable increments. Audit combined behavior.
+
+DX8  Candidate exposure + local tests + non-skipping feature CTS for DX6-DX7.
+     Re-evaluate complete inherited DXVK D3D9 profile and COMMON.
+
+DX9  Require real stock Native D3D9 creation/render/present + stability milestone.
+     Run older D3D9 requirement gates; document, diagnose, and fix real failures.
+
+DX10 Prove GPU-only multiViewport coverage/order/CSF state-routing architecture;
+     implement only after that gate. No primitive-clipping scissor substitute.
+
+DX11 Implement complete required XFB+geometryStreams and applicable DXVK stream
+     output/query/DrawAuto semantics with truthful per-property exposure.
+
+DX12 Run multiViewport/XFB CTS and cross-feature regressions; require FL10.1
+     profile + stock Native FL10.1 rendering/present milestone.
+
+DX13 Implement GPU TCS/tessellator/TES with Valhall-correct barriers and limits.
+     Validate chained TES->GS/XFB and all mandatory tessellation modes.
+
+DX14 Run tessellation CTS; require FL11.0 profile + Native FL11.0 rendering.
+
+DX15 Complete vertex-pipeline stores/atomics under the policy designed at DX4.
+     Test side effects across counting, output routing, XFB, and synchronization.
+
+DX16 Run corresponding CTS; require FL11.1 profile + Native FL11.1 render proof.
+
+DX17 Run complete baseline regression matrix for Android and glibc, combined CTS
+     subset, shader-cache/replay tests, memory stress, and GPU-only trace audit.
+
+DX18 Run all 2.7.1 and 1.10.3 requirement gates and corrected optional/optimal
+     evaluation. Keep unsupported FL12 and untested old runtimes distinct.
+
+DX19 Reconstruct and rebuild clean release candidates from tracked patches;
+     verify binary provenance and repeat acceptance tests on delivered defaults.
+     Publish DXVK-COMPLETION-REPORT.md, JSON ledger, raw tests and trace evidence.
