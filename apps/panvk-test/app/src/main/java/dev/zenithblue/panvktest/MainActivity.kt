@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
         refreshLogsList()
 
         val autorunExtra = intent.getStringExtra("autorun")
-        if (autorunExtra == "all") {
+        if (autorunExtra == "all" && savedInstanceState == null) {
             selectedTabState.intValue = 2 // Switch UI to Tests tab
             lifecycleScope.launch(Dispatchers.IO) {
                 runHeadlessAutorun()
@@ -128,7 +128,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().safeDrawingPadding(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     MainScreen()
@@ -182,25 +182,16 @@ class MainActivity : ComponentActivity() {
         val libPath = File(applicationInfo.nativeLibraryDir, "libt_vkinfo.so").absolutePath
         val driverPath = getDriverPath(driverTypeState.value)
         val env = buildEnv(isDraw = false)
-        val res = Native.run(libPath, arrayOf(driverPath), env, logFile.absolutePath, 30000)
+        val jsonFile = File(cacheDir, "vkinfo.json").apply { delete() }
+        val res = Native.run(libPath, arrayOf(driverPath, jsonFile.absolutePath), env, logFile.absolutePath, 30000)
 
         val logContent = if (logFile.exists()) logFile.readText() else ""
         refreshLogsList()
 
-        var jsonObject: JSONObject? = null
-        try {
-            jsonObject = JSONObject(logContent)
-        } catch (_: Exception) {
-            val start = logContent.indexOf('{')
-            val end = logContent.lastIndexOf('}')
-            if (start != -1 && end > start) {
-                try {
-                    jsonObject = JSONObject(logContent.substring(start, end + 1))
-                } catch (_: Exception) {}
-            }
-        }
+        val jsonText = if (jsonFile.exists()) jsonFile.readText() else ""
+        val jsonObject = try { JSONObject(jsonText) } catch (_: Exception) { null }
 
-        Pair(jsonObject, logContent.ifEmpty { "Result: $res" })
+        Pair(jsonObject, if (jsonObject != null) jsonText else "Result: $res\n$logContent")
     }
 
     private fun flattenJson(obj: Any?, prefix: String, result: MutableList<String>) {
@@ -272,7 +263,14 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    // Autorun summary: logcat + files/autorun.txt (some devices drop app logcat over adb).
+    private fun say(s: String) {
+        Log.i("PanVKTest", s)
+        java.io.File(filesDir, "autorun.txt").appendText(s + "\n")
+    }
+
     private suspend fun runHeadlessAutorun() {
+        java.io.File(filesDir, "autorun.txt").delete()
         val (json, _) = runInfo()
         val devicesArr = json?.optJSONArray("devices")
         val numDevices = devicesArr?.length() ?: 0
@@ -281,7 +279,7 @@ class MainActivity : ComponentActivity() {
             ?: (json?.optJSONArray("instanceExtensions")?.length() ?: 0)
         val numFormats = firstDev?.optJSONObject("formats")?.length() ?: 0
 
-        Log.i("PanVKTest", "INFO devices=$numDevices exts=$numExts formats=$numFormats")
+        say("INFO devices=$numDevices exts=$numExts formats=$numFormats")
 
         var passCount = 0
         for (i in testCases.indices) {
@@ -293,12 +291,12 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.Main) {
                 updateTestResult(res)
             }
-            Log.i("PanVKTest", "RESULT ${test.name} ${res.status} mismatch=${res.mismatch} fps=${res.fps ?: "0"} ms=${res.durationMs}")
+            say("RESULT ${test.name} ${res.status} mismatch=${res.mismatch} fps=${res.fps ?: "0"} ms=${res.durationMs}")
             if (res.status == "PASS") {
                 passCount++
             }
         }
-        Log.i("PanVKTest", "AUTORUN DONE pass=$passCount total=${testCases.size}")
+        say("AUTORUN DONE pass=$passCount total=${testCases.size}")
     }
 
     private fun updateTestStatus(testName: String, status: String) {

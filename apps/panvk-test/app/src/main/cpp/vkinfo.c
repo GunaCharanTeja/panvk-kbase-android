@@ -51,7 +51,12 @@ typedef struct {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <vulkan_icd.so>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <vulkan_icd.so> [out.json]\n", argv[0]);
+        return 1;
+    }
+    /* Optional argv[2]: JSON output file, keeps driver stderr out of the JSON. */
+    if (argc > 2 && !freopen(argv[2], "w", stdout)) {
+        fprintf(stderr, "FAIL open %s\n", argv[2]);
         return 1;
     }
 

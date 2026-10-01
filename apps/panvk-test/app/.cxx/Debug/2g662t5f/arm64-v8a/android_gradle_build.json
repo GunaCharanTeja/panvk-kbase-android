@@ -1,0 +1,108 @@
+{
+  "buildFiles": [
+    "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/opt/android-sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/opt/android-sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "panvktest::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "panvktest",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libpanvktest.so",
+      "runtimeFiles": []
+    },
+    "t_bc_decode::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_bc_decode",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_bc_decode.so",
+      "runtimeFiles": []
+    },
+    "t_clip_cull::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_clip_cull",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_clip_cull.so",
+      "runtimeFiles": []
+    },
+    "t_fill_mode::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_fill_mode",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_fill_mode.so",
+      "runtimeFiles": []
+    },
+    "t_geometry::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_geometry",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_geometry.so",
+      "runtimeFiles": []
+    },
+    "t_gpu_prerast_slice::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_gpu_prerast_slice",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_gpu_prerast_slice.so",
+      "runtimeFiles": []
+    },
+    "t_multi_viewport::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_multi_viewport",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_multi_viewport.so",
+      "runtimeFiles": []
+    },
+    "t_pipeline_stats::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_pipeline_stats",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_pipeline_stats.so",
+      "runtimeFiles": []
+    },
+    "t_tessellation::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_tessellation",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_tessellation.so",
+      "runtimeFiles": []
+    },
+    "t_vkinfo::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_vkinfo",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_vkinfo.so",
+      "runtimeFiles": []
+    },
+    "t_xfb::@6890427a1f51a3e7e1df": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "t_xfb",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_xfb.so",
+      "runtimeFiles": []
+    }
+  },
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "/opt/android-sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/clang.lld",
+      "cppCompilerExecutable": "/opt/android-sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++.lld"
+    }
+  },
+  "cFileExtensions": [
+    "c"
+  ],
+  "cppFileExtensions": []
+}

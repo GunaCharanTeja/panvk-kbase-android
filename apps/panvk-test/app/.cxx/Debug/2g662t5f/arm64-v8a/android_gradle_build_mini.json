@@ -1,0 +1,87 @@
+{
+  "buildFiles": [
+    "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/opt/android-sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/opt/android-sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "t_xfb::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_xfb",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_xfb.so",
+      "runtimeFiles": []
+    },
+    "t_vkinfo::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_vkinfo",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_vkinfo.so",
+      "runtimeFiles": []
+    },
+    "t_geometry::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_geometry",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_geometry.so",
+      "runtimeFiles": []
+    },
+    "t_multi_viewport::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_multi_viewport",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_multi_viewport.so",
+      "runtimeFiles": []
+    },
+    "t_pipeline_stats::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_pipeline_stats",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_pipeline_stats.so",
+      "runtimeFiles": []
+    },
+    "t_clip_cull::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_clip_cull",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_clip_cull.so",
+      "runtimeFiles": []
+    },
+    "t_fill_mode::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_fill_mode",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_fill_mode.so",
+      "runtimeFiles": []
+    },
+    "t_bc_decode::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_bc_decode",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_bc_decode.so",
+      "runtimeFiles": []
+    },
+    "t_tessellation::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_tessellation",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_tessellation.so",
+      "runtimeFiles": []
+    },
+    "panvktest::@6890427a1f51a3e7e1df": {
+      "artifactName": "panvktest",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libpanvktest.so",
+      "runtimeFiles": []
+    },
+    "t_gpu_prerast_slice::@6890427a1f51a3e7e1df": {
+      "artifactName": "t_gpu_prerast_slice",
+      "abi": "arm64-v8a",
+      "output": "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_gpu_prerast_slice.so",
+      "runtimeFiles": []
+    }
+  }
+}

@@ -1,0 +1,25 @@
+# ninja log v5
+4	222	1790823235253398021	CMakeFiles/panvktest.dir/jni.c.o	291d7de7e0e4fcc1
+225	287	1790823235320065058	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libpanvktest.so	f9ea9d068c299abf
+1	360	1790823235390065445	CMakeFiles/t_clip_cull.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/clip-cull/clip_cull.c.o	30ae50364167ea8
+360	402	1790823235433399019	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_clip_cull.so	47c94d4fa87bedd2
+3	448	1790823235480065945	CMakeFiles/t_pipeline_stats.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/pipeline_stats/pipeline_stats.c.o	d70028d12842f077
+448	480	1790823235513451697	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_pipeline_stats.so	e1b071f23e9e4547
+1	498	1790823235530066222	CMakeFiles/t_multi_viewport.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/multi-viewport/multi_viewport.c.o	29b9e44671d215f7
+1	503	1790823235536732926	CMakeFiles/t_bc_decode.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/bc/bc_decode.c.o	dae7f35c34cad96
+1	511	1790823235540311271	CMakeFiles/t_gpu_prerast_slice.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/gpu_prerast_slice.c.o	be27eaceae1e35bf
+1	539	1790823235570588792	CMakeFiles/t_fill_mode.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/fill-mode/fill_mode.c.o	ad4472d1eda9858
+498	550	1790823235576733148	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_multi_viewport.so	5b9497fd6177113
+512	554	1790823235587404815	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_gpu_prerast_slice.so	b99acdb25021efe8
+503	559	1790823235593399906	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_bc_decode.so	e3123c62413669fa
+539	573	1790823235610066665	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_fill_mode.so	3d8f849e2e5eeaa2
+2	644	1790823235676733702	CMakeFiles/t_geometry.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/geometry/geometry.c.o	3690e73376d049ca
+644	669	1790823235703400516	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_geometry.so	fac97a43bd95e8a6
+3	728	1790823235756734145	CMakeFiles/t_vkinfo.dir/vkinfo.c.o	ef4039cd4926d0e5
+2	750	1790823235780067608	CMakeFiles/t_tessellation.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/tessellation/tessellation.c.o	322f6286c7c015b
+728	758	1790823235793401016	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_vkinfo.so	f8f0c1ccc13cfe56
+750	772	1790823235808655180	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_tessellation.so	5bf6150505b67ae8
+2	871	1790823235903401626	CMakeFiles/t_xfb.dir/home/abhaybyte/repos/panvk-apk/tests/dxvk/vulkan/xfb/xfb.c.o	7fb97074c39e151c
+871	897	1790823235933401792	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_xfb.so	2247fbc63f545492
+3	516	1790824683682548300	CMakeFiles/t_vkinfo.dir/vkinfo.c.o	ef4039cd4926d0e5
+516	608	1790824683782549176	/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/build/intermediates/cxx/Debug/2g662t5f/obj/arm64-v8a/libt_vkinfo.so	f8f0c1ccc13cfe56

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22)
 project(panvktest C)
 
 set(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../..")
-set(VULKAN_INCLUDE_DIR "${REPO_ROOT}/tests/dxvk/vulkan")
+set(VULKAN_INCLUDE_DIR "${REPO_ROOT}/work/mesa-dxint/include" CACHE PATH "Vulkan headers")
 
 function(add_vk_test test_name test_rel_path)
     set(target_name "t_${test_name}")

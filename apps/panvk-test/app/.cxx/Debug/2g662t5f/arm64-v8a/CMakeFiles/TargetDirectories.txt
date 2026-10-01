@@ -1,0 +1,13 @@
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_gpu_prerast_slice.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_clip_cull.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_multi_viewport.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_fill_mode.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_bc_decode.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_geometry.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_tessellation.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_xfb.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_pipeline_stats.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/t_vkinfo.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/panvktest.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/edit_cache.dir
+/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a/CMakeFiles/rebuild_cache.dir

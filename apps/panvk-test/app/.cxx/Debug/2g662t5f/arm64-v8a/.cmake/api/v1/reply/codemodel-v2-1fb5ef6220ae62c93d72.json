@@ -1,0 +1,150 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10.0"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "panvktest",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "panvktest::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-panvktest-Debug-50fd73d42c71be68773b.json",
+					"name" : "panvktest",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_bc_decode::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_bc_decode-Debug-21f4827a31c0b58db36b.json",
+					"name" : "t_bc_decode",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_clip_cull::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_clip_cull-Debug-2df57703ba0555f25a9a.json",
+					"name" : "t_clip_cull",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_fill_mode::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_fill_mode-Debug-72af6bb3d9ea92d5bac7.json",
+					"name" : "t_fill_mode",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_geometry::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_geometry-Debug-114683c813707b0f56dd.json",
+					"name" : "t_geometry",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_gpu_prerast_slice::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_gpu_prerast_slice-Debug-2c79d05970d6123a7a6b.json",
+					"name" : "t_gpu_prerast_slice",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_multi_viewport::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_multi_viewport-Debug-5d516c9ada564ab40ac9.json",
+					"name" : "t_multi_viewport",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_pipeline_stats::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_pipeline_stats-Debug-3b6f01719f02e344db17.json",
+					"name" : "t_pipeline_stats",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_tessellation::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_tessellation-Debug-2d7cfb0a661d8c069f5f.json",
+					"name" : "t_tessellation",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_vkinfo::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_vkinfo-Debug-e6fe5d94a8969c1ff95e.json",
+					"name" : "t_vkinfo",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "t_xfb::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-t_xfb-Debug-911ed7ba45cd2875dd53.json",
+					"name" : "t_xfb",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/.cxx/Debug/2g662t5f/arm64-v8a",
+		"source" : "/home/abhaybyte/repos/panvk-apk/apps/panvk-test/app/src/main/cpp"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}

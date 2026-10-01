@@ -21,7 +21,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate vkinfo_gen.h from vk.xml and vulkan_core.h")
     parser.add_argument("--registry", default=os.path.join(repo_root, "work", "mesa-dxint", "src", "vulkan", "registry", "vk.xml"),
                         help="Path to vk.xml")
-    parser.add_argument("--header", default=os.path.join(repo_root, "tests", "dxvk", "vulkan", "vulkan", "vulkan_core.h"),
+    parser.add_argument("--header", default=os.path.join(repo_root, "work", "mesa-dxint", "include", "vulkan", "vulkan_core.h"),
                         help="Path to vulkan_core.h")
     parser.add_argument("--output", default=os.path.join(repo_root, "apps", "panvk-test", "app", "src", "main", "cpp", "vkinfo_gen.h"),
                         help="Path to output vkinfo_gen.h")
