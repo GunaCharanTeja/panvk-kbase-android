@@ -112,13 +112,40 @@ workloads. Enumeration alone is not counted as a test.
 | ASTC LDR | **PASS** | ASTC 4x4 UNORM/SRGB sampling, filtering, mip level 1, exact checksums |
 | ASTC HDR | **PASS** | `VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK_EXT`; pixel `[1, 2, 3, 1]`; filtering and mip level 1 |
 
-Native `textureCompressionBC` is **false and unexposed**. All 16 BC format
-queries returned no feature flags and `VK_ERROR_FORMAT_NOT_SUPPORTED`. The
-experimental compatibility layer remains excluded from packages because
-direct-PanVK composition and correctness are unproven. Other unsupported
+This table describes the beta.3 release. Since then `textureCompressionBC`
+has been exposed on `feature/g615-dxvk-complete` through GPU compute decode
+(G615 has no BC hardware); see the DXVK section below. Other unsupported
 features are listed in [`docs/RUNTIME-FEATURES.md`](docs/RUNTIME-FEATURES.md).
 
 ## DXVK / vkd3d-proton compliance (G615)
+
+### Current state (after csf-v11/068, not yet in a tagged release)
+
+DXVK Native v3.1.1 on the Poco X6 Pro creates a D3D11 device at
+**feature level 11_0** (`D3D11 HRESULT=0x00000000 feature_level=0xb000`);
+D3D11 and D3D9 draw workloads pass. Every feature below runs on the GPU,
+with no CPU fallback or simulation, and is exposed only after device proof.
+
+| Feature | Implementation | Device proof (CTS Pass / Fail) |
+|---|---|---|
+| `geometryShader` | VS/GS run as compute on the GPU pre-raster path | geometry 189 / 0 |
+| `tessellationShader` | VS, TCS, tessellator and TES as compute, GPU chunking | tessellation 526 / 0 |
+| `VK_EXT_transform_feedback` | GPU capture kernel, 4 streams, counters, queries | transform_feedback 15793 / 0 (2 intermittent DeviceLost) |
+| `textureCompressionBC` | GPU compute decode of BC1-7 | BC subset 1863 / 0; copy_and_blit 9620 / 0 |
+| `shaderClipDistance`, `shaderCullDistance` | NIR lowering | device matrix 0 fail |
+| `multiViewport` | 16 viewports | device matrix 0 fail |
+| `fillModeNonSolid` | GPU kernel builds line/point primitives | 17/17 pixel-exact |
+| `pipelineStatisticsQuery` | 049-054 | statistics_query 15374 / 0 |
+| `VK_KHR_incremental_present`, `VK_EXT_swapchain_colorspace`, `VK_EXT_image_compression_control` | upstream backports | device probes 0 fail |
+
+Still missing: `robustImageAccess2` (the vkd3d-proton device-create
+blocker), `vertexPipelineStoresAndAtomics` (FL11_1),
+`VK_EXT_primitives_generated_query`, and sparse (FL12_0, `NO-GO` on Kbase).
+The X11 present teardown hang is open. Progress and TODOs:
+[`worklogs/g615-dxvk/PROGRESS.md`](worklogs/g615-dxvk/PROGRESS.md). Roadmap:
+[`docs/plans/PANVK_MASTER_ROADMAP.md`](docs/plans/PANVK_MASTER_ROADMAP.md).
+
+### beta.3 evaluation (historical)
 
 Machine-evaluated against stock tagged profiles. No fake feature bits.
 Overall result: **FAIL**. DXVK 2.7.1/3.1.1 COMMON and vkd3d README hard
@@ -149,7 +176,7 @@ Capability dump:
 | vkd3d-proton 3.0.1 PROFILE_BASELINE / DEVICE_CREATE | FAIL |
 | MAX_FEATURE_LEVEL / D3D_FEATURE_LEVEL | NOT_AVAILABLE |
 
-Still false (no spoofing): `geometryShader`, `tessellationShader`,
+At beta.3, still false (no spoofing): `geometryShader`, `tessellationShader`,
 `fillModeNonSolid`, `multiViewport`, `shaderClipDistance`,
 `shaderCullDistance`, `textureCompressionBC`, transform feedback,
 `pipelineStatisticsQuery`, `robustImageAccess2`, sparse.
@@ -184,8 +211,9 @@ Evaluators: `scripts/evaluate-vulkan-profile.py`,
 `scripts/evaluate-dxvk-vkd3d-compliance-matrix.py`.
 Workloads: [`tests/dxvk-vkd3d/`](tests/dxvk-vkd3d/).
 
-Next blocker: `robustImageAccess2` (vkd3d 2.14.1/3.0.1 `DEVICE_CREATE`).
-DXVK D3D9 still needs geometry, fill, clip/cull, and BC.
+At beta.3 the next blocker was `robustImageAccess2` (vkd3d 2.14.1/3.0.1
+`DEVICE_CREATE`). It still is; geometry, fill, clip/cull and BC have since
+landed (see Current state above).
 
 ### New extension workloads
 
