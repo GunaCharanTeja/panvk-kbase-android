@@ -10,8 +10,8 @@ while [ $# -gt 0 ]; do case "$1" in
 NDK_BIN="$(ls -d "$NDK"/*/toolchains/llvm/prebuilt/linux-x86_64/bin 2>/dev/null | sort -V | tail -n1)"
 if [ -z "$NDK_BIN" ]; then NDK_BIN="$(ls -d "$NDK"/toolchains/llvm/prebuilt/linux-x86_64/bin 2>/dev/null | head -n1)"; fi
 [ -n "$NDK_BIN" ] || { echo "NDK toolchain not found under $NDK" >&2; exit 1; }
-export PATH="$ROOT/build/host-tools/bin:$NDK_BIN:$PATH"
-MESA="$ROOT/work/mesa"; BDIR="$ROOT/build/android-bionic"; DDIR="$ROOT/dist/android-$PROFILE"
+export PATH="${HOST_TOOLS:-$ROOT/build/host-tools/bin}:$NDK_BIN:$PATH"
+MESA="${MESA:-$ROOT/work/mesa}"; BDIR="${BDIR:-$ROOT/build/android-bionic}"; DDIR="${DDIR:-$ROOT/dist/android-$PROFILE}"
 CC_TRIPLE="aarch64-linux-android$API-clang"
 mkdir -p "$BDIR"
 sed "s/aarch64-linux-android[0-9]*-clang/$CC_TRIPLE/g" "$ROOT/meson/android-aarch64.ini" > "$BDIR.cross.ini"
@@ -34,14 +34,15 @@ mkdir -p "$DDIR"
 # Host codegen tools (mesa_clc, vtn_bindgen2) must come from a native build:
 # export PATH with build/host-tools/bin (see bootstrap-host-tools.sh) or pass
 # --native-file with [binaries] mesa_clc/vtn_bindgen2 paths.
-meson setup "$BDIR" "$MESA" --cross-file "$BDIR.cross.ini" \
+LOG="$BDIR.log"; RECONF=""; [ -f "$BDIR/build.ninja" ] && RECONF="--reconfigure"
+meson setup $RECONF "$BDIR" "$MESA" --cross-file "$BDIR.cross.ini" \
   -Dbuildtype=release -Dplatforms=android -Dandroid-stub=true -Dandroid-strict=false \
   -Dgallium-drivers= -Dvulkan-drivers=panfrost -Dpanfrost-kmds=kbase \
   -Dmesa-clc=system -Dprecomp-compiler=system \
   -Degl=disabled -Dgles1=disabled -Dgles2=disabled -Dopengl=false \
   -Dglx=disabled -Dgbm=disabled -Dlibunwind=disabled -Dzstd=disabled \
-  -Dcpp_link_args=-static-libstdc++ 2>&1 | tail -n 5
-ninja -j"$(nproc)" -C "$BDIR" 2>&1 | tail -n 5
+  -Dcpp_link_args=-static-libstdc++ >"$LOG" 2>&1 || { tail -n 20 "$LOG"; echo "BUILD-FAIL: meson setup (log $LOG)" >&2; exit 1; }
+ninja -j"$(nproc)" -C "$BDIR" >>"$LOG" 2>&1 || { tail -n 20 "$LOG"; echo "BUILD-FAIL: ninja (log $LOG)" >&2; exit 1; }
 SO="$(find "$BDIR" -name libvulkan_panfrost.so | head -n1)"
 [ -n "$SO" ] || { echo "BUILD-FAIL: libvulkan_panfrost.so not produced" >&2; exit 1; }
 cp "$SO" "$DDIR/"
