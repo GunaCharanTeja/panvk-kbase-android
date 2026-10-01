@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <vulkan/vulkan.h>
 
 #define RT_W 64
@@ -429,6 +430,26 @@ dx7_run(struct dx7 *t, VkPipeline pipe, VkBuffer vbuf, dx7_record_fn rec,
    CK(vkQueueSubmit(t->queue, 1, &si, t->fence), "Submit");
    CK(vkWaitForFences(t->dev, 1, &t->fence, VK_TRUE, 30ull * 1000000000ull),
       "Wait");
+   /* Optional: re-submit the first draw for PT_FPS_MS ms, report FPS once. */
+   static int fps_done;
+   const char *fps_ms = getenv("PT_FPS_MS");
+   if (fps_ms && !fps_done) {
+      fps_done = 1;
+      struct timespec a, b;
+      long frames = 0, ms = atol(fps_ms);
+      double el = 0;
+      clock_gettime(CLOCK_MONOTONIC, &a);
+      do {
+         CK(vkResetFences(t->dev, 1, &t->fence), "ResetFence");
+         CK(vkQueueSubmit(t->queue, 1, &si, t->fence), "Submit");
+         CK(vkWaitForFences(t->dev, 1, &t->fence, VK_TRUE, 30ull * 1000000000ull),
+            "Wait");
+         frames++;
+         clock_gettime(CLOCK_MONOTONIC, &b);
+         el = (b.tv_sec - a.tv_sec) * 1e3 + (b.tv_nsec - a.tv_nsec) / 1e6;
+      } while (el < ms);
+      printf("FPS %.1f frames=%ld ms=%.0f\n", frames * 1000.0 / el, frames, el);
+   }
 }
 
 static const uint8_t *
