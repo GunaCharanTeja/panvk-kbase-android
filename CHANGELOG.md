@@ -1,6 +1,35 @@
 # Changelog
 
-## g615-v11-csf-v0.1.0-beta.4 (prerelease, unpublished)
+## g615-v11-csf-v0.1.0-beta.5 (prerelease)
+
+Mesa `5a07217f034b` + csf-v11 patches up to 073
+(`patchSeriesId sha256:c6d62dc2a6085b581ca20e68b54d9bbe2846f30e9df8dc54b1b1ef1d3492956a`).
+Poco X6 Pro, Mali-G615 MC6, mali_kbase CSF UAPI 1.21. Android minApi 35.
+
+### Added
+- `VK_EXT_memory_priority` and `VK_EXT_pageable_device_local_memory` (069).
+- `alphaToOne` (070).
+- `maxGeometryShaderInvocations` raised to 64 (071).
+- `VK_EXT_multi_draw` (072).
+- `VK_EXT_primitives_generated_query` (073).
+- Test APK: native Info tab (device header card; collapsible instance/device
+  extensions with filter, features by struct with "show only supported",
+  limits table, texture-format flag chips). Raw JSON only via Copy/Share.
+
+### Results
+CTS: memory_priority 224/0, pageable 202/0, api.info 7799/0, alphaToOne 123/0,
+geometry 193/0 (GS invocations 64), instanced 20/0, multi_draw 12704/0,
+primitives_generated_query 75206/0. Regression geometry + tessellation +
+transform_feedback.simple 5706/0. Test APK: 9/9 tests passed.
+
+### Known issues
+`depthBounds` and `shaderOutputViewportIndex` not implemented (GS-written
+viewport index dropped; viewport 0 used); 2 intermittent DeviceLost in
+transform_feedback query_copy; XFB 65536-record cap; X11 present hang seen
+once under Xvfb only, unverified on Android; JICA98 0005 not fully validated;
+no `robustImageAccess2` (vkd3d deferred); sparse/FL12 impossible on Kbase.
+
+## g615-v11-csf-v0.1.0-beta.4 (prerelease)
 
 Mesa `5a07217f034b` + csf-v11 patches up to 068
 (`patchSeriesId sha256:e5faa5ee87fbba401cad6ead5dc49a346325defa368692fd296f441618d14e17`).
