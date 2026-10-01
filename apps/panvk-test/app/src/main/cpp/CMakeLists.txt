@@ -47,7 +47,13 @@ target_include_directories(t_vkinfo PRIVATE
 )
 target_link_libraries(t_vkinfo PRIVATE dl m)
 
-# SHARED JNI lib panvktest from jni.c
-add_library(panvktest SHARED "${CMAKE_CURRENT_SOURCE_DIR}/jni.c")
+# SHARED JNI lib panvktest from jni.c + swapchain.c
+add_library(panvktest SHARED
+    "${CMAKE_CURRENT_SOURCE_DIR}/jni.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/swapchain.c")
 target_compile_options(panvktest PRIVATE -w -O2 -fvisibility=default)
-target_link_libraries(panvktest PRIVATE dl log)
+target_compile_definitions(panvktest PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
+target_include_directories(panvktest PRIVATE
+    "${VULKAN_INCLUDE_DIR}"
+    "${REPO_ROOT}/tests/dxvk/vulkan/clip-cull")
+target_link_libraries(panvktest PRIVATE android log dl m)

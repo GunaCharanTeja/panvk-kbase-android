@@ -877,6 +877,122 @@ fun SectionHeaderCard(
     }
 }
 
+// Khronos "Feature Requirements". Names are unique across the core feature structs.
+private val CORE_REQ_BASE = listOf(
+    "robustBufferAccess",
+    "multiview",
+    "subgroupBroadcastDynamicId",
+    "imagelessFramebuffer",
+    "uniformBufferStandardLayout",
+    "shaderSubgroupExtendedTypes",
+    "separateDepthStencilLayouts",
+    "hostQueryReset",
+    "timelineSemaphore",
+)
+
+private val CORE_REQ_13 = listOf(
+    "shaderTerminateInvocation",
+    "shaderDemoteToHelperInvocation",
+    "privateData",
+    "pipelineCreationCacheControl",
+    "synchronization2",
+    "shaderZeroInitializeWorkgroupMemory",
+    "robustImageAccess",
+    "subgroupSizeControl",
+    "computeFullSubgroups",
+    "dynamicRendering",
+    "shaderIntegerDotProduct",
+    "maintenance4",
+    "vulkanMemoryModel",
+    "vulkanMemoryModelDeviceScope",
+    "inlineUniformBlock",
+    "bufferDeviceAddress",
+)
+
+private val CORE_REQ_14 = listOf(
+    "fullDrawIndexUint32",
+    "imageCubeArray",
+    "independentBlend",
+    "sampleRateShading",
+    "drawIndirectFirstInstance",
+    "depthClamp",
+    "depthBiasClamp",
+    "samplerAnisotropy",
+    "fragmentStoresAndAtomics",
+    "shaderStorageImageExtendedFormats",
+    "shaderUniformBufferArrayDynamicIndexing",
+    "shaderSampledImageArrayDynamicIndexing",
+    "shaderStorageBufferArrayDynamicIndexing",
+    "shaderStorageImageArrayDynamicIndexing",
+    "shaderImageGatherExtended",
+    "shaderInt16",
+    "largePoints",
+    "samplerYcbcrConversion",
+    "storageBuffer16BitAccess",
+    "variablePointers",
+    "variablePointersStorageBuffer",
+    "samplerMirrorClampToEdge",
+    "scalarBlockLayout",
+    "shaderUniformTexelBufferArrayDynamicIndexing",
+    "shaderStorageTexelBufferArrayDynamicIndexing",
+    "shaderInt8",
+    "storageBuffer8BitAccess",
+    "globalPriorityQuery",
+    "shaderSubgroupRotate",
+    "shaderSubgroupRotateClustered",
+    "shaderFloatControls2",
+    "shaderExpectAssume",
+    "bresenhamLines",
+    "vertexAttributeInstanceRateDivisor",
+    "indexTypeUint8",
+    "maintenance5",
+    "pushDescriptor",
+    "dynamicRenderingLocalRead",
+    "maintenance6",
+    "pipelineRobustness",
+)
+
+/** Missing core feature names for Vulkan 1.[minor]. Empty = met. Null = features not queried. */
+fun coreRequirementGaps(dev: DeviceInfo, minor: Int): List<String>? {
+    if (dev.featureGroups.isEmpty()) return null
+    val enabled = buildSet {
+        for (group in dev.featureGroups) {
+            for (feature in group.features) {
+                if (feature.supported) add(feature.name)
+            }
+        }
+    }
+    val required = buildList {
+        addAll(CORE_REQ_BASE)
+        if (minor >= 3) {
+            addAll(CORE_REQ_13)
+            if ("descriptorIndexing" in enabled) {
+                add("descriptorBindingInlineUniformBlockUpdateAfterBind")
+            }
+        }
+        if (minor >= 4) {
+            addAll(CORE_REQ_14)
+            if ("protectedMemory" in enabled) add("pipelineProtectedAccess")
+        }
+    }
+    return buildList {
+        for (name in required) {
+            if (name !in enabled) add(name)
+        }
+        val parts = dev.apiVersion.split('.')
+        val major = parts.getOrNull(0)?.toIntOrNull()
+        val apiMinor = parts.getOrNull(1)?.toIntOrNull()
+        val apiOk = major != null && apiMinor != null &&
+            (major > 1 || (major == 1 && apiMinor >= minor))
+        if (!apiOk) add("apiVersion < 1.$minor")
+    }
+}
+
+private fun coreRequirementValue(dev: DeviceInfo, minor: Int): String {
+    val gaps = coreRequirementGaps(dev, minor) ?: return "unknown (features not queried)"
+    return if (gaps.isEmpty()) "met" else "missing: ${gaps.joinToString(", ")}"
+}
+
 // ============================================================================
 // Header Card for Vulkan Device Properties
 // ============================================================================
@@ -942,8 +1058,17 @@ fun DeviceHeaderCard(dev: DeviceInfo) {
             InfoKeyVal("Vendor / Device ID", "${decodeVendor(dev.vendorId)} / $devIdHex")
             InfoKeyVal("Device Type", dev.deviceType)
 
-            if (dev.conformanceVersion != null) {
-                InfoKeyVal("Conformance", dev.conformanceVersion)
+            InfoKeyVal(
+                "Conformance",
+                when (dev.conformanceVersion) {
+                    null -> "Not reported"
+                    "0.0.0.0" -> "Not Khronos-certified (driver reports 0.0.0.0)"
+                    else -> dev.conformanceVersion
+                }
+            )
+            InfoKeyVal("Vulkan 1.3 core requirements", coreRequirementValue(dev, 3))
+            if (dev.featureGroups.any { it.key == "VkPhysicalDeviceVulkan14Features" }) {
+                InfoKeyVal("Vulkan 1.4 core requirements", coreRequirementValue(dev, 4))
             }
         }
     }
@@ -951,11 +1076,7 @@ fun DeviceHeaderCard(dev: DeviceInfo) {
 
 @Composable
 fun InfoKeyVal(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
@@ -965,7 +1086,8 @@ fun InfoKeyVal(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

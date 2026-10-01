@@ -6,6 +6,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -28,6 +30,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,7 +62,8 @@ data class TestResult(
     val durationMs: Long = 0,
     val logFile: File? = null,
     val lastLines: List<String> = emptyList(),
-    val isExpanded: Boolean = false
+    val isExpanded: Boolean = false,
+    val extra: String? = null
 )
 
 class MainActivity : ComponentActivity() {
@@ -73,7 +77,8 @@ class MainActivity : ComponentActivity() {
         TestCase("geometry", isDraw = true),
         TestCase("tessellation", isDraw = true),
         TestCase("xfb", isDraw = true),
-        TestCase("pipeline_stats", isDraw = true)
+        TestCase("pipeline_stats", isDraw = true),
+        TestCase("swapchain_lifecycle", isDraw = true)
     )
 
     private var driverTypeState = mutableStateOf(DriverType.BUNDLED)
@@ -92,6 +97,8 @@ class MainActivity : ComponentActivity() {
         testCases.map { TestResult(it.name) }
     )
     private var isRunningAllState = mutableStateOf(false)
+    @Volatile private var swapSurface: android.view.Surface? = null
+    @Volatile private var hungSwapThread: Thread? = null
 
     // Selected tab: 0=Driver, 1=Info, 2=Tests, 3=Logs
     private var selectedTabState = mutableIntStateOf(0)
@@ -195,6 +202,7 @@ class MainActivity : ComponentActivity() {
 
 
     private suspend fun executeTest(test: TestCase): TestResult = withContext(Dispatchers.IO) {
+        if (test.name == "swapchain_lifecycle") return@withContext executeSwapchainTest()
         val t0 = System.currentTimeMillis()
         val logFile = createLogFile(test.name)
         val libPath = File(applicationInfo.nativeLibraryDir, "libt_${test.name}.so").absolutePath
@@ -240,6 +248,93 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private suspend fun executeSwapchainTest(): TestResult = withContext(Dispatchers.IO) {
+        val t0 = System.currentTimeMillis()
+        if (hungSwapThread?.isAlive == true) {
+            return@withContext TestResult(
+                name = "swapchain_lifecycle",
+                status = "FAIL",
+                durationMs = System.currentTimeMillis() - t0,
+                lastLines = listOf("FAIL previous swapchain run still hung")
+            )
+        }
+
+        val surfaceWaitEnd = System.currentTimeMillis() + 5_000L
+        var surface = swapSurface
+        while (surface == null && System.currentTimeMillis() < surfaceWaitEnd) {
+            Thread.sleep(100)
+            surface = swapSurface
+        }
+        if (surface == null) {
+            return@withContext TestResult(
+                name = "swapchain_lifecycle",
+                status = "FAIL",
+                durationMs = System.currentTimeMillis() - t0,
+                lastLines = listOf("FAIL no surface")
+            )
+        }
+        val boundSurface = surface
+
+        val logFile = createLogFile("swapchain_lifecycle")
+        val holder = object {
+            @Volatile var result: String? = null
+        }
+        val thread = Thread({
+            holder.result = Native.swapchainTest(
+                getDriverPath(driverTypeState.value),
+                boundSurface,
+                logFile.absolutePath
+            )
+        }, "swapchain-test")
+        thread.isDaemon = true
+        thread.start()
+
+        // g_done stays 1 until this run calls set_done(0). Ignore that stale sample.
+        var sawRun = false
+        var hangPhase: String? = null
+        val runDeadline = System.currentTimeMillis() + 120_000L
+        while (true) {
+            Thread.sleep(100)
+            val parts = Native.swapchainPhase().split(' ')
+            val phase = parts.getOrElse(0) { "" }
+            val ms = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+            val done = parts.getOrNull(2) == "1"
+            if (!done) sawRun = true
+            if (!thread.isAlive || (done && sawRun)) break
+            if (System.currentTimeMillis() >= runDeadline || (sawRun && ms > 10_000L)) {
+                logFile.appendText("FAIL hang in $phase (watchdog 10s)\n")
+                hungSwapThread = thread
+                hangPhase = phase
+                break
+            }
+        }
+        if (hangPhase == null) thread.join()
+
+        val result = holder.result ?: ""
+        val logContent = if (logFile.exists()) logFile.readText() else ""
+        val lines = logContent.lines()
+        val hasFail = lines.any { it.trimStart().startsWith("FAIL") }
+        val status = if (hangPhase == null && result == "exit:0" && !hasFail) "PASS" else "FAIL"
+        val fps = Regex("""FPS ([0-9.]+)""").find(logContent)?.groupValues?.get(1)
+        val resized = Regex("""FPS_RESIZED ([0-9.]+)""").find(logContent)?.groupValues?.get(1) ?: ""
+        val phases = Regex("""PHASE (\S+) ms=(\d+)""")
+            .findAll(logContent)
+            .joinToString(", ") { "${it.groupValues[1]} ${it.groupValues[2]}ms" }
+        val extra = (if (hangPhase != null) "hang in $hangPhase | " else "") +
+            "resized FPS $resized | $phases"
+
+        refreshLogsList()
+        TestResult(
+            name = "swapchain_lifecycle",
+            status = status,
+            fps = fps,
+            durationMs = System.currentTimeMillis() - t0,
+            logFile = logFile,
+            lastLines = lines.takeLast(40),
+            extra = extra
+        )
+    }
+
     // Autorun summary: logcat + files/autorun.txt (some devices drop app logcat over adb).
     private fun say(s: String) {
         Log.i("PanVKTest", s)
@@ -268,7 +363,7 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.Main) {
                 updateTestResult(res)
             }
-            say("RESULT ${test.name} ${res.status} mismatch=${res.mismatch} fps=${res.fps ?: "0"} ms=${res.durationMs}")
+            say("RESULT ${test.name} ${res.status} mismatch=${res.mismatch} fps=${res.fps ?: "0"} ms=${res.durationMs}${if (res.extra != null) " extra=${res.extra}" else ""}")
             if (res.status == "PASS") {
                 passCount++
             }
@@ -467,8 +562,29 @@ class MainActivity : ComponentActivity() {
 
             Spacer(Modifier.height(8.dp))
 
+            AndroidView(
+                factory = { ctx ->
+                    SurfaceView(ctx).apply {
+                        holder.addCallback(object : SurfaceHolder.Callback {
+                            override fun surfaceCreated(holder: SurfaceHolder) {
+                                swapSurface = holder.surface
+                            }
+                            override fun surfaceChanged(
+                                holder: SurfaceHolder, format: Int, width: Int, height: Int
+                            ) {
+                                swapSurface = holder.surface
+                            }
+                            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                swapSurface = null
+                            }
+                        })
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(160.dp)
+            )
+
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(testCases) { test ->
@@ -549,6 +665,9 @@ class MainActivity : ComponentActivity() {
                                 }
                                 Text("${result.durationMs}ms", style = MaterialTheme.typography.bodySmall)
                             }
+                        }
+                        result.extra?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall)
                         }
                     }
 
