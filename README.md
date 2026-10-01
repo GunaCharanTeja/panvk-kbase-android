@@ -64,10 +64,17 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-`g615-v11-csf-v0.1.0-beta.3` is the latest published tag. Its code commit is
-`fc8a759e7d1b2b8de01c0e96f1fdc5e3950ba1a3`; the release was published on
-2026-09-19. The tag and its Android and glibc assets are frozen by project
-policy. See `validation/g615-v11-csf/BETA3-PUBLICATION-ADDENDUM.md`.
+`g615-v11-csf-v0.1.0-beta.4` is the latest published tag (prerelease, Mesa
+`5a07217f` plus csf-v11 patches up to 068, release commit
+`88c950c16819098d1da9e3f44c5714b2ac198126`). It adds the Android and glibc
+drivers, the `.adpkg` package and the PanVK Test APK. See
+[`CHANGELOG.md`](CHANGELOG.md) and the
+[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.4).
+
+`g615-v11-csf-v0.1.0-beta.3` (code commit
+`fc8a759e7d1b2b8de01c0e96f1fdc5e3950ba1a3`, published 2026-09-19) and its
+assets stay frozen by project policy. See
+`validation/g615-v11-csf/BETA3-PUBLICATION-ADDENDUM.md`.
 
 ## Capability truth
 
