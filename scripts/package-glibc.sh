@@ -8,7 +8,7 @@ while [ $# -gt 0 ]; do case "$1" in --profile) PROFILE="$2"; shift 2;; --version
 [ -n "$PROFILE" ] || { echo "--profile required" >&2; exit 2; }
 SRC="$ROOT/dist/glibc-$PROFILE/libvulkan_panfrost.so"
 [ -f "$SRC" ] || { echo "build first: $SRC missing" >&2; exit 1; }
-MESA_SHA="$(git -C "$ROOT/work/mesa" rev-parse HEAD 2>/dev/null || python3 -c "import json;print(json.load(open('$ROOT/sources.lock'))['mesaCommit'])")"
+MESA_SHA="$(python3 -c "import json;print(json.load(open('$ROOT/sources.lock'))['mesaCommit'])")"
 PATCH_SERIES_ID="$(python3 "$ROOT/scripts/compute-patch-series-id.py" --profile "$PROFILE")"
 OUT="$ROOT/dist/PanVK-Kbase-$PROFILE-$VER-${MESA_SHA:0:8}-EMULATOR.zip"
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT

@@ -165,9 +165,7 @@ def collect(profile: str) -> dict:
     glibc_so = ROOT / "dist" / f"glibc-{profile}" / "libvulkan_panfrost.so"
     android_sha = sha256_file(android_so)
     glibc_sha = sha256_file(glibc_so)
-    mesa = sh("git", "-C", str(ROOT / "work" / "mesa"), "rev-parse", "HEAD") or lock.get(
-        "mesaCommit"
-    )
+    mesa = lock.get("mesaCommit")  # release pin; work/mesa may be a dev tree
 
     android = {}
     for gate in ANDROID_GATES:

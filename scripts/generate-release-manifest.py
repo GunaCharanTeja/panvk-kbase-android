@@ -21,12 +21,9 @@ def sh(*cmd):
     except Exception:
         return 'unknown'
 
-mesa_dir = root / 'work' / 'mesa'
-mesa_sha = sh('git', '-C', str(mesa_dir), 'rev-parse', 'HEAD')
+# Releases are built from the sources.lock pin + patch series; work/mesa may be a dev tree.
 lock = json.loads((root / 'sources.lock').read_text())
-pinned = lock.get('mesaCommit', '')
-if mesa_sha in ('unknown', '', None):
-    mesa_sha = pinned
+mesa_sha = lock.get('mesaCommit', '')
 patch_series_id = sh('python3', str(root / 'scripts' / 'compute-patch-series-id.py'), '--profile', a.profile)
 if not patch_series_id or patch_series_id.startswith('unknown'):
     patch_series_id = lock.get('patchSeriesId', 'unknown')
