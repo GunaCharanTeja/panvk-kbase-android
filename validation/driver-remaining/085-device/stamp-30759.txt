@@ -1,0 +1,20 @@
+PID=30759
+STATUS
+Name:	csf-event-regre
+Tgid:	30759
+Pid:	30759
+PPid:	30754
+MAPS
+71a94d0000-71aa90f000 r-xp 00000000 fe:2f 4467661                        /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+71aa90f000-71aa911000 ---p 0143f000 fe:2f 4467661                        /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+71aa911000-71aa980000 r--p 01441000 fe:2f 4467661                        /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+71aa980000-71aa98b000 rw-p 014b0000 fe:2f 4467661                        /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+ENV
+LD_LIBRARY_PATH=/tmp/val-085087088/icd
+SHA
+0457150b935d38ad8faab4db7a12088acb38998cf8fb30130320164934b98dc4  /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+
+Displaying notes found in: .note.gnu.build-id
+  Owner                Data size 	Description
+  GNU                  0x00000014	NT_GNU_BUILD_ID (unique build ID bitstring)
+    Build ID: 2afe54d4f472dc9ce2563e0fcc17becd45040f7d

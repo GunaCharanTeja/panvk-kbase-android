@@ -1,0 +1,44 @@
+prw-r--r-- 1 root root 0 Oct  2 19:11 /tmp/085-go
+PID 30759
+Tgid:	30759
+Pid:	30759
+PPid:	30754
+READY
+T 232062.027689365 go
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+PHYS 0 Mali-G615 MC6 vendor=0x13b5 device=0xb8a31030
+FEATURE synchronization2=1
+QFAM 0 flags=0x7 count=2
+SYNC2 enabled
+T 232062.037222058 host-set
+T 232062.037798366 host-submit
+FENCE host r=0 dt=0.002
+CASE host got=0x085000a1 expect=0x085000a1
+T 232062.040397982 host-set-replay
+T 232062.041073751 host-submit-replay
+FENCE host-replay r=0 dt=0.001
+CASE host-replay got=0x085000a2 expect=0x085000a2
+T 232062.041803905 gpu-write
+T 232062.042506367 gpu-submit-set
+FENCE gpu-set r=0 dt=0.001
+GPU_EVENT_STATUS 3
+T 232062.043175828 gpu-submit-wait
+FENCE gpu r=0 dt=0.001
+CASE gpu got=0x085000b1 expect=0x085000b1
+T 232062.043830905 gpu-write-replay
+T 232062.045168828 gpu-submit-set-replay
+FENCE gpu-set-replay r=0 dt=0.001
+GPU_EVENT_STATUS 3
+T 232062.045928752 gpu-submit-wait-replay
+FENCE gpu-replay r=0 dt=0.001
+CASE gpu-replay got=0x085000b2 expect=0x085000b2
+T 232062.093947295 ring-begin
+FENCE ring r=0 dt=0.105
+FENCE ring-copy r=0 dt=0.000
+CASE ring submit=0 red=64/64 passes=1700
+FENCE ring r=0 dt=0.083
+FENCE ring-copy r=0 dt=0.000
+CASE ring submit=1 red=64/64 passes=1700
+T 232062.286156160 ring-end
+RESULT PASS
+EXIT:0
