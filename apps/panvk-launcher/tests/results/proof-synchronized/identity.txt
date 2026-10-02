@@ -1,0 +1,4 @@
+3f56527830b06f711bcb22a93b83dd6dbe525ddb4fed5c25cc1cf080b5796138  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/syswow64/d3d11.dll
+4aafd6fb8d5465aa8f3c33fad6c88ae84b96ef9bc5ba033eb2e37d15b5a3d0d4  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/syswow64/dxgi.dll
+44300ee413dc8f3df5e8f44323fa41de45b1ef62af00feebacc8eae8b6da8655  /data/user/0/dev.zenithblue.panvklauncher/files/m4wsi/libvulkan_panfrost.so
+{"file_format_version":"1.0.0","ICD":{"library_path":"/data/user/0/dev.zenithblue.panvklauncher/files/m4wsi/libvulkan_panfrost.so","api_version":"1.4.0"}}

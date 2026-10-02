@@ -1,0 +1,5 @@
+DXSMOKE: window hwnd=00010066 visible=1 client=320x240 hold_ms=12000
+DXSMOKE: api=d3d11 D3D11CreateDeviceAndSwapChain hr=0x00000000 feature=0xb000
+DXSMOKE: api=d3d11 adapter hr=0x00000000 desc="Mali-G615 MC6" vendor=0x13b5 device=0x1030
+DXSMOKE: api=d3d11 Clear issued
+DXSMOKE: api=d3d11 Present hr=0x00000000

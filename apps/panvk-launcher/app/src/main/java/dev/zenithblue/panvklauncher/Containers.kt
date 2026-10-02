@@ -290,6 +290,8 @@ object ContainerManager {
             "FONTCONFIG_PATH" to "${imagefs.absolutePath}/etc/fonts",
             "XDG_DATA_DIRS" to "${imagefs.absolutePath}/usr/share",
             "USER" to "xuser",
+            // libandroid-sysvshm sysvshm_connect crashes on NULL getenv; /dev/null forces clean non-SHM fallback.
+            "ANDROID_SYSVSHM_SERVER" to "/dev/null",
             "VK_ICD_FILENAMES" to icdFile.absolutePath,
             "VK_DRIVER_FILES" to icdFile.absolutePath
         )

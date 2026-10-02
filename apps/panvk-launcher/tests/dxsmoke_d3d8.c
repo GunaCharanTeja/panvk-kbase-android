@@ -14,6 +14,7 @@ void fail(const char *what, HRESULT hr);
 void *sym(HMODULE mod, const char *name);
 HWND make_window(const char *title);
 void pump(DWORD ms);
+DWORD hold_ms(void);
 
 #define W 320
 #define H 240
@@ -66,7 +67,7 @@ void run_d3d8(void)
     if (FAILED(hr))
         fail("IDirect3DDevice8::Present", hr);
 
-    pump(750);
+    pump(hold_ms());
     IDirect3DDevice8_Release(dev);
     IDirect3D8_Release(d3d);
     printf("DXSMOKE: PASS api=d3d8\n");

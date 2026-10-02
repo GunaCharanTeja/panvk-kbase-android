@@ -18,6 +18,7 @@
 #include <d3d9.h>
 #include <d3d11.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* d3d8types.h and d3d9types.h both define the same enums, so the d3d8
@@ -28,6 +29,7 @@ void fail(const char *what, HRESULT hr);
 void *sym(HMODULE mod, const char *name);
 HWND make_window(const char *title);
 void pump(DWORD ms);
+DWORD hold_ms(void);
 
 /* headers only declare these GUIDs; define the four this file takes the
  * address of so nothing has to be pulled out of uuid.lib / dxguid.lib */
@@ -38,16 +40,39 @@ const GUID IID_ID3D11Texture2D = {0x6f15aaf2,0xd208,0x4e89,{0x9a,0xb4,0x48,0x95,
 
 #define W 320
 #define H 240
-#define DEADLINE_MS 10000
+#define DEADLINE_PAD_MS 8000
+#define HOLD_DEFAULT_MS 750
+#define HOLD_MIN_MS 200
+#define HOLD_MAX_MS 20000
 
 static volatile LONG g_done;
 
+/* Test harness only. Unset keeps the old 750ms present window.
+ * Not read from the launcher's process environment. */
+DWORD hold_ms(void)
+{
+    const char *e = getenv("DXSMOKE_HOLD");
+    char *end = NULL;
+    unsigned long v;
+
+    if (!e || !*e)
+        return HOLD_DEFAULT_MS;
+    v = strtoul(e, &end, 10);
+    if (end == e || v < HOLD_MIN_MS)
+        v = HOLD_MIN_MS;
+    if (v > HOLD_MAX_MS)
+        v = HOLD_MAX_MS;
+    return (DWORD)v;
+}
+
 static DWORD WINAPI watchdog(void *unused)
 {
+    DWORD deadline = hold_ms() + DEADLINE_PAD_MS;
+
     (void)unused;
-    Sleep(DEADLINE_MS);
+    Sleep(deadline);
     if (!g_done) {
-        printf("DXSMOKE: FAIL deadline %ds exceeded\n", DEADLINE_MS / 1000);
+        printf("DXSMOKE: FAIL deadline %lums exceeded\n", (unsigned long)deadline);
         fflush(stdout);
         ExitProcess(3);
     }
@@ -104,6 +129,17 @@ HWND make_window(const char *title)
         fail("CreateWindowA", HRESULT_FROM_WIN32(GetLastError()));
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
+    {
+        RECT cr;
+        BOOL vis = IsWindowVisible(hwnd);
+
+        memset(&cr, 0, sizeof(cr));
+        GetClientRect(hwnd, &cr);
+        printf("DXSMOKE: window hwnd=%p visible=%d client=%ldx%ld hold_ms=%lu\n",
+               (void *)hwnd, vis ? 1 : 0,
+               (long)(cr.right - cr.left), (long)(cr.bottom - cr.top),
+               (unsigned long)hold_ms());
+    }
     return hwnd;
 }
 
@@ -171,7 +207,7 @@ static void run_d3d9(void)
     if (FAILED(hr))
         fail("IDirect3DDevice9::Present", hr);
 
-    pump(750);
+    pump(hold_ms());
     IDirect3DDevice9_Release(dev);
     IDirect3D9_Release(d3d);
     printf("DXSMOKE: PASS api=d3d9\n");
@@ -265,13 +301,13 @@ static void run_d3d10(void)
 
     ID3D10Device_OMSetRenderTargets(dev, 1, &rtv, NULL);
     ID3D10Device_ClearRenderTargetView(dev, rtv, color);
-    printf("DXSMOKE: api=d3d10 Clear hr=0x%08lx\n", 0ul);
+    printf("DXSMOKE: api=d3d10 Clear issued\n");
     hr = IDXGISwapChain_Present(sc, 0, 0);
     printf("DXSMOKE: api=d3d10 Present hr=0x%08lx\n", (unsigned long)hr);
     if (FAILED(hr))
         fail("IDXGISwapChain::Present", hr);
 
-    pump(750);
+    pump(hold_ms());
     ID3D10RenderTargetView_Release(rtv);
     IDXGISwapChain_Release(sc);
     ID3D10Device_Release(dev);
@@ -320,13 +356,13 @@ static void run_d3d11(void)
 
     ID3D11DeviceContext_OMSetRenderTargets(ctx, 1, &rtv, NULL);
     ID3D11DeviceContext_ClearRenderTargetView(ctx, rtv, color);
-    printf("DXSMOKE: api=d3d11 Clear hr=0x%08lx\n", 0ul);
+    printf("DXSMOKE: api=d3d11 Clear issued\n");
     hr = IDXGISwapChain_Present(sc, 0, 0);
     printf("DXSMOKE: api=d3d11 Present hr=0x%08lx\n", (unsigned long)hr);
     if (FAILED(hr))
         fail("IDXGISwapChain::Present", hr);
 
-    pump(750);
+    pump(hold_ms());
     ID3D11RenderTargetView_Release(rtv);
     ID3D11DeviceContext_Release(ctx);
     IDXGISwapChain_Release(sc);
