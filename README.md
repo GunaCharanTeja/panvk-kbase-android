@@ -64,15 +64,18 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-`g615-v11-csf-v0.1.0-beta.7` is the latest published tag (prerelease, Mesa
-`5a07217f` plus csf-v11 patches up to 082). It exposes
-`vertexPipelineStoresAndAtomics` on v10-v12 through the compute pre-raster
-path (a D3D11 feature level 11_1 prerequisite) and fixes an intermittent
-tessellation `DeviceLost` on kbase by keeping cross-subqueue sync words in CSF
-event memory. The PanVK Test APK gains a `vertex_stores` test. Assets: Android
-and glibc drivers, `.adpkg` package, EMULATOR zip, and the test APK. See
-[`CHANGELOG.md`](CHANGELOG.md) and the
-[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.7).
+`g615-v11-csf-v0.1.0-beta.8` is the latest published tag (prerelease, Mesa
+`5a07217f` plus csf-v11 patches up to 084). The Android driver now exposes
+X11 surfaces (`VK_KHR_xlib_surface`, `VK_KHR_xcb_surface`) for Wine/Proton
+launchers that display through Termux:X11. The X11/XCB libraries are loaded at
+runtime from the launcher's library path and are not bundled. Presentation is
+a software copy (X11 `PutImage`). This support is basic-tested only; the D3D
+matrix and full validation are pending. beta.7 added
+`vertexPipelineStoresAndAtomics` on v10-v12 and fixed an intermittent
+tessellation `DeviceLost`. Assets: Android and glibc drivers, `.adpkg`
+package, EMULATOR zip, and the test APK. See [`CHANGELOG.md`](CHANGELOG.md)
+and the
+[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.8).
 
 `g615-v11-csf-v0.1.0-beta.3` (code commit
 `fc8a759e7d1b2b8de01c0e96f1fdc5e3950ba1a3`, published 2026-09-19) and its
@@ -155,7 +158,10 @@ with no CPU fallback or simulation, and is exposed only after device proof.
 | `sync_fd` export | 075 (kbase KCPU queue) | sync_fd 1996 / 0 |
 | `vertexPipelineStoresAndAtomics` (v10-v12) | 078-082, vertex stage on the compute pre-raster path | atomic_operations `*_vertex*` 66 / 0; 12132-case tess/geometry/xfb/draw list 7940 / 0, 0 DeviceLost |
 
-DXVK feature level 11_1 has not been re-checked on the beta.7 build yet.
+DXVK feature level 11_1 has not been re-checked on the beta.7 or beta.8
+builds yet. On beta.8 the Android driver has X11 surfaces, but under Proton 11
+(i686 through wow64) Wine fails to create the Vulkan surface before the
+driver is called, so DXVK presentation there is still blocked.
 Still missing: `robustImageAccess2` (the vkd3d-proton device-create
 blocker), `depthBounds`,
 `shaderOutputViewportIndex` (not exposed; no patch sets it), and

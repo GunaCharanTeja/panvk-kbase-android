@@ -1,5 +1,50 @@
 # Changelog
 
+## g615-v11-csf-v0.1.0-beta.8 (prerelease)
+
+Mesa `5a07217f034b` + csf-v11 patches up to 084
+(`patchSeriesId sha256:374b7b830111a848515d3e0ec41a60b902bc57938deb420ecea7de8a03f58ecd`).
+Poco X6 Pro, Mali-G615 MC6, mali_kbase CSF UAPI 1.21. Android minApi 35.
+
+### Added
+- X11 WSI in the Android ICD: `VK_KHR_xlib_surface` and `VK_KHR_xcb_surface`
+  (083). The Android build now uses `-Dplatforms=android,x11` with
+  `-Dxlib-lease=disabled`. The X11/XCB libraries are not linked or bundled.
+  The driver dlopens them on the first X11 surface or presentation-support
+  query, from the caller's library path (for example the launcher imagefs):
+  `libxcb.so.1`, `libX11-xcb.so.1`, `libxcb-dri3.so.0`, `libxcb-present.so.0`,
+  `libxcb-shm.so.0`, `libxcb-sync.so.1`, `libxcb-xfixes.so.0`,
+  `libxcb-randr.so.0`, `libxshmfence.so.1`. The ICD `DT_NEEDED` list is
+  unchanged. Presentation is software: the GPU renders and the CPU sends the
+  image with X11 `PutImage` (no DRI3, no MIT-SHM). FIFO is not vsync-paced
+  on this path.
+- `scripts/prepare-x11-headers.sh`: header-only X11/XCB pkg-config prefix for
+  the Android build.
+
+### Fixed
+- X11 software present path: the swapchain present id now advances, and
+  `vkWaitForPresentKHR` timeouts return `VK_TIMEOUT` instead of
+  `VK_ERROR_DEVICE_LOST` (084).
+
+### Results (basic testing only)
+With the release Android driver, under the launcher UID, the imagefs Vulkan
+loader 1.4.315 and Termux:X11 (`DISPLAY=:0`): `vkCreateInstance` with
+`VK_KHR_surface` + `VK_KHR_xlib_surface` and with `VK_KHR_xcb_surface`
+returns `VK_SUCCESS`; an Xlib surface + swapchain presented 1500 frames
+(about 343 fps, correct pixel readback and screenshot); Xlib and XCB resize
+runs pass; `vkWaitForPresentKHR` returns `VK_SUCCESS`. The Android surface
+path still works: the test APK autorun passes 11/11, including
+`swapchain_lifecycle`.
+
+### Known issues
+The full extension audit, end-to-end presentation suite, repeated
+launch/relaunch runs and the D3D8/9/10/11 matrix are still pending. Under
+Proton 11 (i686 through wow64), Wine's winex11 fails to create the Vulkan
+surface before the driver is called (it receives HWND `0xc0000005`; DXVK logs
+"Presenter: Failed to create Vulkan surface"), so D3D presentation through
+DXVK does not yet work in that setup. DXVK does create the instance and the
+Mali-G615 device. All beta.7 known issues except the X11 entry still apply.
+
 ## g615-v11-csf-v0.1.0-beta.7 (prerelease)
 
 Mesa `5a07217f034b` + csf-v11 patches up to 082
