@@ -1,5 +1,5 @@
 #!/bin/sh
-# build-android.sh — Android/Bionic arm64-v8a PanVK (hot-loadable ICD + Android WSI + AHB + Kbase)
+# build-android.sh — Android/Bionic arm64-v8a PanVK (hot-loadable ICD + Android/X11 WSI + AHB + Kbase)
 # Usage: ./scripts/build-android.sh --profile g615-v11-csf [--api 35] [--ndk $ANDROID_NDK_ROOT]
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,12 +26,15 @@ sed "s/aarch64-linux-android[0-9]*-clang/$CC_TRIPLE/g" "$ROOT/meson/android-aarc
 # Pin target pkg-config to our NDK-built deps prefix so host /usr/lib .pc
 # files (zlib, libudev, ...) can never leak host paths into the link.
 DEPS_PCDIR="$ROOT/work/android-deps/lib/pkgconfig"
+# X11 WSI: headers + pkg-config only, libxcb & co. are dlopened at runtime (csf-v11/083).
+X11_PCDIR="$ROOT/work/android-deps-x11/lib/pkgconfig"
+[ -f "$X11_PCDIR/xcb.pc" ] || "$ROOT/scripts/prepare-x11-headers.sh" "$ROOT/work/android-deps-x11" >&2
 if [ -d "$DEPS_PCDIR" ]; then
-  python3 - "$BDIR.cross.ini" "$DEPS_PCDIR" <<'EOF'
+  python3 - "$BDIR.cross.ini" "$DEPS_PCDIR" "$X11_PCDIR" <<'EOF'
 import sys
-p, d = sys.argv[1], sys.argv[2]
+p, d, x = sys.argv[1], sys.argv[2], sys.argv[3]
 t = open(p).read()
-line = f"pkg_config_libdir = ['{d}']\n"
+line = f"pkg_config_libdir = ['{d}', '{x}']\n"
 assert '[properties]' in t
 t = t.replace('[properties]', '[properties]\n' + line, 1)
 open(p, 'w').write(t)
@@ -43,9 +46,9 @@ mkdir -p "$DDIR"
 # default is derived from MESA (see bootstrap-host-tools.sh) and HOST_TOOLS overrides it.
 LOG="$BDIR.log"; RECONF=""; [ -f "$BDIR/build.ninja" ] && RECONF="--reconfigure"
 meson setup $RECONF "$BDIR" "$MESA" --cross-file "$BDIR.cross.ini" \
-  -Dbuildtype=release -Dplatforms=android -Dandroid-stub=true -Dandroid-strict=false \
+  -Dbuildtype=release -Dplatforms=android,x11 -Dandroid-stub=true -Dandroid-strict=false \
   -Dgallium-drivers= -Dvulkan-drivers=panfrost -Dpanfrost-kmds=kbase \
-  -Dmesa-clc=system -Dprecomp-compiler=system \
+  -Dmesa-clc=system -Dprecomp-compiler=system -Dxlib-lease=disabled \
   -Degl=disabled -Dgles1=disabled -Dgles2=disabled -Dopengl=false \
   -Dglx=disabled -Dgbm=disabled -Dlibunwind=disabled -Dzstd=disabled \
   -Dcpp_link_args=-static-libstdc++ >"$LOG" 2>&1 || { tail -n 20 "$LOG"; echo "BUILD-FAIL: meson setup (log $LOG)" >&2; exit 1; }
