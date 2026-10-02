@@ -15,6 +15,8 @@ void *sym(HMODULE mod, const char *name);
 HWND make_window(const char *title);
 void pump(DWORD ms);
 DWORD hold_ms(void);
+int staging_enabled(void);
+void source_pixels(const char *api, const void *data, unsigned pitch);
 
 #define W 320
 #define H 240
@@ -25,6 +27,8 @@ void run_d3d8(void)
     IDirect3D8 *(WINAPI *create)(UINT);
     IDirect3D8 *d3d;
     IDirect3DDevice8 *dev = NULL;
+    IDirect3DSurface8 *bb = NULL;
+    D3DLOCKED_RECT map;
     D3DPRESENT_PARAMETERS pp;
     D3DADAPTER_IDENTIFIER8 id;
     HRESULT hr;
@@ -46,6 +50,7 @@ void run_d3d8(void)
     pp.SwapEffect = D3DSWAPEFFECT_DISCARD;
     pp.hDeviceWindow = hwnd;
     pp.Windowed = TRUE;
+    if (staging_enabled()) pp.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 
     hr = IDirect3D8_CreateDevice(d3d, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
                                  D3DCREATE_SOFTWARE_VERTEXPROCESSING, &pp, &dev);
@@ -62,6 +67,15 @@ void run_d3d8(void)
     printf("DXSMOKE: api=d3d8 Clear hr=0x%08lx\n", (unsigned long)hr);
     if (FAILED(hr))
         fail("IDirect3DDevice8::Clear", hr);
+    if (staging_enabled()) {
+        hr = IDirect3DDevice8_GetBackBuffer(dev, 0, D3DBACKBUFFER_TYPE_MONO, &bb);
+        if (FAILED(hr)) fail("GetBackBuffer", hr);
+        hr = IDirect3DSurface8_LockRect(bb, &map, NULL, D3DLOCK_READONLY);
+        if (FAILED(hr)) fail("LockRect", hr);
+        source_pixels("d3d8", map.pBits, map.Pitch);
+        IDirect3DSurface8_UnlockRect(bb);
+        IDirect3DSurface8_Release(bb);
+    }
     hr = IDirect3DDevice8_Present(dev, NULL, NULL, NULL, NULL);
     printf("DXSMOKE: api=d3d8 Present hr=0x%08lx\n", (unsigned long)hr);
     if (FAILED(hr))

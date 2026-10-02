@@ -170,7 +170,7 @@ info:    Transfer : (0, 0)
 info:    Sparse   : (4294967295, 0)
 info:  Memory:
 info:    Heap 0: 5.36 GiB (DEVICE_LOCAL)
-info:    Budget: 2.90 GiB
+info:    Budget: 3.16 GiB
 info:      Type  0: DEVICE_LOCAL
 info:      Type  1: DEVICE_LOCAL | HOST_VISIBLE | HOST_COHERENT
 info:      Type  2: DEVICE_LOCAL | HOST_VISIBLE | HOST_CACHED

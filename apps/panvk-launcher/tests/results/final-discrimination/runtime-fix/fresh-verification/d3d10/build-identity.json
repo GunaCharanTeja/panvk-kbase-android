@@ -1,0 +1,8 @@
+{
+  "xreadback": "58732a182cb34839dfee35d33556619b65256a3329782302c634de7622084cc6",
+  "architecture": "arm64ec",
+  "api": "d3d10",
+  "staging": "0",
+  "sync": "none",
+  "dxsmoke-arm64ec.exe": "a34cc23ff344e56f4056919f8c9b3e8bc35868f17cadd39e7e449def8ffa8d43"
+}

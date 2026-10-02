@@ -1,0 +1,19 @@
+2026-10-02 finalization, device 192.168.1.34:40501
+Actual launcher Wine tab DXVK switch clicked off, then on.
+run-as dev.zenithblue.panvklauncher cat shared_prefs/launcher.xml
+Observed dxvk_enabled=false after off, true after on.
+run-as dev.zenithblue.panvklauncher sh -c 'sha256sum files/contents/DXVK/*/system32/*.dll files/contents/DXVK/*/syswow64/*.dll files/container/.wine/drive_c/windows/system32/{d3d8,d3d9,d3d10core,d3d11,dxgi}.dll files/container/.wine/drive_c/windows/syswow64/{d3d8,d3d9,d3d10core,d3d11,dxgi}.dll'
+20 hash rows, 10 architecture/name pairs, exactly one hash per pair.
+All hashes below match component-before.txt and destination DLLs after re-enable.
+system32/d3d10core.dll 79309bb528075356e2912ac927f24601876efe1c4bc7015a73ff9b46c5c12638
+system32/d3d11.dll 486cc3bb4ee49985cf7b303d56ec6ece7eacef37cb45a60414d009fadaac182e
+system32/d3d8.dll e3006bf95aa24d023015471028c68880e346dd950129342355d325060437176f
+system32/d3d9.dll 1875eeaedd11838b41ee390f99677a7868fc292bc0184a18b1f8705cdcdb0848
+system32/dxgi.dll 77fb5f2e57646440422d53321a3186a41b7f80066b4082180ec9e7e7b750aab5
+syswow64/d3d10core.dll f21f45265ddc01abf1a60f62319c9686464466a2095b472ac96904a65de566ee
+syswow64/d3d11.dll 7eab8264fb9e7ec46a9682e629e68e8cfda157f001e565f1ca2a443de763bc59
+syswow64/d3d8.dll 0649f1d3322821526daf1172bc5b66169e3f7f8ff1f2b320576a96da2dbaf3b4
+syswow64/d3d9.dll c0b0e1226bc524d988f7381c19373ce80233f5130bb752dbbf4704b7e914d7c8
+syswow64/dxgi.dll 8456f7b08dd4cb9000b059f3dfe569cc7fe5fabb1bbce5e03fa13ec11ef3e470
+Fresh normal capture identity.txt files identify the matching ARM64EC prefix DLLs.
+No claim of i686 game execution or zero-copy presentation.

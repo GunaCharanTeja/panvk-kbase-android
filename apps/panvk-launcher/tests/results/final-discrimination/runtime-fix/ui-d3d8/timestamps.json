@@ -1,0 +1,22 @@
+[
+  {
+    "event": "ui_run_tap",
+    "utc": "2026-10-02T17:35:38.810320+00:00",
+    "monotonic_ns": 291880489653122
+  },
+  {
+    "event": "present_observed",
+    "utc": "2026-10-02T17:35:42.304306+00:00",
+    "monotonic_ns": 291883983632013
+  },
+  {
+    "event": "captures_complete",
+    "utc": "2026-10-02T17:35:43.067608+00:00",
+    "monotonic_ns": 291884746933243
+  },
+  {
+    "event": "final_log_collected",
+    "utc": "2026-10-02T17:35:59.478022+00:00",
+    "monotonic_ns": 291901157349499
+  }
+]

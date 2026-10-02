@@ -1,0 +1,15 @@
+[binaries]
+c = 'arm64ec-w64-mingw32-clang'
+cpp = 'arm64ec-w64-mingw32-clang++'
+ar = 'arm64ec-w64-mingw32-ar'
+strip = 'arm64ec-w64-mingw32-strip'
+windres = 'arm64ec-w64-mingw32-windres'
+
+[properties]
+needs_exe_wrapper = true
+
+[host_machine]
+system = 'windows'
+cpu_family = 'aarch64'
+cpu = 'arm64ec'
+endian = 'little'

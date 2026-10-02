@@ -1070,6 +1070,11 @@ fun WineTabContent(
                             onCheckedChange = onToggleDxvk
                         )
                     }
+                    Text(
+                        text = "DXVK enabled is not a game compatibility result. ARM64EC smoke tests do not validate x86/i686 WOW64 games; 32-bit staging can fail on Mali kbase SAME_VA.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

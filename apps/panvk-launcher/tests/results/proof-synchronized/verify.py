@@ -29,10 +29,11 @@ assert max(events['screenshot_start'], events['xgetimage_start']) < min(
     events['screenshot_end'], events['xgetimage_end'])
 log = (root / 'present-observed.log').read_text()
 assert (root / 'd3d11.log').read_bytes().startswith((root / 'present-observed.log').read_bytes())
-assert 'Present hr=0x00000000' in log and 'DXSMOKE: PASS' not in log
+assert re.search(r'^DXSMOKE: api=d3d11 Present.*hr=0x00000000', log, re.M) and 'DXSMOKE: PASS' not in log and 'outcome API=PASS' not in log
 assert 'client=320x240 hold_ms=12000' in log
 assert (root / 'exit.txt').read_text().strip() == '0'
-assert 'DXSMOKE: PASS api=d3d11' in (root / 'd3d11.log').read_text()
+d3d11_text = (root / 'd3d11.log').read_text()
+assert 'DXSMOKE: PASS api=d3d11' in d3d11_text or 'outcome API=PASS' in d3d11_text
 tree = (root / 'xgetimage.log').read_text()
 assert 'GRAB fail' not in tree and 'failed' not in tree
 writes = re.findall(r'^WROTE (\S+) (\d+)x(\d+) bpp=32 masks=ff0000/ff00/ff orange=(\d+)/(\d+)$', tree, re.M)

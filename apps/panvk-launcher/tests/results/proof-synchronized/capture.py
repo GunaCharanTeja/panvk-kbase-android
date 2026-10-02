@@ -6,12 +6,22 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import shlex
 import subprocess
 import time
 import tempfile
 
-OUT = pathlib.Path(__file__).resolve().parent
+TOOLS = pathlib.Path(__file__).resolve().parent
+OUT = pathlib.Path(os.environ.get('PROOF_OUT', str(TOOLS))).resolve()
+OUT.mkdir(parents=True, exist_ok=True)
+API = os.environ.get('DXSMOKE_API', 'd3d11')
+ARCH = os.environ.get('DXSMOKE_ARCH', 'i686')
+STAGING = os.environ.get('DXSMOKE_STAGING', '1')
+SYNC = os.environ.get('DXSMOKE_SYNC', '')
+assert STAGING in ('0', '1') and SYNC in ('', 'flush', 'event')
+assert API in ('d3d8', 'd3d9', 'd3d10', 'd3d11')
+assert ARCH in ('i686', 'arm64ec')
 ADB = ['adb'] + (['-s', os.environ['ADB_SERIAL']] if os.environ.get('ADB_SERIAL') else [])
 APP = 'dev.zenithblue.panvklauncher'
 C = '/data/user/0/' + APP + '/files/container'
@@ -36,28 +46,31 @@ def shell(text):
 
 build = tempfile.TemporaryDirectory(prefix='panvk-proof-')
 helper = build.name + '/xreadback'
-exe = build.name + '/dxsmoke-i686.exe'
+exe = build.name + '/dxsmoke-' + ARCH + '.exe'
 command([os.environ.get('ANDROID_CC', 'aarch64-linux-android35-clang'), '-O2', '-Wall', '-Wextra',
-         str(OUT / 'xreadback.c'), '-L' + os.environ['X11_LIBDIR'], '-lX11',
+         str(TOOLS / 'xreadback.c'), '-L' + os.environ['X11_LIBDIR'], '-lX11',
          '-o', helper])
-command([os.environ.get('MINGW_CC', 'i686-w64-mingw32-clang'), '-O2', '-Wall', '-Wextra',
+command([os.environ.get('MINGW_CC', ARCH + '-w64-mingw32-clang'), '-O2', '-Wall', '-Wextra',
          '-DWINAPI_FAMILY=WINAPI_FAMILY_DESKTOP_APP',
          'apps/panvk-launcher/tests/dxsmoke.c', 'apps/panvk-launcher/tests/dxsmoke_d3d8.c',
          '-o', exe, '-luser32', '-lgdi32'])
 for source, dest in [(helper, 'xreadback'),
                      (exe, 'dxsmoke-synchronized.exe'),
-                     (str(OUT / 'dxenv.sh'), 'dxenv-synchronized.sh')]:
+                      (str(TOOLS / 'dxenv.sh'), 'dxenv-synchronized.sh')]:
     command(ADB + ['push', source, '/data/local/tmp/' + dest])
 command(ADB + ['shell', 'chmod', '755', '/data/local/tmp/xreadback'])
 shell('cp /data/local/tmp/dxsmoke-synchronized.exe ' + C + '/.wine/drive_c/dxsmoke-synchronized.exe')
 shell('cp /data/local/tmp/xreadback ' + C + '/xreadback; chmod 755 ' + C + '/xreadback')
-identity = shell('sha256sum ' + C + '/.wine/drive_c/windows/syswow64/{d3d11,dxgi}.dll; '
+identity = shell('sha256sum ' + C + '/.wine/drive_c/windows/' +
+                 ('syswow64' if ARCH == 'i686' else 'system32') +
+                 '/{d3d8,d3d9,d3d10core,d3d11,dxgi}.dll; '
                  'sha256sum /data/user/0/' + APP + '/files/m4wsi/libvulkan_panfrost.so; '
                  'cat /data/user/0/' + APP + '/files/m4wsi/icd.json')
 (OUT / 'identity.txt').write_bytes(identity)
 (OUT / 'build-identity.json').write_text(json.dumps({
     'xreadback': hashlib.sha256(pathlib.Path(helper).read_bytes()).hexdigest(),
-    'dxsmoke-i686.exe': hashlib.sha256(pathlib.Path(exe).read_bytes()).hexdigest(),
+    'architecture': ARCH, 'api': API, 'staging': STAGING, 'sync': SYNC or 'none',
+    'dxsmoke-' + ARCH + '.exe': hashlib.sha256(pathlib.Path(exe).read_bytes()).hexdigest(),
 }, indent=2) + '\n')
 shell('rm -f ' + C + '/synchronized-exit.txt ' + C + '/synchronized-d3d11.log ' +
       C + '/synchronized-xread.ppm*')
@@ -68,8 +81,10 @@ environment = shell('DXSMOKE_HOLD=12000 sh /data/local/tmp/dxenv-synchronized.sh
 command(ADB + ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'])
 command(ADB + ['shell', 'wm', 'dismiss-keyguard'])
 launch = ADB + ['shell', 'run-as', APP, 'sh', '-c', shlex.quote(
-    'cd ' + C + '; DXSMOKE_HOLD=12000 sh /data/local/tmp/dxenv-synchronized.sh 0 '
-    'C:\\\\dxsmoke-synchronized.exe d3d11 > synchronized-d3d11.log 2> synchronized-d3d11-stderr.log; '
+    'cd ' + C + '; DXSMOKE_STAGING=' + STAGING + ' ' +
+    ('DXSMOKE_SYNC=' + SYNC + ' ' if SYNC else '') +
+    'DXSMOKE_HOLD=12000 sh /data/local/tmp/dxenv-synchronized.sh 0 '
+    'C:\\\\dxsmoke-synchronized.exe ' + API + ' > synchronized-d3d11.log 2> synchronized-d3d11-stderr.log; '
     'echo $? > synchronized-exit.txt')]
 transcript.append(shlex.join(launch))
 stamp('launch')
@@ -77,8 +92,9 @@ process = subprocess.Popen(launch, stdout=subprocess.PIPE, stderr=subprocess.PIP
 deadline = time.monotonic() + 25
 while True:
     log = shell('cat ' + C + '/synchronized-d3d11.log 2>/dev/null || true')
-    if b'DXSMOKE: api=d3d11 Present hr=0x00000000' in log:
-        assert b'DXSMOKE: PASS' not in log, 'Present observed only after exit'
+    present_pattern = rb' Present frame=7' if API == 'd3d11' else rb' Present'
+    if re.search(rb'^DXSMOKE: api=' + API.encode() + present_pattern + rb'.*hr=0x00000000', log, re.M):
+        assert b'DXSMOKE: PASS' not in log and b'outcome API=PASS' not in log, 'Present observed only after exit'
         stamp('present_success_observed')
         (OUT / 'present-observed.log').write_bytes(log)
         break

@@ -1,0 +1,42 @@
+[
+  {
+    "event": "launch",
+    "utc": "2026-10-02T17:28:05.682954+00:00",
+    "monotonic_ns": 291427362283626
+  },
+  {
+    "event": "present_success_observed",
+    "utc": "2026-10-02T17:28:07.633972+00:00",
+    "monotonic_ns": 291429313303168
+  },
+  {
+    "event": "screenshot_start",
+    "utc": "2026-10-02T17:28:07.636047+00:00",
+    "monotonic_ns": 291429315373494
+  },
+  {
+    "event": "xgetimage_start",
+    "utc": "2026-10-02T17:28:07.636326+00:00",
+    "monotonic_ns": 291429315645838
+  },
+  {
+    "event": "xgetimage_end",
+    "utc": "2026-10-02T17:28:07.929910+00:00",
+    "monotonic_ns": 291429609238596
+  },
+  {
+    "event": "screenshot_end",
+    "utc": "2026-10-02T17:28:08.102170+00:00",
+    "monotonic_ns": 291429781502144
+  },
+  {
+    "event": "captures_complete_process_alive",
+    "utc": "2026-10-02T17:28:08.102358+00:00",
+    "monotonic_ns": 291429781677295
+  },
+  {
+    "event": "process_exit_observed",
+    "utc": "2026-10-02T17:28:19.725703+00:00",
+    "monotonic_ns": 291441405028322
+  }
+]

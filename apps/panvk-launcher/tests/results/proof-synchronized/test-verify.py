@@ -10,7 +10,7 @@ import tempfile
 
 root = pathlib.Path(__file__).resolve().parent
 subprocess.run([sys.executable, str(root / 'verify.py')], check=True)
-for case in ['mismatched-log', 'missing-screenshot', 'failed-readback', 'stale-ppm', 'wrong-mask', 'bad-hash']:
+for case in ['mismatched-log', 'missing-screenshot', 'failed-readback', 'stale-ppm', 'wrong-mask', 'split-present-line', 'present-failed', 'bad-hash']:
     with tempfile.TemporaryDirectory() as tmp:
         copy = pathlib.Path(tmp) / 'proof'
         shutil.copytree(root, copy)
@@ -26,6 +26,14 @@ for case in ['mismatched-log', 'missing-screenshot', 'failed-readback', 'stale-p
         elif case == 'wrong-mask':
             p = copy / 'xgetimage.log'
             p.write_text(p.read_text().replace('masks=ff0000/ff00/ff', 'masks=ff/ff00/ff0000'))
+        elif case == 'split-present-line':
+            p = copy / 'present-observed.log'
+            p.write_text('DXSMOKE: api=d3d11 Present frame=0\nhr=0x00000000\nclient=320x240 hold_ms=12000\n')
+            (copy / 'd3d11.log').write_text(p.read_text() + 'DXSMOKE: outcome API=PASS readback=SKIPPED (orange=0 zero=0 other=0) frames=8\n')
+        elif case == 'present-failed':
+            p = copy / 'present-observed.log'
+            p.write_text('DXSMOKE: api=d3d11 Present frame=0 hr=0x887a0005 (FAILED)\nclient=320x240 hold_ms=12000\n')
+            (copy / 'd3d11.log').write_text(p.read_text() + 'DXSMOKE: outcome API=FAIL frames=8\n')
         else:
             (copy / 'identity.txt').write_text('changed\n')
         if case != 'bad-hash':

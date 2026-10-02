@@ -8,6 +8,16 @@
 
 ## 1. Goals / Non-Goals
 
+### Current launcher acceptance boundary (2026-10-02)
+
+Resolved normal ARM64EC clear/present smoke: upstream DXVK v3.1.1 one-line
+`endCurrentPass(false)` before external rendering materializes deferred clears.
+Normal DX8/9/10/11 CLI and actual launcher UI captures all 76800/76800 orange;
+same-source unpatched DX11 control black. No staging/Flush/EVENT/fbread injection.
+Driver unchanged. ARM64EC+i686 runtime built; i686 mapping/game support still
+unverified. Evidence/provenance: `apps/panvk-launcher/tests/results/final-discrimination/runtime-fix/README.md`.
+Earlier failure investigation below is historical, not the current smoke result.
+
 ### Goals
 1. **Zero-CPU-copy presentation in normal operation:** Directly present GPU-rendered `AHardwareBuffer` (AHB) swapchains via `SurfaceControl` (`ASurfaceTransaction_setBuffer`) to SurfaceFlinger / Hardware Composer (HWC) without intermediate CPU readbacks, format conversions, or `memcpy` stalls (`DISPLAY-ALTERNATIVES.md:10, 33-35`).
 2. **GPU-only execution path:** Production graphics execution executes strictly on the GPU hardware and compute engines; no CPU texture decoding, no CPU shader fallback, no software rasterization, and no CPU readback-and-rebuild loops (`README.md:126-127`, `docs/plans/PANVK_MASTER_ROADMAP.md:26-28`). Specifically:
@@ -250,12 +260,13 @@ SurfaceFlinger / HWC (Hardware Composer Zero-Copy Scanout)
   - Bundle/build Khronos Vulkan-Loader for bionic as `libvulkan.so.1`, write icd json pointing to bundled `libvulkan_panfrost.so`, set `VK_ICD_FILENAMES`.
   - Run a `vulkaninfo.exe` (arm64ec or x64 via FEX) or DXVK d3d11 triangle under Wine; gate = output reports "Mali-G615".
   - Display: needs X server (Winlator-style Java X server, LGPL-2.1) or headless offscreen for `vulkaninfo --summary`.
-- **M4 app status (proven on device 2026-10-02; API smoke succeeds, visible rendering unresolved):**
+- **M4 app status (proven on device 2026-10-02; normal ARM64EC DX8/9/10/11 clear/present passes):**
   - App side is in place. Graphical launch uses external Termux:X11 (`com.termux.x11`), not an embedded X server. `DisplayServer.prepare` publishes `DISPLAY` from the first live socket (`<imagefs>/usr/tmp/.X11-unix/X<n>`, else `/tmp/.X11-unix/X<n>`) and sets Wine `TMPDIR` to that socket's directory. Graphics registry is `x11` for graphical runs and `null` for console. Stop keeps the cancellation latch and `STOPPING` until that `run` owner returns. ICD is `files/container/panvk_icd.json` via `VK_ICD_FILENAMES` and `VK_DRIVER_FILES`. targetSdk stays 28 so wine can exec from app data (W^X at 29+). Sideloaded; lint `ExpiredTargetSdkVersion` is suppressed for that reason only.
   - Root cause resolved: `imagefs/bionic/usr/lib/libandroid-sysvshm.so` crashed in `strncpy` on `getenv("ANDROID_SYSVSHM_SERVER")` returning `NULL` when unset, surfacing as `STATUS_ACCESS_VIOLATION` (`0xC0000005`) in `CreateWindowEx`. Fixed in `Containers.env()` by setting `ANDROID_SYSVSHM_SERVER=/dev/null`, forcing graceful non-SHM fallback in `winex11`.
   - Presentation mode truth: Operating strictly via software X11 copy (`PutImage` fallback). No zero-copy scanout or hardware vsync pacing claimed.
-  - Driver & DXVK: Pristine upstream DXVK 3.1.1-arm64ec and PanVK Kbase G615 `0.1.0-beta.8` (patches 083-084 X11 WSI dlopen + present id).
-   - UI Verification matrix `apps/panvk-launcher/tests/results/m4-matrix.md` (2311DRK48I, Mali-G615 MC6): d3d8, d3d9, d3d10, and d3d11 return HRESULT 0 through the launcher. The orange-frame claim on `i686-d3d{8,9,10,11}-termux-x11.png` is retracted: those pixels are the status-bar battery. A later `XGetImage` during a 7s hold shows the mapped 320x240 window black (0 orange). A GDI fill on the same Termux:X11 server is solid orange (`proof-x11-gdi.png`). D3D10 and D3D11 report adapter `Mali-G615 MC6` (D3D11 feature level 0xb000). Visible D3D present is unverified.
+   - Driver & DXVK: PanVK Kbase G615 `0.1.0-beta.8` unchanged; local upstream DXVK v3.1.1 runtime ends the current pass before external rendering. Installed fixed WCP supplies ARM64EC and i686 DLLs; actual app disable/re-enable preserves matching component/prefix hashes for both architectures.
+    - Current normal ARM64EC matrix: DX8/9/10/11 each have two 320x240 client captures, 76800/76800 orange, exit 0; actual launcher Run captures also pass all four. No staging, Flush/EVENT diagnostic synchronization or automatic fbread injection. Same-source unpatched DX11 control is black. Independent fresh verification repeats all four normal passes. Evidence: `apps/panvk-launcher/tests/results/final-discrimination/runtime-fix/README.md` and `fresh-verification/RESULTS.md`.
+    - Historical `apps/panvk-launcher/tests/results/m4-matrix.md` i686 orange-frame claims remain retracted: those pixels were the status-bar battery. ARM64EC success does not prove i686 SAME_VA mapping, x86/WOW64 game compatibility, a real game workload, or zero-copy presentation.
    - Stop/relaunch lifecycle: historical observations only; independently unverified, as recorded in `apps/panvk-launcher/tests/results/m4-matrix.md`. No leak-free or hang-free lifecycle claim.
 
 ---

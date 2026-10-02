@@ -296,12 +296,6 @@ object ContainerManager {
             "VK_DRIVER_FILES" to icdFile.absolutePath
         )
 
-        if (layerSoFile.exists()) {
-            envMap["VK_LAYER_PATH"] = vklayersDir.absolutePath
-            envMap["VK_INSTANCE_LAYERS"] = "VK_LAYER_panvk_fbread"
-            envMap["PANVK_FB_PATH"] = File(containerDir, "fb.bin").absolutePath
-        }
-
         if (dxvk) {
             envMap["DXVK_LOG_LEVEL"] = "info"
         }
@@ -829,4 +823,3 @@ object ContainerManager {
 }
 
 typealias Containers = ContainerManager
-

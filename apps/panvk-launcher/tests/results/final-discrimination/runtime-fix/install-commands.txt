@@ -1,0 +1,13 @@
+adb -s 192.168.1.34:40501 shell run-as dev.zenithblue.panvklauncher sh -c ''"'"'mkdir -p /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix; for n in d3d8 d3d9 d3d10core d3d11 dxgi; do test -f /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix/$n.dll || cp /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/$n.dll /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix/$n.dll; done'"'"''
+adb -s 192.168.1.34:40501 shell run-as dev.zenithblue.panvklauncher sh -c ''"'"'sha256sum /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix/*.dll'"'"''
+adb -s 192.168.1.34:40501 push /var/tmp/panvk/dxvk-clear-arm64ec/src/dxgi/dxgi.dll /data/local/tmp/clearfix-dxgi.dll
+adb -s 192.168.1.34:40501 shell run-as dev.zenithblue.panvklauncher sh -c ''"'"'cp /data/local/tmp/clearfix-dxgi.dll /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/dxgi.dll'"'"''
+adb -s 192.168.1.34:40501 push /var/tmp/panvk/dxvk-clear-arm64ec/src/d3d11/d3d11.dll /data/local/tmp/clearfix-d3d11.dll
+adb -s 192.168.1.34:40501 shell run-as dev.zenithblue.panvklauncher sh -c ''"'"'cp /data/local/tmp/clearfix-d3d11.dll /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d11.dll'"'"''
+adb -s 192.168.1.34:40501 push /var/tmp/panvk/dxvk-clear-arm64ec/src/d3d10/d3d10core.dll /data/local/tmp/clearfix-d3d10core.dll
+adb -s 192.168.1.34:40501 shell run-as dev.zenithblue.panvklauncher sh -c ''"'"'cp /data/local/tmp/clearfix-d3d10core.dll /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d10core.dll'"'"''
+adb -s 192.168.1.34:40501 push /var/tmp/panvk/dxvk-clear-arm64ec/src/d3d9/d3d9.dll /data/local/tmp/clearfix-d3d9.dll
+adb -s 192.168.1.34:40501 shell run-as dev.zenithblue.panvklauncher sh -c ''"'"'cp /data/local/tmp/clearfix-d3d9.dll /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d9.dll'"'"''
+adb -s 192.168.1.34:40501 push /var/tmp/panvk/dxvk-clear-arm64ec/src/d3d8/d3d8.dll /data/local/tmp/clearfix-d3d8.dll
+adb -s 192.168.1.34:40501 shell run-as dev.zenithblue.panvklauncher sh -c ''"'"'cp /data/local/tmp/clearfix-d3d8.dll /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d8.dll'"'"''
+adb -s 192.168.1.34:40501 shell run-as dev.zenithblue.panvklauncher sh -c ''"'"'sha256sum /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/{d3d8,d3d9,d3d10core,d3d11,dxgi}.dll'"'"''
