@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
         TestCase("tessellation", isDraw = true),
         TestCase("xfb", isDraw = true),
         TestCase("pipeline_stats", isDraw = true),
+        TestCase("vertex_stores", isDraw = false),
         TestCase("swapchain_lifecycle", isDraw = true)
     )
 

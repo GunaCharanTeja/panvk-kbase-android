@@ -24,7 +24,7 @@ function(add_vk_test test_name test_rel_path)
     target_link_libraries(${target_name} PRIVATE dl m)
 endfunction()
 
-# 9 standalone Vulkan test programs
+# 10 standalone Vulkan test programs
 add_vk_test(gpu_prerast_slice tests/dxvk/vulkan/gpu_prerast_slice.c)
 add_vk_test(clip_cull tests/dxvk/vulkan/clip-cull/clip_cull.c)
 add_vk_test(multi_viewport tests/dxvk/vulkan/multi-viewport/multi_viewport.c)
@@ -34,6 +34,7 @@ add_vk_test(geometry tests/dxvk/vulkan/geometry/geometry.c)
 add_vk_test(tessellation tests/dxvk/vulkan/tessellation/tessellation.c)
 add_vk_test(xfb tests/dxvk/vulkan/xfb/xfb.c)
 add_vk_test(pipeline_stats tests/dxvk/vulkan/pipeline_stats/pipeline_stats.c)
+add_vk_test(vertex_stores tests/dxvk/vulkan/vertex-stores/vertex_stores.c)
 
 # SHARED lib t_vkinfo from vkinfo.c
 add_library(t_vkinfo SHARED "${CMAKE_CURRENT_SOURCE_DIR}/vkinfo.c")
