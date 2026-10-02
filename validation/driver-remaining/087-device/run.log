@@ -1,0 +1,111 @@
+PID 32589
+Tgid:	32589
+Pid:	32589
+PPid:	32587
+READY
+T 234754.831694578 go
+UPTIME_AT_GO 234763.95
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+PHYS 0 Mali-G615 MC6 vendor=0x13b5 device=0xb8a31030
+FEATURE tess=1 vpsa=1 cond=1 inherited=1 sync2=1 bda=1
+QFAM 0 flags=0x7 count=2 ts=64
+MEM 0 flags=0x1
+MEM 1 flags=0x7
+MEM 2 flags=0xb
+MEM host=1 local=0
+FEATURES enabled tess vpsa=1 cond inherited sync2 bda
+PRED_ADDR 0x5fffe1c000
+FENCE plain r=0 dt=0.005
+FENCE plain-copy r=0 dt=0.001
+DIAG plain pixel 255 0 0 255 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.065456063 direct
+FENCE direct r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000003
+PIXEL 255 0 0 255
+CASE direct pred=0 counter=3 expect=3 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.069121602 direct
+FENCE direct r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000009
+PIXEL 255 0 0 255
+CASE direct pred=1 counter=9 expect=9 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.073077680 direct
+FENCE direct r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000003
+PIXEL 255 0 0 255
+CASE direct pred=0 counter=3 expect=3 red=1024
+TIMESTAMP r=0 t0=3052000817036 t1=3052000836127
+FENCE zero r=0 dt=0.000
+T 234755.076560757 indirect
+FENCE indirect r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000003
+PIXEL 255 0 0 255
+CASE indirect pred=0 counter=3 expect=3 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.080063757 indirect
+FENCE indirect r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000009
+PIXEL 255 0 0 255
+CASE indirect pred=1 counter=9 expect=9 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.084251834 indirect
+FENCE indirect r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000003
+PIXEL 255 0 0 255
+CASE indirect pred=0 counter=3 expect=3 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.087923450 inverted
+FENCE inverted r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000009
+PIXEL 255 0 0 255
+CASE inverted pred=0 counter=9 expect=9 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.092315528 inverted
+FENCE inverted r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000003
+PIXEL 255 0 0 255
+CASE inverted pred=1 counter=3 expect=3 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.096032759 inverted
+FENCE inverted r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000009
+PIXEL 255 0 0 255
+CASE inverted pred=0 counter=9 expect=9 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.100177375 inherit
+FENCE inherit r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000003
+PIXEL 255 0 0 255
+CASE inherit pred=0 counter=3 expect=3 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.104063529 inherit
+FENCE inherit r=0 dt=0.003
+FENCE copy r=0 dt=0.003
+RAW 00000009
+PIXEL 255 0 0 255
+CASE inherit pred=1 counter=9 expect=9 red=1024
+FENCE zero r=0 dt=0.000
+T 234755.108547452 inherit
+FENCE inherit r=0 dt=0.002
+FENCE copy r=0 dt=0.003
+RAW 00000003
+PIXEL 255 0 0 255
+CASE inherit pred=0 counter=3 expect=3 red=1024
+FENCE zero-replay r=0 dt=0.000
+T 234755.112472453 direct-replay
+FENCE direct-replay r=0 dt=0.002
+FENCE copy-replay r=0 dt=0.003
+CASE direct-replay pred=1 counter=9 expect=9
+RESULT PASS

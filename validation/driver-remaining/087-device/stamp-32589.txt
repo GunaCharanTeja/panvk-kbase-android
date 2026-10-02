@@ -1,0 +1,20 @@
+PID=32589
+STATUS
+Name:	tess-conditiona
+Tgid:	32589
+Pid:	32589
+PPid:	32587
+MAPS
+7860000000-786143f000 r-xp 00000000 fe:2f 4467661                        /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+786143f000-7861441000 ---p 0143f000 fe:2f 4467661                        /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+7861441000-78614b0000 r--p 01441000 fe:2f 4467661                        /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+78614b0000-78614bb000 rw-p 014b0000 fe:2f 4467661                        /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+ENV
+LD_LIBRARY_PATH=/tmp/val-085087088/icd
+MESA_VK_ABORT_ON_DEVICE_LOSS=1
+SHA
+0457150b935d38ad8faab4db7a12088acb38998cf8fb30130320164934b98dc4  /data/local/tmp/chrootAlpine/tmp/val-085087088/icd/libvulkan_panfrost.so
+UPTIME
+234763.86
+STATE
+State:	S (sleeping)
