@@ -71,9 +71,18 @@ INDEXING_BITS = (
 
 # Overlay only. Evaluation still reads the beta.3-era capture. Do not gate on this.
 BETA6_STATUS = {
-    "release": "g615-v11-csf-v0.1.0-beta.6",
-    "patchesUpTo": "077",
+    "release": "g615-v11-csf-v0.1.0-beta.7",
+    "patchesUpTo": "082",
     "exposedSinceCapture": [
+        {
+            "feature": "vertexPipelineStoresAndAtomics (v10-v12, via compute gpu_prerast; FL11_1 prerequisite)",
+            "patch": "078-082",
+            "cts": (
+                "atomic_operations *_vertex* 66/0 (was NotSupported); "
+                "tess/geometry/xfb.simple/draw list 7940/0, 0 DeviceLost; "
+                "atomics/memory-model/shader-access/signal_order list 3775/0"
+            ),
+        },
         {
             "feature": "variableMultisampleRate",
             "patch": "074",
@@ -156,7 +165,8 @@ BETA6_STATUS = {
     ],
     "openItems": [
         "GS primitive drop",
-        "VMR (vertexPipelineStoresAndAtomics / FL11_1, worktree dx-vpsa)",
+        "DXVK FL11_1 not yet re-checked on the beta.7 build",
+        "render desc ringbuf / VkEvent syncobjs not in CSF event memory on kbase (possible eviction hang)",
         "JICA98 0005 (same-queue semaphore waits) review",
         "depthBounds",
         "shaderOutputViewportIndex (not exposed; GS viewport index honoured in 076)",
@@ -171,8 +181,9 @@ BETA6_STATUS = {
     "note": (
         "Matrix rows below are evaluated from the beta.3-era "
         "consumer-capabilities.json capture; features listed here are "
-        "device-proven in beta.6 but await a fresh capture. "
-        "Swapchain lifecycle test done (passes on device); GS viewport index honoured (076)."
+        "device-proven in beta.7 but await a fresh capture. "
+        "vertexPipelineStoresAndAtomics exposed on v10-v12 (078-082); "
+        "swapchain lifecycle test done (passes on device); GS viewport index honoured (076)."
     ),
 }
 BETA5_STATUS = BETA6_STATUS
@@ -560,7 +571,7 @@ def render_beta6_section(status):
     open_items = "\n".join(f"- {item}" for item in status["openItems"])
     deferred = "\n".join(f"- {item}" for item in status["deferred"])
     body = [
-        "## Beta.6 status (current)",
+        "## Beta.7 status (current)",
         "",
         f"Release `{status['release']}`. Patches through `{status['patchesUpTo']}`.",
         "",

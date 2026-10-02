@@ -1,15 +1,16 @@
 # P23 Final DXVK/vkd3d compliance matrix
 
-## Beta.6 status (current)
+## Beta.7 status (current)
 
-Release `g615-v11-csf-v0.1.0-beta.6`. Patches through `077`.
+Release `g615-v11-csf-v0.1.0-beta.7`. Patches through `082`.
 
-Matrix rows below are evaluated from the beta.3-era consumer-capabilities.json capture; features listed here are device-proven in beta.6 but await a fresh capture. Swapchain lifecycle test done (passes on device); GS viewport index honoured (076).
+Matrix rows below are evaluated from the beta.3-era consumer-capabilities.json capture; features listed here are device-proven in beta.7 but await a fresh capture. vertexPipelineStoresAndAtomics exposed on v10-v12 (078-082); swapchain lifecycle test done (passes on device); GS viewport index honoured (076).
 
 Exposed since the beta.3 capture:
 
 | Feature | Patch | CTS |
 |---|---|---|
+| `vertexPipelineStoresAndAtomics (v10-v12, via compute gpu_prerast; FL11_1 prerequisite)` | `078-082` | atomic_operations *_vertex* 66/0 (was NotSupported); tess/geometry/xfb.simple/draw list 7940/0, 0 DeviceLost; atomics/memory-model/shader-access/signal_order list 3775/0 |
 | `variableMultisampleRate` | `074` | variable_rate 504/0 standalone; combined regression 6210/0 |
 | `sync_fd export (kbase KCPU queue)` | `075` | 1996/0 (was 113 ResourceError) |
 | `multiViewport GS viewport index honoured` | `076` | draw scissor 88/88 |
@@ -33,7 +34,8 @@ Exposed since the beta.3 capture:
 Open items:
 
 - GS primitive drop
-- VMR (vertexPipelineStoresAndAtomics / FL11_1, worktree dx-vpsa)
+- DXVK FL11_1 not yet re-checked on the beta.7 build
+- render desc ringbuf / VkEvent syncobjs not in CSF event memory on kbase (possible eviction hang)
 - JICA98 0005 (same-queue semaphore waits) review
 - depthBounds
 - shaderOutputViewportIndex (not exposed; GS viewport index honoured in 076)

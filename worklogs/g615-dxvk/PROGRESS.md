@@ -1,6 +1,6 @@
 # G615 DXVK / vkd3d progress
 
-Snapshot: 2026-10-02, beta.6 is current (`g615-v11-csf-v0.1.0-beta.6`, patches through 077); 078-082 (vertexPipelineStoresAndAtomics) exported, unreleased. Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a31030).
+Snapshot: 2026-10-02, beta.7 is current (`g615-v11-csf-v0.1.0-beta.7`, patches through 082, vertexPipelineStoresAndAtomics). Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a31030).
 
 ## Done and device-proven
 
@@ -36,7 +36,7 @@ Integration gaps: GS primitive drop; JICA98 0005 (same-queue semaphore waits) re
 - Still to run: full DEVICE-TEST-PLAN.md steps 1-7 results write-up and P23 matrix update.
 
 ### vertexPipelineStoresAndAtomics (done 2026-10-02, not released)
-- Final: `work/mesa-vpsa2-final` branch `dx-vpsa2-final` (5 commits on `dx-p5`), exported as `patches/csf-v11/078-082`; fresh pin + apply = 83 patches, tree equal to the branch. Not committed in this repo yet.
+- Final: `work/mesa-vpsa2-final` branch `dx-vpsa2-final` (5 commits on `dx-p5`), exported as `patches/csf-v11/078-082`; fresh pin + apply = 83 patches, tree equal to the branch. Released in beta.7.
 - Intermittent tess DeviceLost root cause: on kbase each subqueue is its own CSG. A CS blocked on SYNC_WAIT whose group gets evicted is re-evaluated by kbase on the CPU through a permanent kernel mapping, which only `BASE_MEM_CSF_EVENT` memory has. The tess ready/free words (per-draw `panlib_tess_draw`) and arena `available` words (arena header) were ordinary memory, so an evicted vertex/tiler group never resumed. Debugfs proof: group CSG NR -1, `SYNC_LIVE_VALUE 0xffffffffffffffff` (kbase's "no mapping" value, not an underflow). Fix 082: arena syncs in a device CSF-event BO, tess syncs in the per-queue syncobjs BO. Earlier tries (cache-line isolation, flush before signal) reverted; matching take scope kept in 082.
 - Older worktrees `work/mesa-vpsa`, `mesa-vpsa2`, `mesa-vpsa2-atomic`, `mesa-vpsa2-tess` are superseded.
 - Same latent class, not fixed: the render desc ringbuf syncobj (`init_render_desc_ringbuf`, rw pool) and VkEvent syncobjs (`panvk_vX_event.c`, rw_nc pool) are cross-subqueue SYNC_WAIT targets outside CSF event memory on kbase; an evicted waiter on them can hang the same way.
@@ -68,7 +68,7 @@ Integration gaps: GS primitive drop; JICA98 0005 (same-queue semaphore waits) re
 
 ## Remaining after that
 
-1. Release 078-082 (CHANGELOG/README), DXVK FL11_1 check on the new build.
+1. DXVK FL11_1 check on the beta.7 build (078-082 released in beta.7).
 2. Feature bit: `shaderOutputViewportIndex`.
 3. Wine (x86_64 under box64/FEX in the Alpine chroot), then first game test at FL11_0 / SM6.0.
 4. SM6.2+ denorm control, Winlator packaging.

@@ -64,14 +64,15 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-`g615-v11-csf-v0.1.0-beta.6` is the latest published tag (prerelease, Mesa
-`5a07217f` plus csf-v11 patches up to 077). It adds `variableMultisampleRate`,
-kbase KCPU queue `sync_file` fence export, honoured geometry shader viewport
-index, and system-scope subqueue sync signals on kbase, plus swapchain lifecycle
-and Vulkan 1.3/1.4 core requirement gap checks in the PanVK Test APK. Assets:
-Android and glibc drivers, `.adpkg` package, EMULATOR zip, and the test APK. See
+`g615-v11-csf-v0.1.0-beta.7` is the latest published tag (prerelease, Mesa
+`5a07217f` plus csf-v11 patches up to 082). It exposes
+`vertexPipelineStoresAndAtomics` on v10-v12 through the compute pre-raster
+path (a D3D11 feature level 11_1 prerequisite) and fixes an intermittent
+tessellation `DeviceLost` on kbase by keeping cross-subqueue sync words in CSF
+event memory. The PanVK Test APK gains a `vertex_stores` test. Assets: Android
+and glibc drivers, `.adpkg` package, EMULATOR zip, and the test APK. See
 [`CHANGELOG.md`](CHANGELOG.md) and the
-[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.6).
+[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.7).
 
 `g615-v11-csf-v0.1.0-beta.3` (code commit
 `fc8a759e7d1b2b8de01c0e96f1fdc5e3950ba1a3`, published 2026-09-19) and its
@@ -128,7 +129,7 @@ features are listed in [`docs/RUNTIME-FEATURES.md`](docs/RUNTIME-FEATURES.md).
 
 ## DXVK / vkd3d-proton compliance (G615)
 
-### Current state (after csf-v11/077)
+### Current state (after csf-v11/082)
 
 DXVK Native v3.1.1 on the Poco X6 Pro creates a D3D11 device at
 **feature level 11_0** (`D3D11 HRESULT=0x00000000 feature_level=0xb000`);
@@ -152,9 +153,11 @@ with no CPU fallback or simulation, and is exposed only after device proof.
 | `alphaToOne` | 070 | alphaToOne 123 / 0 |
 | `variableMultisampleRate` | 074 | variable_rate 504 / 0 standalone (tmp/cts/p5-vmsr/summary.txt); combined regression run (geometry + tessellation + transform_feedback.simple + variable_rate: 15955 cases, 6210 pass, 9745 NotSupported, 0 fail; source tmp/cts/r6-geo/status.txt) |
 | `sync_fd` export | 075 (kbase KCPU queue) | sync_fd 1996 / 0 |
+| `vertexPipelineStoresAndAtomics` (v10-v12) | 078-082, vertex stage on the compute pre-raster path | atomic_operations `*_vertex*` 66 / 0; 12132-case tess/geometry/xfb/draw list 7940 / 0, 0 DeviceLost |
 
+DXVK feature level 11_1 has not been re-checked on the beta.7 build yet.
 Still missing: `robustImageAccess2` (the vkd3d-proton device-create
-blocker), `vertexPipelineStoresAndAtomics` (FL11_1), `depthBounds`,
+blocker), `depthBounds`,
 `shaderOutputViewportIndex` (not exposed; no patch sets it), and
 sparse (FL12_0, `NO-GO` on Kbase). The X11 present teardown hang was seen once
 under Xvfb only and is unverified on Android. Progress and TODOs:

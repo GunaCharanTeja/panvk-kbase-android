@@ -1,5 +1,61 @@
 # Changelog
 
+## g615-v11-csf-v0.1.0-beta.7 (prerelease)
+
+Mesa `5a07217f034b` + csf-v11 patches up to 082
+(`patchSeriesId sha256:0c47124314f24c46233d4135ff8f20dbde9b6571b60b0f5cdf6f3f8f4da8d0ce`).
+Poco X6 Pro, Mali-G615 MC6, mali_kbase CSF UAPI 1.21. Android minApi 35.
+
+### Added
+- `vertexPipelineStoresAndAtomics` on v10-v12 (078). Vertex shaders that
+  write storage buffers or use atomics run on the compute pre-raster path
+  (`gpu_prerast`). This is a prerequisite for D3D11 feature level 11_1.
+- The pre-raster arena is allocated when the feature is enabled (080).
+- Test APK: `vertex_stores` test.
+
+### Fixed
+- Point-mode tessellation writes `gl_PointSize` (079).
+- IDVS flags now come from the vertex shader variant that is actually bound
+  (081).
+- Intermittent `DeviceLost` in tessellation draws (082). On kbase each
+  subqueue is its own command stream group. When a waiting group is evicted,
+  kbase can only re-check its wait on the CPU if the sync word is in CSF event
+  memory. The pre-raster arena and tessellation sync words were in ordinary
+  memory, so an evicted group never resumed. They now live in CSF event memory.
+
+### Results
+CTS `atomic_operations` `*_vertex*`: 66 pass / 0 fail (38 NotSupported; the
+first work-in-progress build was 1 pass / 65 fail, beta.6 reported the feature
+as unsupported). Regression list of 12,132 cases (tessellation, geometry,
+`transform_feedback.simple`, draw subset): 7940 pass / 0 fail / 0 DeviceLost,
+against 7619 pass / 5 fail / 1 DeviceLost on the beta.6 baseline; 315
+tessellation cases moved from NotSupported to Pass. A 5,613-case list
+(atomics, memory model, shader access, `signal_order`): 3775 pass / 0 fail.
+On-device run of the release APK: 11/11 in-app tests pass, including
+`vertex_stores` and `swapchain_lifecycle`; the driver reports Mali-G615 MC6,
+Mesa 26.3.0-devel (git-5a07217f03) and `vertexPipelineStoresAndAtomics = true`;
+no DeviceLost or kbase faults.
+
+### Known issues
+The render descriptor ring buffer sync object and `VkEvent` sync objects are
+still outside CSF event memory on kbase, so the same kind of hang is possible
+there (pre-existing, not seen in these runs). Tessellation follow-ups are open:
+per-instance geometry shader `PrimitiveIdIn` after tessellation, conditional
+rendering on the compute loop, and an exact primitives-generated count. DXVK
+feature level 11_1 has not yet been re-checked on this build. X11 surfaces
+(`VK_KHR_xlib_surface`, `VK_KHR_xcb_surface`) are not in the Android package
+yet. Carried over from beta.6: sync_file export (075) uses one device-wide KCPU
+queue, so a pending export can delay later ones and could in theory deadlock
+with wait-before-signal timelines; with a geometry-shader-selected viewport
+(076), depth clip/clamp uses the union of all viewports' depth ranges;
+system-scope signals (077) have an unmeasured game perf cost; dEQP draw
+`depth_bias_patch_list_tri_line` fails (pre-existing); `depthBounds` is not
+implemented; 2 intermittent `DeviceLost` in `transform_feedback` `query_copy`;
+transform feedback is capped at 65,536 records per draw; the X11 present
+teardown hang was seen once under Xvfb only; JICA98-derived patch 0005 is not
+fully validated; `robustImageAccess2` is missing (no vkd3d-proton device;
+deferred); sparse resources and FL 12_0 are impossible on Kbase.
+
 ## g615-v11-csf-v0.1.0-beta.6 (prerelease)
 
 Mesa `5a07217f034b` + csf-v11 patches up to 077

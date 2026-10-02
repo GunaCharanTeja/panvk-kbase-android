@@ -3,9 +3,14 @@
   "phase": "P23",
   "date": "2026-09-20",
   "beta6Status": {
-    "release": "g615-v11-csf-v0.1.0-beta.6",
-    "patchesUpTo": "077",
+    "release": "g615-v11-csf-v0.1.0-beta.7",
+    "patchesUpTo": "082",
     "exposedSinceCapture": [
+      {
+        "feature": "vertexPipelineStoresAndAtomics (v10-v12, via compute gpu_prerast; FL11_1 prerequisite)",
+        "patch": "078-082",
+        "cts": "atomic_operations *_vertex* 66/0 (was NotSupported); tess/geometry/xfb.simple/draw list 7940/0, 0 DeviceLost; atomics/memory-model/shader-access/signal_order list 3775/0"
+      },
       {
         "feature": "variableMultisampleRate",
         "patch": "074",
@@ -104,7 +109,8 @@
     ],
     "openItems": [
       "GS primitive drop",
-      "VMR (vertexPipelineStoresAndAtomics / FL11_1, worktree dx-vpsa)",
+      "DXVK FL11_1 not yet re-checked on the beta.7 build",
+      "render desc ringbuf / VkEvent syncobjs not in CSF event memory on kbase (possible eviction hang)",
       "JICA98 0005 (same-queue semaphore waits) review",
       "depthBounds",
       "shaderOutputViewportIndex (not exposed; GS viewport index honoured in 076)",
@@ -116,7 +122,7 @@
       "vkd3d/D3D12",
       "FL12 (sparse NO-GO on kbase)"
     ],
-    "note": "Matrix rows below are evaluated from the beta.3-era consumer-capabilities.json capture; features listed here are device-proven in beta.6 but await a fresh capture. Swapchain lifecycle test done (passes on device); GS viewport index honoured (076)."
+    "note": "Matrix rows below are evaluated from the beta.3-era consumer-capabilities.json capture; features listed here are device-proven in beta.7 but await a fresh capture. vertexPipelineStoresAndAtomics exposed on v10-v12 (078-082); swapchain lifecycle test done (passes on device); GS viewport index honoured (076)."
   },
   "result": "FAIL",
   "smoke": "BLOCKED",
