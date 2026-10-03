@@ -1,0 +1,5 @@
+CTS (chroot musl ICD from the beta.10 source tree, /tmp/d10, sha256 26fc8a00...1c2e)
+Cases: dEQP-VK.memory.mapping.*, dEQP-VK.memory.map_placed.*, dEQP-VK.synchronization{,2}.basic.*  (4533)
+Pass 4520 / Fail 0 / NotSupported 13 (all *_cq event cases: exclusive compute queue not supported)
+map_placed: 13/13 pass (exact_size, gpu_access.read_write, unmap_reserve, normal_unmap_reserve)
+Import outflags 0x4540f: BASE_MEM_COHERENT_SYSTEM kept by the kernel.
