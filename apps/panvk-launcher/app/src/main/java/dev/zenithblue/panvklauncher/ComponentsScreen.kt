@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.semantics.contentDescription
@@ -52,7 +53,7 @@ fun ComponentsScreen(
     catalog: List<CatalogEntry>,
     installedList: List<InstalledContent>,
     busy: Boolean,
-    busyEntryUrl: String?,
+    busyEntryType: String?,
     progressText: String?,
     errorText: String?,
     onDismissError: () -> Unit,
@@ -61,6 +62,10 @@ fun ComponentsScreen(
     onDelete: (InstalledContent) -> Unit
 ) {
     var confirmDelete by remember { mutableStateOf<InstalledContent?>(null) }
+    val context = LocalContext.current
+    val bundledTypes = remember(catalog) {
+        catalog.filter { ContentManager.bundledAsset(context, it) != null }.map { it.type }.toSet()
+    }
     val states = remember(catalog, installedList) { catalog.map { ContentManager.stateFor(it, installedList) } }
     val catalogTypes = remember(catalog) { catalog.map { it.type }.toSet() }
     val others = remember(installedList, catalogTypes) { installedList.filter { it.type !in catalogTypes } }
@@ -76,11 +81,12 @@ fun ComponentsScreen(
         if (errorText != null) item { ErrorBanner(errorText, onDismissError) }
         if (progressText != null) item { BusyCard(progressText) }
 
-        items(states, key = { it.entry.url }) { st ->
+        items(states, key = { it.entry.type }) { st ->
             ComponentCard(
                 st = st,
+                bundled = st.entry.type in bundledTypes,
                 busy = busy,
-                working = busyEntryUrl == st.entry.url,
+                working = busyEntryType == st.entry.type,
                 onDownload = { onDownload(st) },
                 onDelete = { confirmDelete = it }
             )
@@ -129,12 +135,15 @@ fun ComponentsScreen(
 @Composable
 private fun ComponentCard(
     st: ComponentState,
+    bundled: Boolean,
     busy: Boolean,
     working: Boolean,
     onDownload: () -> Unit,
     onDelete: (InstalledContent) -> Unit
 ) {
     val e = st.entry
+    val tag = if (bundled && st.installedVersion == e.versionName) " (bundled)" else ""
+    val verb = if (bundled) "Install" else "Download"
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
@@ -149,7 +158,7 @@ private fun ComponentCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 when (st.status) {
-                    ComponentStatus.Installed -> StatusPill("Installed ${versionLabel(st.installedVersion ?: "")}", Tone.Ok)
+                    ComponentStatus.Installed -> StatusPill("Installed ${versionLabel(st.installedVersion ?: "")}$tag", Tone.Ok)
                     ComponentStatus.UpdateAvailable -> StatusPill("Installed ${versionLabel(st.installedVersion ?: "")}", Tone.Warn)
                     ComponentStatus.Incomplete -> StatusPill("Incomplete", Tone.Error)
                     ComponentStatus.NotInstalled -> StatusPill("Not installed")
@@ -180,7 +189,7 @@ private fun ComponentCard(
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val primaryAction: Pair<ImageVector, String>? = when (st.status) {
-                    ComponentStatus.NotInstalled -> Icons.Rounded.CloudDownload to "Download ${versionLabel(e.versionName)}"
+                    ComponentStatus.NotInstalled -> Icons.Rounded.CloudDownload to "$verb ${versionLabel(e.versionName)}"
                     ComponentStatus.Incomplete -> Icons.Rounded.CloudDownload to "Reinstall ${versionLabel(e.versionName)}"
                     ComponentStatus.UpdateAvailable -> Icons.Rounded.SystemUpdateAlt to "Update to ${versionLabel(e.versionName)}"
                     ComponentStatus.Installed -> null // up to date: nothing to download

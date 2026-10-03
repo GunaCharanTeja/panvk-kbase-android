@@ -229,17 +229,18 @@ object ContainerManager {
         }
     }
 
-    /** Container made before FEX was installed lacks its dlls; copy them in (arm64ec wine needs libarm64ecfex.dll). */
+    /** Copy FEX dlls into the prefix when missing or when a different FEXCore is installed (arm64ec wine needs libarm64ecfex.dll). */
     private fun ensureFex(ctx: Context) {
         val containerDir = File(ctx.filesDir, "container")
         val prefix = File(containerDir, ".wine")
         if (!prefix.isDirectory) return
-        if (File(prefix, "drive_c/windows/system32/libarm64ecfex.dll").exists()) return
         val fex = ContentManager.list(ctx).firstOrNull { it.type == "FEXCore" } ?: return
+        val cj = File(containerDir, "container.json")
+        val json = try { if (cj.isFile) JSONObject(cj.readText()) else JSONObject() } catch (_: Exception) { JSONObject() }
+        if (File(prefix, "drive_c/windows/system32/libarm64ecfex.dll").exists() &&
+            json.optString("fex") == fex.dir.absolutePath) return
         try {
             applyFex(fex.dir, prefix)
-            val cj = File(containerDir, "container.json")
-            val json = if (cj.isFile) JSONObject(cj.readText()) else JSONObject()
             json.put("fex", fex.dir.absolutePath)
             cj.writeText(json.toString(2))
         } catch (_: Exception) {}

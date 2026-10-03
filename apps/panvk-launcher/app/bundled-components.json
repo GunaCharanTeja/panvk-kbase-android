@@ -1,0 +1,25 @@
+{
+  "comment": "Archives packed into the APK as assets/components/<file> (stored, not recompressed) and unpacked on first start. Gradle (bundleComponents) copies them from -PcomponentsDir (default /var/tmp/panvk/components) and fails on any sha256 mismatch. Fetched: scripts/fetch-launcher-components.sh. Built: scripts/build-fex-windows.sh, scripts/build-dxvk.sh (pins in scripts/components.env). -PbundleComponents=false builds a download-only APK.",
+  "components": [
+    {
+      "file": "imagefs_bionic.txz",
+      "sha256": "368db62bfc58b72c97e5169bda9aa64d4246f07964c447e27c79a065e7e9c48b",
+      "url": "https://downloads.gamenative.app/imagefs_bionic.txz"
+    },
+    {
+      "file": "proton-11.0-2-arm64ec.wcp",
+      "sha256": "fffa467241bdae3eacd6ceb7e8096bb7793d617ce53a198dae8bc63a3453f595",
+      "url": "https://github.com/GameNative/proton-wine/releases/download/proton-11.0-2-20260928/proton-11.0-2-arm64ec.wcp"
+    },
+    {
+      "file": "fexcore-2609.1.wcp",
+      "sha256": "1701380b8198d267499a5eea2c0caf9f2547090f31854141b0c314d5c52ea999",
+      "build": "scripts/build-fex-windows.sh"
+    },
+    {
+      "file": "dxvk-3.1.1-1-arm64ec.wcp",
+      "sha256": "bb702623a565374e05282e7d3baa5da579dd611421571ee729d32213ba40f87a",
+      "build": "scripts/build-dxvk.sh"
+    }
+  ]
+}

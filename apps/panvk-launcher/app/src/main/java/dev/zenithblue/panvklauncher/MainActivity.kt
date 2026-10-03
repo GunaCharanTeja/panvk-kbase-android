@@ -126,7 +126,7 @@ fun LauncherApp(
     var isComponentBusy by remember { mutableStateOf(false) }
     var componentProgressText by remember { mutableStateOf<String?>(null) }
     var lastComputedSha256 by remember { mutableStateOf<String?>(null) }
-    var busyEntryUrl by remember { mutableStateOf<String?>(null) }
+    var busyEntryType by remember { mutableStateOf<String?>(null) }
     var componentError by remember { mutableStateOf<String?>(null) }
     val logs = remember { mutableStateListOf<String>() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
@@ -527,67 +527,102 @@ fun LauncherApp(
         }
     }
 
-    fun downloadComponent(st: ComponentState) {
+    /** Installs [st] from the APK when bundled, else downloads it. Caller holds isComponentBusy. */
+    suspend fun installEntry(st: ComponentState) {
         val entry = st.entry
+        busyEntryType = entry.type
+        componentError = null
+        // Broken install of the same version must be removed first (install refuses an existing dir).
+        if (st.status == ComponentStatus.Incomplete) {
+            withContext(Dispatchers.IO) { st.installed.forEach { ContentManager.delete(context, it) } }
+        }
+        val asset = ContentManager.bundledAsset(context, entry)
+        val installResult = if (asset != null) {
+            addLog("Installing bundled ${entry.name}...")
+            componentProgressText = "Installing bundled ${entry.title}..."
+            ContentManager.installAsset(context, asset, rootfs = (entry.type == "imagefs")) { pct ->
+                mainHandler.post { componentProgressText = "Installing bundled ${entry.title}: $pct%" }
+            }
+        } else {
+            if (entry.url.isEmpty()) {
+                componentError = "${entry.title} ships only inside the full PanPlay APK"
+                return
+            }
+            addLog("Downloading ${entry.name}...")
+            componentProgressText = "Downloading 0.0 MB..."
+            val (file, sha256) = ContentManager.download(
+                context = context,
+                url = entry.url,
+                expectedSha256 = entry.sha256,
+                onProgress = { bytes ->
+                    val mb = bytes.toDouble() / (1024.0 * 1024.0)
+                    componentProgressText = "Downloading %.1f MB...".format(Locale.US, mb)
+                }
+            ).getOrElse { err ->
+                componentError = "Download failed: ${err.message}"
+                addLog("Download failed: ${err.message}")
+                return
+            }
+            lastComputedSha256 = sha256
+            addLog(if (entry.sha256 != null) "SHA-256 (verified): $sha256" else "UNVERIFIED sha256=$sha256")
+            addLog("Installing ${entry.name}...")
+            componentProgressText = "Installing..."
+            try {
+                ContentManager.install(context, file, rootfs = (entry.type == "imagefs"))
+            } finally {
+                file.delete()
+            }
+        }
+        installResult.onSuccess { installed ->
+            val updatedList = withContext(Dispatchers.IO) {
+                // Update: new version is in place, drop the superseded one(s).
+                if (st.status == ComponentStatus.UpdateAvailable) {
+                    st.installed.filter { it.dir != installed.dir }.forEach { ContentManager.delete(context, it) }
+                }
+                ContentManager.list(context)
+            }
+            installedComponents = updatedList
+            addLog("Installed component: ${installed.type}/${installed.versionName}")
+        }.onFailure { err ->
+            componentError = "Install failed: ${err.message}"
+            addLog("Installation failed: ${err.message}")
+        }
+    }
+
+    fun downloadComponent(st: ComponentState) {
         if (isComponentBusy) return
         isComponentBusy = true
-        busyEntryUrl = entry.url
-        componentError = null
-        componentProgressText = "Downloading 0.0 MB..."
         scope.launch {
             try {
-                // Broken install of the same version must be removed first (install refuses an existing dir).
-                if (st.status == ComponentStatus.Incomplete) {
-                    withContext(Dispatchers.IO) { st.installed.forEach { ContentManager.delete(context, it) } }
-                }
-                addLog("Downloading ${entry.name}...")
-                val dlResult = ContentManager.download(
-                    context = context,
-                    url = entry.url,
-                    expectedSha256 = entry.sha256,
-                    onProgress = { bytes ->
-                        val mb = bytes.toDouble() / (1024.0 * 1024.0)
-                        componentProgressText = "Downloading %.1f MB...".format(Locale.US, mb)
-                    }
-                )
-                dlResult.onSuccess { (file, sha256) ->
-                    lastComputedSha256 = sha256
-                    if (entry.sha256 != null) {
-                        addLog("SHA-256 (verified): $sha256")
-                    } else {
-                        addLog("UNVERIFIED sha256=$sha256")
-                    }
-                    addLog("Installing ${entry.name}...")
-                    componentProgressText = "Installing..."
-                    try {
-                        val installResult = ContentManager.install(context, file, rootfs = (entry.type == "imagefs"))
-                        installResult.onSuccess { installed ->
-                            val updatedList = withContext(Dispatchers.IO) {
-                                // Update: new version is in place, drop the superseded one(s).
-                                if (st.status == ComponentStatus.UpdateAvailable) {
-                                    st.installed.filter { it.dir != installed.dir }.forEach { ContentManager.delete(context, it) }
-                                }
-                                ContentManager.list(context)
-                            }
-                            installedComponents = updatedList
-                            addLog("Installed component: ${installed.type}/${installed.versionName}")
-                        }.onFailure { err ->
-                            componentError = "Install failed: ${err.message}"
-                            addLog("Installation failed: ${err.message}")
-                        }
-                    } finally {
-                        file.delete()
-                    }
-                }.onFailure { err ->
-                    componentError = "Download failed: ${err.message}"
-                    addLog("Download failed: ${err.message}")
-                }
+                installEntry(st)
             } finally {
                 isComponentBusy = false
-                busyEntryUrl = null
+                busyEntryType = null
                 componentProgressText = null
             }
         }
+    }
+
+    // First start after each install/update: unpack bundled components that are missing, broken or older.
+    // Once per APK install, so a component the user removes stays removed until the next update.
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("components", Context.MODE_PRIVATE)
+        val stamp = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+        if (prefs.getLong("bundledInstalledFor", 0L) == stamp || isComponentBusy) return@LaunchedEffect
+        val todo = ContentManager.CATALOG.map { ContentManager.stateFor(it, installedComponents) }
+            .filter { it.status != ComponentStatus.Installed && ContentManager.bundledAsset(context, it.entry) != null }
+        if (todo.isNotEmpty()) {
+            selectedTab = AppTab.Components
+            isComponentBusy = true
+            try {
+                todo.forEach { installEntry(it) }
+            } finally {
+                isComponentBusy = false
+                busyEntryType = null
+                componentProgressText = null
+            }
+        }
+        if (componentError == null) prefs.edit().putLong("bundledInstalledFor", stamp).apply()
     }
 
     fun deleteComponent(c: InstalledContent) {
@@ -641,7 +676,7 @@ fun LauncherApp(
                 catalog = ContentManager.CATALOG,
                 installedList = installedComponents,
                 busy = isComponentBusy,
-                busyEntryUrl = busyEntryUrl,
+                busyEntryType = busyEntryType,
                 progressText = componentProgressText,
                 errorText = componentError,
                 onDismissError = { componentError = null },

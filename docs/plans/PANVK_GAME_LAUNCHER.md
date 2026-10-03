@@ -47,7 +47,7 @@ Root: `apps/panvk-launcher/tests/results/final-discrimination/runtime-fix/`. Ver
 Remaining:
 - i686/WOW64: mapping fails when Wine requests caller-chosen addresses incompatible with kbase SAME_VA. Patched i686 DLLs built; normal rendering not established.
 - Real games (x86/x64): draw workloads, assets, input, audio, resize, long Stop/relaunch.
-- DXVK component distribution: only local `/var/tmp/panvk/dxvk-clear-package/dxvk-3.1.1-clearfix.wcp`; no reproducible published artifact.
+- Components are bundled in the APK (2026-10-03): rootfs + Proton (pinned upstream archives) and FEX-2609.1 / DXVK v3.1.1+clear fix built from source, bit-reproducible (`apps/panvk-launcher/scripts/`, pins in `app/bundled-components.json`), unpacked on first start.
 - Performance: software X11 copy only. No zero-copy, vsync pacing or perf claim.
 
 Next-agent rules: fresh subagent per task; Sol worker -> independent tester -> fix/retest -> scoped commit. Require logs plus actual client pixels. Keep source-readback diagnostics separate from normal-presentation acceptance. No driver edits; hand off only if a driver issue is conclusively shown. Preserve unrelated working-tree changes. CLI via ctx_execute.

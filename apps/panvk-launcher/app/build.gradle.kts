@@ -74,8 +74,8 @@ android {
         minSdk = 28
         // targetSdk 28: W^X (targetSdk>=29) blocks execve of wine/wineserver from app data; linker64 fails ("could not exec the wine loader"). Same as Winlator/GameNative legacy.
         targetSdk = 28
-        versionCode = 3
-        versionName = "1.0.1"
+        versionCode = 4
+        versionName = "1.0.2"
 
         ndk {
             abiFilters.add("arm64-v8a")
@@ -132,4 +132,48 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.tukaani:xz:1.10")
     implementation("com.github.luben:zstd-jni:1.5.7-4@aar")
+}
+
+// Bundled components (rootfs, Proton, FEX, DXVK): pinned in bundled-components.json, copied from
+// -PcomponentsDir (default /var/tmp/panvk/components; filled by scripts/fetch-launcher-components.sh,
+// build-fex-windows.sh, build-dxvk.sh) into assets/components, sha256-checked; never committed.
+// -PbundleComponents=false builds a download-only APK.
+val bundleComponents = providers.gradleProperty("bundleComponents").orNull != "false"
+val componentsDir = file(providers.gradleProperty("componentsDir").orNull ?: "/var/tmp/panvk/components")
+@Suppress("UNCHECKED_CAST")
+val bundledComponents = (groovy.json.JsonSlurper().parse(file("bundled-components.json")) as Map<String, Any?>)
+    .getValue("components") as List<Map<String, String>>
+val componentAssetsDir = layout.buildDirectory.dir("generated/componentAssets")
+
+val copyComponents = tasks.register<Sync>("copyComponents") {
+    into(componentAssetsDir.map { it.dir("components") })
+    if (bundleComponents) {
+        val files = bundledComponents.map { File(componentsDir, it["file"]!!) }
+        from(files)
+        doFirst {
+            for (c in bundledComponents) {
+                val f = File(componentsDir, c["file"]!!)
+                if (!f.isFile) throw GradleException(
+                    "Missing bundled component $f: run scripts/fetch-launcher-components.sh, " +
+                        "build-fex-windows.sh, build-dxvk.sh (or -PbundleComponents=false)"
+                )
+                val got = sha256Of(f)
+                if (got != c["sha256"]) throw GradleException("Bundled component $f sha256 $got != pinned ${c["sha256"]}")
+            }
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(copyComponents)
+}
+
+android {
+    sourceSets.getByName("main") {
+        assets.directories.add(componentAssetsDir.get().asFile.path)
+    }
+    // Archives are already xz/zstd: store them so they are not compressed twice and can be openFd'd.
+    androidResources {
+        noCompress += listOf("txz", "wcp")
+    }
 }

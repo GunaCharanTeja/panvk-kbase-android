@@ -1,6 +1,0 @@
-{
-  "type": "DXVK",
-  "versionName": "3.1.1-clearfix-arm64ec",
-  "versionCode": 1,
-  "description": "Upstream v3.1.1 b1a1c99 + endCurrentPass(false) before external rendering. ARM64EC + i686. Local test runtime, not WCP Hub pristine build."
-}

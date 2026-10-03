@@ -37,7 +37,9 @@ data class CatalogEntry(
     val title: String = type,
     /** profile.json versionName the entry installs as; used to detect "already installed" from files. */
     val versionName: String = "",
-    val note: String = ""
+    val note: String = "",
+    /** APK asset holding this exact archive (bundled builds, see app/bundled-components.json). */
+    val asset: String? = null
 )
 
 enum class ComponentStatus { NotInstalled, Installed, UpdateAvailable, Incomplete }
@@ -60,7 +62,8 @@ object ContentManager {
             sha256 = "368db62bfc58b72c97e5169bda9aa64d4246f07964c447e27c79a065e7e9c48b",
             title = "Rootfs",
             versionName = "bionic",
-            note = "Android bionic userland for Wine"
+            note = "Android bionic userland for Wine",
+            asset = "components/imagefs_bionic.txz"
         ),
         CatalogEntry(
             type = "Proton",
@@ -69,27 +72,36 @@ object ContentManager {
             sha256 = "fffa467241bdae3eacd6ceb7e8096bb7793d617ce53a198dae8bc63a3453f595",
             title = "Wine (Proton)",
             versionName = "11.0-2-arm64ec",
-            note = "Proton Wine, ARM64EC build"
+            note = "Proton Wine, ARM64EC build",
+            asset = "components/proton-11.0-2-arm64ec.wcp"
         ),
+        // FEX and DXVK are built from upstream source (scripts/build-*.sh) and only ship inside the APK.
         CatalogEntry(
             type = "FEXCore",
-            name = "FEXCore-2609 (WCP Hub)",
-            url = "https://github.com/Arihany/WinlatorWCPHub/releases/download/FEXCore/FEXCore-2609.wcp",
-            sha256 = "520c31b8ea601baf691da4577f53034e80f4b13bcbfe9d96167f2c402c1db9d1",
+            name = "FEX-2609.1 ARM64EC + WOW64 (built from FEX-Emu source)",
+            url = "",
+            sha256 = null,
             title = "FEX",
-            versionName = "2609",
-            note = "x86/x86_64 emulation"
+            versionName = "2609.1",
+            note = "x86/x86_64 emulation",
+            asset = "components/fexcore-2609.1.wcp"
         ),
         CatalogEntry(
             type = "DXVK",
-            name = "dxvk-arm64ec-3.1.1 (WCP Hub)",
-            url = "https://github.com/Arihany/WinlatorWCPHub/releases/download/DXVK-ARM64EC/dxvk-arm64ec-3.1.1.wcp",
-            sha256 = "f3765e3589a5b84888d52cc03f26e93c2d3db3565def47dc63cb75a183aaaaaa",
+            name = "DXVK v3.1.1 + clear fix, ARM64EC + i686 (built from doitsujin/dxvk source)",
+            url = "",
+            sha256 = null,
             title = "DXVK",
-            versionName = "3.1.1-arm64ec",
-            note = "Direct3D 8/9/10/11 to Vulkan"
+            versionName = "3.1.1-1-arm64ec",
+            note = "Direct3D 8/9/10/11 to Vulkan",
+            asset = "components/dxvk-3.1.1-1-arm64ec.wcp"
         )
     )
+
+    /** Asset path if this APK bundles [entry], else null (lite build or no asset). */
+    fun bundledAsset(context: Context, entry: CatalogEntry): String? = entry.asset?.takeIf { a ->
+        try { context.assets.openFd(a).close(); true } catch (_: IOException) { false }
+    }
 
     /** Leading numeric part of a version ("11.0-2-arm64ec" -> [11,0,2]); empty if not numeric ("bionic"). */
     private fun versionNumbers(v: String): List<Int> =
@@ -339,12 +351,15 @@ object ContentManager {
         }
     }
 
-    fun extractTar(archive: File, destDir: File, lenient: Boolean = false) {
+    fun extractTar(archive: File, destDir: File, lenient: Boolean = false) =
+        extractTar(FileInputStream(archive), destDir, lenient)
+
+    /** Extracts a tar.xz / tar.zst stream into [destDir]; closes [input]. */
+    fun extractTar(input: InputStream, destDir: File, lenient: Boolean = false) {
         val destCanonical = destDir.canonicalPath
         val destPrefix = destCanonical + File.separator
 
-        val fis = FileInputStream(archive)
-        val bis = BufferedInputStream(fis)
+        val bis = BufferedInputStream(input)
         try {
             bis.mark(16)
             val magic = ByteArray(6)
@@ -511,6 +526,36 @@ object ContentManager {
         context: Context,
         archive: File,
         rootfs: Boolean = false
+    ): Result<InstalledContent> = install(context, rootfs) { FileInputStream(archive) }
+
+    /** Installs the APK-bundled archive [asset]; [onProgress] gets 0..100 (compressed bytes read). */
+    suspend fun installAsset(
+        context: Context,
+        asset: String,
+        rootfs: Boolean,
+        onProgress: (Int) -> Unit
+    ): Result<InstalledContent> = install(context, rootfs) {
+        val total = context.assets.openFd(asset).use { it.length }.coerceAtLeast(1)
+        object : java.io.FilterInputStream(context.assets.open(asset, android.content.res.AssetManager.ACCESS_STREAMING)) {
+            var done = 0L
+            var last = -1
+            private fun count(n: Int): Int {
+                if (n > 0) {
+                    done += n
+                    val pct = (done * 100 / total).toInt()
+                    if (pct != last) { last = pct; onProgress(pct) }
+                }
+                return n
+            }
+            override fun read(): Int = super.read().also { if (it >= 0) count(1) }
+            override fun read(b: ByteArray, off: Int, len: Int): Int = count(super.read(b, off, len))
+        }
+    }
+
+    private suspend fun install(
+        context: Context,
+        rootfs: Boolean,
+        open: () -> InputStream
     ): Result<InstalledContent> = withContext(Dispatchers.IO) {
         val stageDir = File(context.filesDir, "staging/stage_${System.nanoTime()}")
         if (!stageDir.mkdirs()) {
@@ -518,7 +563,7 @@ object ContentManager {
         }
 
         try {
-            extractTar(archive, stageDir, lenient = rootfs)
+            extractTar(open(), stageDir, lenient = rootfs)
 
             if (rootfs) {
                 val profileFile = File(stageDir, "profile.json")
