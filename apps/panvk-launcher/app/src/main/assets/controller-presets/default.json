@@ -1,5 +1,5 @@
 {
-  "name": "default",
+  "name": "Default WASD",
   "output": "keyboard",
   "bindings": {
     "A": "space", "B": "Escape", "X": "e", "Y": "f",

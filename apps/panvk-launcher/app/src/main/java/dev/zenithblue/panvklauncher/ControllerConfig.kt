@@ -41,7 +41,8 @@ class ControllerConfig(
 
     fun with(
         bindings: Map<String, String> = this.bindings, labels: Map<String, String> = this.labels,
-        leftStick: StickConfig = this.leftStick, rightStick: StickConfig = this.rightStick, output: String = this.output
+        leftStick: StickConfig = this.leftStick, rightStick: StickConfig = this.rightStick, output: String = this.output,
+        name: String = this.name, exe: List<String> = this.exe
     ) = ControllerConfig(name, output, bindings, labels, leftStick, rightStick, exe)
 
     /** Text drawn on an overlay control: label if set, else a short form of the binding. */
@@ -51,6 +52,7 @@ class ControllerConfig(
     fun stickCaption(left: Boolean): String {
         val s = if (left) leftStick else rightStick
         if (s.mode == "mouse") return "MOUSE"
+        if (s.mode == "none") return ""
         val k = listOf(s.up, s.left, s.down, s.right).map { ControllerKeys.short(it) }
         return if (k.all { it.length == 1 }) k.joinToString("") else ""
     }
@@ -84,7 +86,7 @@ class ControllerConfig(
 
         /** Built-in fallback when assets are missing: WASD + mouse. */
         val FALLBACK = ControllerConfig(
-            "default", "keyboard",
+            "Default WASD", "keyboard",
             mapOf(
                 "A" to "space", "B" to "Escape", "X" to "e", "Y" to "f", "LB" to "q", "RB" to "r",
                 "LT" to "mouse:right", "RT" to "mouse:left", "BACK" to "Tab", "START" to "Escape",
@@ -117,32 +119,105 @@ class ControllerConfig(
             fromJson(JSONObject(ctx.assets.open("$ASSETS/$n").bufferedReader().use { it.readText() }))
         } catch (_: Exception) { null }
 
-        fun presetFor(ctx: Context, exePath: String): ControllerConfig? {
+        /** Asset file name of the preset whose "exe" list has this exe's file name. */
+        fun presetNameFor(ctx: Context, exePath: String): String? {
             val base = File(exePath.replace('\\', '/')).name
-            return (ctx.assets.list(ASSETS) ?: emptyArray()).sorted().firstNotNullOfOrNull { n ->
-                asset(ctx, n)?.takeIf { c -> c.exe.any { it.equals(base, true) } }
+            return (ctx.assets.list(ASSETS) ?: emptyArray()).sorted().firstOrNull { n ->
+                asset(ctx, n)?.exe?.any { it.equals(base, true) } == true
             }
         }
+
+        fun presetFor(ctx: Context, exePath: String): ControllerConfig? = presetNameFor(ctx, exePath)?.let { asset(ctx, it) }
 
         fun default(ctx: Context) = asset(ctx, "default.json") ?: FALLBACK
 
-        /** Give a shortcut whose exe matches a preset (e.g. MiSide.exe) its own editable controller file. */
+        /** A shortcut whose exe matches a preset (e.g. MiSide.exe) gets that template assigned. */
         fun attachPreset(ctx: Context, shortcutId: String, exePath: String) {
-            if (!file(ctx, shortcutId).isFile) presetFor(ctx, exePath)?.let { try { save(ctx, shortcutId, it) } catch (_: Exception) {} }
+            if (!file(ctx, shortcutId).isFile) presetNameFor(ctx, exePath)?.let { try { ControllerLibrary.assign(ctx, shortcutId, "preset:$it") } catch (_: Exception) {} }
         }
 
-        /** Config for a game: saved file, else matching preset (materialised into the file), else default. */
+        /**
+         * Config for a game: saved file (a full config, or {"ref": "lib:<id>" | "preset:<asset>"} pointing at a
+         * library config / template), else matching preset (materialised into the file), else default.
+         */
         fun resolve(ctx: Context, shortcutId: String?, exePath: String): ControllerConfig {
             if (shortcutId != null) {
                 val f = file(ctx, shortcutId)
-                if (f.isFile) try { return fromJson(JSONObject(f.readText())) } catch (_: Exception) {}
+                if (f.isFile) try {
+                    val j = JSONObject(f.readText())
+                    val ref = j.optString("ref", "")
+                    if (ref.isEmpty()) return fromJson(j)
+                    ControllerLibrary.load(ctx, ref)?.let { return it }
+                } catch (_: Exception) {}
             }
-            val p = presetFor(ctx, exePath)
-            if (p != null) {
-                if (shortcutId != null) try { save(ctx, shortcutId, p) } catch (_: Exception) {}
-                return p
+            val pn = presetNameFor(ctx, exePath)
+            if (pn != null) {
+                if (shortcutId != null) try { ControllerLibrary.assign(ctx, shortcutId, "preset:$pn") } catch (_: Exception) {}
+                return asset(ctx, pn) ?: default(ctx)
             }
             return default(ctx)
+        }
+    }
+}
+
+/**
+ * Named controller configs. Templates = asset presets (read-only, clone to change). User configs live in
+ * files/controller-lib/<id>.json. A game points at one with {"ref": "lib:<id>"} / {"ref": "preset:<asset>"}
+ * in files/controller/<shortcutId>.json, or keeps its own full config there ("game's own").
+ */
+object ControllerLibrary {
+    class Entry(val ref: String, val config: ControllerConfig, val template: Boolean)
+
+    private fun dir(ctx: Context) = File(ctx.filesDir, "controller-lib").apply { mkdirs() }
+
+    fun templates(ctx: Context): List<Entry> = (ctx.assets.list(ControllerConfig.ASSETS) ?: emptyArray()).sorted().mapNotNull { n ->
+        try {
+            Entry("preset:$n", ControllerConfig.fromJson(JSONObject(ctx.assets.open("${ControllerConfig.ASSETS}/$n").bufferedReader().use { it.readText() })), true)
+        } catch (_: Exception) { null }
+    }
+
+    fun user(ctx: Context): List<Entry> = (dir(ctx).listFiles { f -> f.extension == "json" } ?: emptyArray())
+        .sortedBy { it.name }
+        .mapNotNull { f -> try { Entry("lib:${f.nameWithoutExtension}", ControllerConfig.fromJson(JSONObject(f.readText())), false) } catch (_: Exception) { null } }
+
+    fun all(ctx: Context) = templates(ctx) + user(ctx)
+
+    fun load(ctx: Context, ref: String): ControllerConfig? = all(ctx).firstOrNull { it.ref == ref }?.config
+
+    /** Saves a user config; returns its ref. Templates cannot be saved (clone them). */
+    fun save(ctx: Context, ref: String?, c: ControllerConfig): String {
+        val id = ref?.removePrefix("lib:")?.takeIf { ref.startsWith("lib:") } ?: ("c" + System.currentTimeMillis().toString(36))
+        val f = File(dir(ctx), "$id.json")
+        val tmp = File(f.path + ".tmp")
+        // exe list belongs to templates (auto-match); user configs are assigned explicitly.
+        tmp.writeText(c.with(exe = emptyList()).toJson().toString(2)); tmp.renameTo(f)
+        return "lib:$id"
+    }
+
+    fun delete(ctx: Context, ref: String) {
+        if (ref.startsWith("lib:")) File(dir(ctx), ref.removePrefix("lib:") + ".json").delete()
+    }
+
+    /** Unique "name (copy)" style name. */
+    fun copyName(ctx: Context, base: String): String {
+        val names = all(ctx).map { it.config.name }.toSet()
+        var n = "$base copy"; var i = 2
+        while (n in names) n = "$base copy ${i++}"
+        return n
+    }
+
+    /** Which config a game uses: a ref, "own" (its own full file) or "" (automatic: exe preset or default). */
+    fun assignment(ctx: Context, shortcutId: String): String {
+        val f = ControllerConfig.file(ctx, shortcutId)
+        if (!f.isFile) return ""
+        return try { JSONObject(f.readText()).optString("ref", "").ifEmpty { "own" } } catch (_: Exception) { "" }
+    }
+
+    fun assign(ctx: Context, shortcutId: String, ref: String) {
+        val f = ControllerConfig.file(ctx, shortcutId)
+        when (ref) {
+            "", "own" -> if (ref == "") f.delete()
+            else -> f.writeText(JSONObject().put("ref", ref).toString())
         }
     }
 }
@@ -176,6 +251,35 @@ object ControllerKeys {
 
     /** Choices for the editor: none, mouse actions, keys. */
     val CHOICES: List<String> = listOf("none") + MOUSE + names.keys
+
+    /** Picker sections (title, binding names). */
+    val GROUPS: List<Pair<String, List<String>>> by lazy {
+        val keys = names.keys.toList()
+        listOf(
+            "Mouse" to MOUSE,
+            "Common" to listOf("space", "Return", "Escape", "Tab", "BackSpace", "Shift_L", "Control_L", "Alt_L", "Up", "Down", "Left", "Right"),
+            "Letters" to keys.filter { it.length == 1 && it[0].isLetter() },
+            "Digits" to keys.filter { it.length == 1 && it[0].isDigit() },
+            "Function keys" to keys.filter { it.matches(Regex("F\\d+")) },
+            "Navigation" to listOf("Home", "End", "Prior", "Next", "Insert", "Delete"),
+            "Modifiers" to listOf("Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R"),
+            "Symbols" to listOf("minus", "equal", "comma", "period", "slash", "backslash", "semicolon", "apostrophe", "grave", "bracketleft", "bracketright")
+        )
+    }
+
+    /** Human name for a binding: "Left click", "Space", "Page Up", "W". */
+    fun describe(b: String): String = when (b) {
+        "none", "" -> "None"
+        "mouse:left" -> "Left click"; "mouse:right" -> "Right click"; "mouse:middle" -> "Middle click"
+        "mouse:wheelup" -> "Wheel up"; "mouse:wheeldown" -> "Wheel down"
+        "space" -> "Space"; "Return" -> "Enter"; "Escape" -> "Esc"; "BackSpace" -> "Backspace"
+        "Shift_L" -> "Left Shift"; "Shift_R" -> "Right Shift"; "Control_L" -> "Left Ctrl"; "Control_R" -> "Right Ctrl"
+        "Alt_L" -> "Left Alt"; "Alt_R" -> "Right Alt"; "Prior" -> "Page Up"; "Next" -> "Page Down"
+        "Up" -> "Arrow Up"; "Down" -> "Arrow Down"; "Left" -> "Arrow Left"; "Right" -> "Arrow Right"
+        "minus" -> "-"; "equal" -> "="; "comma" -> ","; "period" -> "."; "slash" -> "/"; "backslash" -> "\\"
+        "semicolon" -> ";"; "apostrophe" -> "'"; "grave" -> "`"; "bracketleft" -> "["; "bracketright" -> "]"
+        else -> if (b.length == 1) b.uppercase() else b
+    }
 
     fun key(b: String): XKeycode? = lower[b.lowercase()] ?: alias[b.lowercase()]?.let { lower[it] }
 

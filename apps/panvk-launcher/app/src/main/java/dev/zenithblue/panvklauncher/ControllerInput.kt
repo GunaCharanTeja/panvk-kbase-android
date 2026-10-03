@@ -43,6 +43,7 @@ object ControllerInput {
         want.forEach { id -> c.bindings[id]?.let { targets += it } }
         var mx = 0f; var my = 0f
         for ((s, x, y) in listOf(Triple(c.leftStick, lx, ly), Triple(c.rightStick, rx, ry))) {
+            if (s.mode == "none") continue
             if (s.mode == "mouse") {
                 val m = hypotf(x, y)
                 if (m > s.deadzone) {
