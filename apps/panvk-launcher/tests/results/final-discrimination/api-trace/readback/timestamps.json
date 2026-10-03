@@ -1,0 +1,22 @@
+[
+  {
+    "event": "launch",
+    "utc": "2026-10-02T17:13:37.999969+00:00",
+    "monotonic_ns": 290559679298249
+  },
+  {
+    "event": "frame7_observed",
+    "utc": "2026-10-02T17:13:40.689029+00:00",
+    "monotonic_ns": 290562368363112
+  },
+  {
+    "event": "captures_complete_process_alive",
+    "utc": "2026-10-02T17:13:41.459231+00:00",
+    "monotonic_ns": 290563138559652
+  },
+  {
+    "event": "exit_observed",
+    "utc": "2026-10-02T17:13:52.674764+00:00",
+    "monotonic_ns": 290574354099476
+  }
+]

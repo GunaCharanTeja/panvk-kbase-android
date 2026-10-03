@@ -1,0 +1,202 @@
+[
+ {
+  "name": "arm64ec-d3d10-cube",
+  "test": "cube",
+  "arch": "arm64ec",
+  "api": "d3d10",
+  "result": "PASS",
+  "fps": 47.8,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.968,
+  "colors": 132,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.99
+ },
+ {
+  "name": "arm64ec-d3d11-cube",
+  "test": "cube",
+  "arch": "arm64ec",
+  "api": "d3d11",
+  "result": "PASS",
+  "fps": 48.2,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.968,
+  "colors": 132,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.99
+ },
+ {
+  "name": "arm64ec-d3d11-draw",
+  "test": "draw",
+  "arch": "arm64ec",
+  "api": "d3d11",
+  "result": "PASS",
+  "fps": null,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.968,
+  "colors": 144,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.99
+ },
+ {
+  "name": "arm64ec-d3d9-cube",
+  "test": "cube",
+  "arch": "arm64ec",
+  "api": "d3d9",
+  "result": "PASS",
+  "fps": 42.1,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.967,
+  "colors": 142,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.989
+ },
+ {
+  "name": "arm64ec-d3d9-draw",
+  "test": "draw",
+  "arch": "arm64ec",
+  "api": "d3d9",
+  "result": "PASS",
+  "fps": null,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.967,
+  "colors": 153,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.989
+ },
+ {
+  "name": "x86_64-d3d10-cube",
+  "test": "cube",
+  "arch": "x86_64",
+  "api": "d3d10",
+  "result": "PASS",
+  "fps": 47.0,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.968,
+  "colors": 131,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.99
+ },
+ {
+  "name": "x86_64-d3d11-cube",
+  "test": "cube",
+  "arch": "x86_64",
+  "api": "d3d11",
+  "result": "PASS",
+  "fps": 47.9,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.968,
+  "colors": 132,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.99
+ },
+ {
+  "name": "x86_64-d3d11-draw",
+  "test": "draw",
+  "arch": "x86_64",
+  "api": "d3d11",
+  "result": "PASS",
+  "fps": null,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.968,
+  "colors": 145,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.99
+ },
+ {
+  "name": "x86_64-d3d9-cube",
+  "test": "cube",
+  "arch": "x86_64",
+  "api": "d3d9",
+  "result": "PASS",
+  "fps": 41.0,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.967,
+  "colors": 138,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.989
+ },
+ {
+  "name": "x86_64-d3d9-draw",
+  "test": "draw",
+  "arch": "x86_64",
+  "api": "d3d9",
+  "result": "PASS",
+  "fps": null,
+  "note": "",
+  "errors": 0,
+  "nonblack": 0.967,
+  "colors": 153,
+  "window": [
+   1280,
+   720,
+   4,
+   30
+  ],
+  "image": "screencap",
+  "xgetimage_nonblack": 0.989
+ }
+]

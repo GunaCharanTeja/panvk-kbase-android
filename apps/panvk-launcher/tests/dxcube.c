@@ -1,7 +1,7 @@
 /*
  * "Test Direct3D" demo: 2x2 rotating lit rounded blocks (green/red/yellow/blue)
  * on a grey background, indexed vertex+index buffers with normals, depth buffer.
- * dxcube.exe <d3d11|d3d9>. Env: DXCUBE_SECS (default 25) render time, keeps
+ * dxcube.exe <d3d11|d3d10|d3d9>. Env: DXCUBE_SECS (default 25) render time, keeps
  * presenting the whole time so screenshots hit a live frame.
  * d3d9 = fixed function lighting; d3d11 = HLSL via d3dcompiler_47.dll.
  */
@@ -11,6 +11,7 @@
 #include <windows.h>
 #include <d3d9.h>
 #include <d3d11.h>
+#include <d3d10.h>
 #include <d3dcompiler.h>
 #include <math.h>
 #include <stdio.h>
@@ -237,6 +238,97 @@ static void run11(int secs)
     ExitProcess(0);
 }
 
+/* ----------------------------------------------------------------- d3d10 */
+static void run10(int secs)
+{
+    HMODULE dll = LoadLibraryA("d3d10.dll"), cdll = LoadLibraryA("d3dcompiler_47.dll");
+    HRESULT (WINAPI *create)(IDXGIAdapter *, D3D10_DRIVER_TYPE, HMODULE, UINT, UINT, DXGI_SWAP_CHAIN_DESC *,
+                             IDXGISwapChain **, ID3D10Device **);
+    HRESULT (WINAPI *C)(const void *, SIZE_T, const char *, const D3D_SHADER_MACRO *, ID3DInclude *,
+                        const char *, const char *, UINT, UINT, ID3DBlob **, ID3DBlob **);
+    IDXGISwapChain *sc; ID3D10Device *dev;
+    DXGI_SWAP_CHAIN_DESC sd; HRESULT hr; HWND hw; DWORD t0; int f = 0, b;
+    ID3D10VertexShader *vs; ID3D10PixelShader *ps; ID3D10InputLayout *il;
+    ID3D10Buffer *vb, *ib, *cb; ID3D10Texture2D *bb, *dtex; ID3D10RenderTargetView *rtv; ID3D10DepthStencilView *dsv;
+    ID3D10RasterizerState *rs; ID3DBlob *bvs, *bps;
+    D3D10_INPUT_ELEMENT_DESC ied[2] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D10_INPUT_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D10_INPUT_PER_VERTEX_DATA, 0}};
+    D3D10_BUFFER_DESC bd; D3D10_SUBRESOURCE_DATA sr; D3D10_TEXTURE2D_DESC dd; D3D10_RASTERIZER_DESC rd;
+    D3D10_VIEWPORT vp = {0, 0, W, H, 0, 1};
+    UINT stride = sizeof(Vtx), off = 0;
+    M4 vp_ = mmul(trans(0, 0, 8), proj());
+    struct { M4 wvp, w; float c[4]; } cbd;
+
+    if (!dll || !cdll) die("LoadLibrary d3d10/d3dcompiler_47", E_FAIL);
+    create = (void *)GetProcAddress(dll, "D3D10CreateDeviceAndSwapChain");
+    C = (void *)GetProcAddress(cdll, "D3DCompile");
+    hw = mkwin();
+    memset(&sd, 0, sizeof(sd));
+    sd.BufferDesc.Width = W; sd.BufferDesc.Height = H; sd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    sd.SampleDesc.Count = 1; sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; sd.BufferCount = 1;
+    sd.OutputWindow = hw; sd.Windowed = TRUE; sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    hr = create(NULL, D3D10_DRIVER_TYPE_HARDWARE, NULL, 0, D3D10_SDK_VERSION, &sd, &sc, &dev);
+    printf("CUBE: d3d10 create hr=0x%08lx\n", (unsigned long)hr);
+    if (FAILED(hr)) die("create", hr);
+
+    bvs = comp(C, "vs", "vs_4_0"); bps = comp(C, "ps", "ps_4_0");
+    if (FAILED(hr = ID3D10Device_CreateVertexShader(dev, ID3D10Blob_GetBufferPointer(bvs), ID3D10Blob_GetBufferSize(bvs), &vs))) die("VS", hr);
+    if (FAILED(hr = ID3D10Device_CreatePixelShader(dev, ID3D10Blob_GetBufferPointer(bps), ID3D10Blob_GetBufferSize(bps), &ps))) die("PS", hr);
+    if (FAILED(hr = ID3D10Device_CreateInputLayout(dev, ied, 2, ID3D10Blob_GetBufferPointer(bvs), ID3D10Blob_GetBufferSize(bvs), &il))) die("IL", hr);
+
+    memset(&bd, 0, sizeof(bd)); memset(&sr, 0, sizeof(sr));
+    bd.Usage = D3D10_USAGE_IMMUTABLE; bd.BindFlags = D3D10_BIND_VERTEX_BUFFER; bd.ByteWidth = sizeof(vtx); sr.pSysMem = vtx;
+    if (FAILED(hr = ID3D10Device_CreateBuffer(dev, &bd, &sr, &vb))) die("VB", hr);
+    bd.BindFlags = D3D10_BIND_INDEX_BUFFER; bd.ByteWidth = sizeof(idx); sr.pSysMem = idx;
+    if (FAILED(hr = ID3D10Device_CreateBuffer(dev, &bd, &sr, &ib))) die("IB", hr);
+    bd.Usage = D3D10_USAGE_DEFAULT; bd.BindFlags = D3D10_BIND_CONSTANT_BUFFER; bd.ByteWidth = sizeof(cbd);
+    if (FAILED(hr = ID3D10Device_CreateBuffer(dev, &bd, NULL, &cb))) die("CB", hr);
+
+    memset(&dd, 0, sizeof(dd));
+    dd.Width = W; dd.Height = H; dd.MipLevels = dd.ArraySize = 1; dd.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    dd.SampleDesc.Count = 1; dd.BindFlags = D3D10_BIND_DEPTH_STENCIL;
+    if (FAILED(hr = ID3D10Device_CreateTexture2D(dev, &dd, NULL, &dtex))) die("depth tex", hr);
+    if (FAILED(hr = ID3D10Device_CreateDepthStencilView(dev, (ID3D10Resource *)dtex, NULL, &dsv))) die("DSV", hr);
+    memset(&rd, 0, sizeof(rd)); rd.FillMode = D3D10_FILL_SOLID; rd.CullMode = D3D10_CULL_NONE; rd.DepthClipEnable = TRUE;
+    if (FAILED(hr = ID3D10Device_CreateRasterizerState(dev, &rd, &rs))) die("RS", hr);
+
+    t0 = GetTickCount();
+    while (GetTickCount() - t0 < (DWORD)secs * 1000) {
+        float t = f * 0.04f;
+        if (FAILED(hr = IDXGISwapChain_GetBuffer(sc, 0, &IID_Tex2D, (void **)&bb))) die("GetBuffer", hr);
+        if (FAILED(hr = ID3D10Device_CreateRenderTargetView(dev, (ID3D10Resource *)bb, NULL, &rtv))) die("RTV", hr);
+        ID3D10Device_OMSetRenderTargets(dev, 1, &rtv, dsv);
+        ID3D10Device_RSSetViewports(dev, 1, &vp);
+        ID3D10Device_RSSetState(dev, rs);
+        ID3D10Device_ClearRenderTargetView(dev, rtv, bg);
+        ID3D10Device_ClearDepthStencilView(dev, dsv, D3D10_CLEAR_DEPTH | D3D10_CLEAR_STENCIL, 1.0f, 0);
+        ID3D10Device_IASetInputLayout(dev, il);
+        ID3D10Device_IASetPrimitiveTopology(dev, D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        ID3D10Device_IASetVertexBuffers(dev, 0, 1, &vb, &stride, &off);
+        ID3D10Device_IASetIndexBuffer(dev, ib, DXGI_FORMAT_R16_UINT, 0);
+        ID3D10Device_VSSetShader(dev, vs);
+        ID3D10Device_PSSetShader(dev, ps);
+        ID3D10Device_VSSetConstantBuffers(dev, 0, 1, &cb);
+        ID3D10Device_PSSetConstantBuffers(dev, 0, 1, &cb);
+        for (b = 0; b < 4; b++) {
+            cbd.w = world(b, t); cbd.wvp = mmul(cbd.w, vp_); memcpy(cbd.c, col[b], 16);
+            ID3D10Device_UpdateSubresource(dev, (ID3D10Resource *)cb, 0, NULL, &cbd, 0, 0);
+            ID3D10Device_DrawIndexed(dev, NI, 0, 0);
+        }
+        ID3D10Texture2D_Release(bb);
+        ID3D10RenderTargetView_Release(rtv);
+        hr = IDXGISwapChain_Present(sc, 0, 0);
+        if (FAILED(hr)) die("Present", hr);
+        if (f < 10 || f % 30 == 0) printf("CUBE: d3d10 Present frame=%d hr=0x%08lx\n", f, (unsigned long)hr);
+        f++;
+        pump(10);
+    }
+    printf("CUBE: PASS api=d3d10 frames=%d (check pixels)\n", f);
+    fflush(stdout);
+    ExitProcess(0);
+}
+
 /* ------------------------------------------------------------------ d3d9 */
 static void run9(int secs)
 {
@@ -313,6 +405,7 @@ int main(int argc, char **argv)
     setvbuf(stdout, NULL, _IONBF, 0);
     mkmesh();
     if (!strcmp(api, "d3d11")) run11(secs);
+    else if (!strcmp(api, "d3d10")) run10(secs);
     else if (!strcmp(api, "d3d9")) run9(secs);
     printf("CUBE: usage dxcube.exe <d3d11|d3d9>\n");
     return 2;

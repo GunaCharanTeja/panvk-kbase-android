@@ -1,0 +1,17 @@
+{
+  "build-identity.json": "a2c6933cc3ba503aad5a795171cb03023b545b528e4124b938bcc791dd72ce6b",
+  "commands.txt": "67b69ee2969e075b9fc117ea7133325e99ff9056ae20b2a9a4b326f84b16f878",
+  "d3d11-stderr.log": "d0437cc3996ea8ef3733b1db28801e9a14b2d6dd3ef4ebf569eaf2e3cd1be919",
+  "d3d11.log": "718e3deb3b2569bdeac5dd206d64643b6d8a640621cecc662bdc586af3eb3138",
+  "environment.txt": "be8ae45e1576d8cb9715ebcae03a34131830759af7dfa84b570578701bc4e3c8",
+  "exit.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+  "identity.txt": "1bc6acc8cabf60f3106801f5b609af70dbddc22dedd107781166cc2ff7e659fc",
+  "present-observed.log": "d712a4801cee0a24f1630447a04016ec864369342dedf297c565446b87558ddc",
+  "screenshot.png": "15f140bdfe8685f56302e53214e129536567d7aeade71dc1f88b629456da71fc",
+  "synchronized-xread.ppm": "7f84a400989b01d40f32f799e2127ecbfad6befeecc2e809e89d7cfb04326f23",
+  "synchronized-xread.ppm-0x511.ppm": "7f84a400989b01d40f32f799e2127ecbfad6befeecc2e809e89d7cfb04326f23",
+  "synchronized-xread.ppm-0xa0002d.ppm": "0616eaaf137cad6c0336b4247cea2d05da870debf30255e4f9685b6d6f5e1ed9",
+  "synchronized-xread.ppm-0xe00001.ppm": "0616eaaf137cad6c0336b4247cea2d05da870debf30255e4f9685b6d6f5e1ed9",
+  "timestamps.json": "b8039e7f6643d77f0cfeece3af43d9ffbe26af03ca0c9fc31b016aa997d28d64",
+  "xgetimage.log": "3b12fb5eeda8842c4c0d43a2a6e29dec35f120cb11506cef5dcff2cc4c5e0e56"
+}

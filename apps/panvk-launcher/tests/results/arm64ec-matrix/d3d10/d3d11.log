@@ -1,0 +1,7 @@
+DXSMOKE: window hwnd=0000000000020058 visible=1 client=320x240 hold_ms=12000
+DXSMOKE: api=d3d10 D3D10CreateDeviceAndSwapChain hr=0x00000000
+DXSMOKE: api=d3d10 adapter hr=0x00000000 desc="Mali-G615 MC6" vendor=0x13b5 device=0x1030
+DXSMOKE: api=d3d10 Clear issued
+DXSMOKE: api=d3d10 source orange=76800 zero=0 other=0 need=76800
+DXSMOKE: api=d3d10 Present hr=0x00000000
+DXSMOKE: PASS api=d3d10

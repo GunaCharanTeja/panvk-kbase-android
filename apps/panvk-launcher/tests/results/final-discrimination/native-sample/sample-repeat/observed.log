@@ -1,0 +1,36 @@
+device: Mali-G615 MC6 api 1.4.363 driver 0x6802063 mode=sample
+surface-support=1 window=0x200001
+chosen-format=44 (BGRA8=44)
+caps usage=0x8009f extent=320x240 min=3 max=0
+caps TRANSFER_SRC=1 TRANSFER_DST=1 COLOR=1
+swapchain 320x240 images=3 usage=0x11
+renderpass loadOp=CLEAR attachments=1 draws=0
+readback buffer bytes=307200 host-cached type=2 map=0x5fff0da000
+TS before_present realtime=1790960752.669543864 mono=224548.795778817
+TS after_present realtime=1790960752.671745711 mono=224548.797980433
+present frame=0 result=0 swapchain_result=0 image=0
+TS before_present realtime=1790960752.671835557 mono=224548.798070279
+TS after_present realtime=1790960752.673307249 mono=224548.799542202
+present frame=1 result=0 swapchain_result=0 image=1
+TS before_present realtime=1790960752.673352095 mono=224548.799586817
+TS after_present realtime=1790960752.674695865 mono=224548.800930817
+present frame=2 result=0 swapchain_result=0 image=2
+TS before_present realtime=1790960752.676465096 mono=224548.802699818
+TS after_present realtime=1790960752.677343788 mono=224548.803578587
+present frame=3 result=0 swapchain_result=0 image=0
+TS before_present realtime=1790960752.680701019 mono=224548.806935818
+TS after_present realtime=1790960752.681589712 mono=224548.807824664
+present frame=4 result=0 swapchain_result=0 image=1
+TS before_present realtime=1790960752.685045635 mono=224548.811280434
+TS after_present realtime=1790960752.686299481 mono=224548.812534280
+present frame=5 result=0 swapchain_result=0 image=2
+TS before_present realtime=1790960752.688851482 mono=224548.815086204
+TS after_present realtime=1790960752.689837635 mono=224548.816072434
+present frame=6 result=0 swapchain_result=0 image=0
+TS before_present realtime=1790960752.693148097 mono=224548.819382896
+TS after_present realtime=1790960752.694731559 mono=224548.820966512
+present frame=7 result=0 swapchain_result=0 image=1
+TS hold realtime=1790960752.694751174 mono=224548.820985973
+TS before_xgetimage realtime=1790960753.895502371 mono=224550.021737478
+TS after_xgetimage realtime=1790960753.896485756 mono=224550.022720555
+final mode=sample 320x240 depth=24 bpp=32 stride=1280 masks=ff0000/ff00/ff orange=76800 zero=0 other=0 need=76800 center=0xff8040

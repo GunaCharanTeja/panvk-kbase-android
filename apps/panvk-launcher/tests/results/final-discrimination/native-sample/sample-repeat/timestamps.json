@@ -1,0 +1,37 @@
+[
+  {
+    "event": "launch",
+    "utc": "2026-10-02T17:05:53.221712+00:00",
+    "monotonic_ns": 290094901049214
+  },
+  {
+    "event": "final_present_and_client_observed",
+    "utc": "2026-10-02T17:05:54.642741+00:00",
+    "monotonic_ns": 290096322069450
+  },
+  {
+    "event": "screenshot_start",
+    "utc": "2026-10-02T17:05:54.642758+00:00",
+    "monotonic_ns": 290096322073859
+  },
+  {
+    "event": "screenshot_end",
+    "utc": "2026-10-02T17:05:55.036415+00:00",
+    "monotonic_ns": 290096715744859
+  },
+  {
+    "event": "xgetimage_end",
+    "utc": "2026-10-02T17:05:55.468676+00:00",
+    "monotonic_ns": 290097148012303
+  },
+  {
+    "event": "captures_complete_process_alive",
+    "utc": "2026-10-02T17:05:55.468710+00:00",
+    "monotonic_ns": 290097148027382
+  },
+  {
+    "event": "exit_observed",
+    "utc": "2026-10-02T17:06:06.620633+00:00",
+    "monotonic_ns": 290108299962872
+  }
+]

@@ -1,0 +1,2 @@
+DXDRAW: d3d9 CreateDevice hr=0x00000000
+exit=3

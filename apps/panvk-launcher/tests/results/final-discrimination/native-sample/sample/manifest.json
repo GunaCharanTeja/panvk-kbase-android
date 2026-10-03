@@ -1,0 +1,15 @@
+{
+  "client.raw": "5f57b879c2d01aebb07ce6b702aa1775f4efb5718a6ff8729540e2add1fa6fbf",
+  "commands.txt": "e3cf513cc681c8ad5a8fed4515e386f9c50431f3c752ff6d2aa0c37ae76474bb",
+  "exit.txt": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+  "identity.txt": "656aec6aa886fdd13ec1f957ec56237b7c9053c103a12a3aaad2c70e69eda897",
+  "native-xread.ppm": "8aaec8ea264f650e7561d966b9f0a5d279e2351aa4c2fec2f082adbc7a47e552",
+  "native-xread.ppm-0x200001.ppm": "0616eaaf137cad6c0336b4247cea2d05da870debf30255e4f9685b6d6f5e1ed9",
+  "native-xread.ppm-0x511.ppm": "8aaec8ea264f650e7561d966b9f0a5d279e2351aa4c2fec2f082adbc7a47e552",
+  "observed.log": "623e77067ede7ed3175ae6bb375f869d01b0019ea30b29a35b6b5d96870b8171",
+  "screenshot.png": "6e30c0a50844efe95e0c7e802bedb5394999faa8c9b58b290f8c70b455d60e49",
+  "stderr.log": "5ca506a395286bb20e6a6642ed6180383ece0f431d2d97a61b6da3104b894e31",
+  "stdout.log": "17d84381d425ee55a8f3fac1b6159a00f44a92e20317445dba4cd1153b5cdd72",
+  "timestamps.json": "c50bba6f9e56edbf7a89907ac03010f672e78f1c2236870d2e60931e2c70dc07",
+  "xgetimage.log": "2a44165ecd2eab921403937bf26feecf16ba4d519822cd9e50a157a3e64ad112"
+}

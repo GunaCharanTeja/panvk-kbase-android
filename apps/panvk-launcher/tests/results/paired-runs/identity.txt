@@ -1,0 +1,3 @@
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -
+44300ee413dc8f3df5e8f44323fa41de45b1ef62af00feebacc8eae8b6da8655  /data/user/0/dev.zenithblue.panvklauncher/files/m4wsi/libvulkan_panfrost.so
+{"file_format_version":"1.0.0","ICD":{"library_path":"/data/user/0/dev.zenithblue.panvklauncher/files/m4wsi/libvulkan_panfrost.so","api_version":"1.4.0"}}

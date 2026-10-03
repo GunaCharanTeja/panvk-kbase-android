@@ -1,0 +1,4 @@
+WIN depth=0 id=0x511 map=1 1080x1449+0+0 name=""
+WROTE /data/user/0/dev.zenithblue.panvklauncher/files/container/lr.ppm-0x511.ppm 1080x1449 bpp=32 masks=ff0000/ff00/ff orange=0/1564920
+ROOT 1080x1449 depth=24
+WROTE /data/user/0/dev.zenithblue.panvklauncher/files/container/lr.ppm 1080x1449 bpp=32 masks=ff0000/ff00/ff orange=0/1564920

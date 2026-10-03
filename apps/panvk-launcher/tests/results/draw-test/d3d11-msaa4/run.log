@@ -1,0 +1,18 @@
+DXDRAW: d3d11 create hr=0x00000000 fl=0xb000
+DXDRAW: d3d11 Present frame=0 hr=0x00000000
+DXDRAW: d3d11 Present frame=1 hr=0x00000000
+DXDRAW: d3d11 Present frame=2 hr=0x00000000
+DXDRAW: d3d11 Present frame=3 hr=0x00000000
+DXDRAW: d3d11 Present frame=4 hr=0x00000000
+DXDRAW: d3d11 Present frame=5 hr=0x00000000
+DXDRAW: d3d11 Present frame=6 hr=0x00000000
+DXDRAW: gpu-readback bg(5,5)=26,51,153
+DXDRAW: gpu-readback tri_center(80,130)=70,72,114
+DXDRAW: gpu-readback quad_a(215,90)=255,0,255
+DXDRAW: gpu-readback quad_b(245,90)=255,0,255
+DXDRAW: gpu-readback quad_c(215,150)=255,255,0
+DXDRAW: gpu-readback quad_d(245,150)=255,255,0
+DXDRAW: gpu-readback histogram bg=39744 non_bg=37056 (non_bg==0 => draws missing)
+DXDRAW: d3d11 Present frame=7 hr=0x00000000
+DXDRAW: PASS api=d3d11 (API only; check pixels)
+exit=0

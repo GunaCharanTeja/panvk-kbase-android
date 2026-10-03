@@ -1,0 +1,38 @@
+device: Mali-G615 MC6 api 1.4.363 driver 0x6802063 mode=sample-copy
+surface-support=1 window=0x200001
+chosen-format=44 (BGRA8=44)
+caps usage=0x8009f extent=320x240 min=3 max=0
+caps TRANSFER_SRC=1 TRANSFER_DST=1 COLOR=1
+swapchain 320x240 images=3 usage=0x11
+renderpass loadOp=CLEAR attachments=1 draws=0
+readback buffer bytes=307200 host-cached type=2 map=0x5fff0da000
+TS before_present realtime=1790960728.329223275 mono=224524.455458228
+TS after_present realtime=1790960728.332854968 mono=224524.459089920
+present frame=0 result=0 swapchain_result=0 image=0
+TS before_present realtime=1790960728.333046352 mono=224524.459281305
+TS after_present realtime=1790960728.334167891 mono=224524.460402613
+present frame=1 result=0 swapchain_result=0 image=1
+TS before_present realtime=1790960728.334282891 mono=224524.460517690
+TS after_present realtime=1790960728.335287199 mono=224524.461522228
+present frame=2 result=0 swapchain_result=0 image=2
+TS before_present realtime=1790960728.335384814 mono=224524.461619767
+TS after_present realtime=1790960728.336483814 mono=224524.462718613
+present frame=3 result=0 swapchain_result=0 image=0
+TS before_present realtime=1790960728.336575276 mono=224524.462810228
+TS after_present realtime=1790960728.337699891 mono=224524.463934844
+present frame=4 result=0 swapchain_result=0 image=1
+TS before_present realtime=1790960728.337909430 mono=224524.464144382
+TS after_present realtime=1790960728.339118660 mono=224524.465353613
+present frame=5 result=0 swapchain_result=0 image=2
+TS before_present realtime=1790960728.339280199 mono=224524.465515152
+TS after_present realtime=1790960728.340304814 mono=224524.466539536
+present frame=6 result=0 swapchain_result=0 image=0
+src mode=sample-copy BGRA center=40 80 ff ff orange=76800 zero=0 other=0 need=76800
+TS src_readback realtime=1790960728.348158661 mono=224524.474393691
+TS before_present realtime=1790960728.348164431 mono=224524.474399460
+TS after_present realtime=1790960728.349356508 mono=224524.475591460
+present frame=7 result=0 swapchain_result=0 image=1
+TS hold realtime=1790960728.349385661 mono=224524.475620460
+TS before_xgetimage realtime=1790960729.550108243 mono=224525.676343350
+TS after_xgetimage realtime=1790960729.551887320 mono=224525.678122427
+final mode=sample-copy 320x240 depth=24 bpp=32 stride=1280 masks=ff0000/ff00/ff orange=76800 zero=0 other=0 need=76800 center=0xff8040
