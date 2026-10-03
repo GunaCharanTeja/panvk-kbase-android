@@ -398,6 +398,15 @@ private fun ShortcutEditorSheet(
         }
     }
 
+    // Fresh install has no storage permission: picked /sdcard exe would be copied alone, without its DLLs/data.
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        picker.launch(arrayOf("*/*"))
+    }
+    fun pickExe() {
+        if (StorageAccess.granted(ctx)) picker.launch(arrayOf("*/*"))
+        else StorageAccess.request(ctx) { permLauncher.launch(StorageAccess.legacyPerms) }
+    }
+
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(
             modifier = Modifier
@@ -414,7 +423,7 @@ private fun ShortcutEditorSheet(
                 modifier = Modifier.fillMaxWidth(),
                 supportingText = { Text(if (importing) "Importing..." else detected?.let { "Detected: $it" } ?: "Detected: unknown / not found") }
             )
-            OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !importing, modifier = Modifier.heightIn(min = 48.dp)) {
+            OutlinedButton(onClick = { pickExe() }, enabled = !importing, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text("Browse for .exe")
             }
             OutlinedTextField(args, { args = it }, label = { Text("Arguments") }, singleLine = true, modifier = Modifier.fillMaxWidth())

@@ -35,6 +35,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
+import android.content.Context
+import android.os.Build
 import java.util.Date
 import java.util.Locale
 
@@ -70,6 +72,28 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         ShortcutRequests.fromIntent(this, intent)
+    }
+}
+
+object StorageAccess {
+    val legacyPerms = arrayOf(
+        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+    )
+
+    fun granted(ctx: Context): Boolean =
+        if (Build.VERSION.SDK_INT >= 30) android.os.Environment.isExternalStorageManager()
+        else legacyPerms.all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }
+
+    /** API 30+: open All files access settings; below: [legacy] runs the runtime-permission request. */
+    fun request(ctx: Context, legacy: () -> Unit) {
+        if (Build.VERSION.SDK_INT < 30) { legacy(); return }
+        val uri = android.net.Uri.parse("package:${ctx.packageName}")
+        try {
+            ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri))
+        } catch (_: Exception) {
+            ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+        }
     }
 }
 
@@ -309,9 +333,13 @@ fun LauncherApp(
     }
 
     var pendingStoragePath by rememberSaveable { mutableStateOf<String?>(null) }
+    var showStorageDialog by rememberSaveable { mutableStateOf(false) }
+    var storageAsked by rememberSaveable { mutableStateOf(false) }
+    lateinit var resumePending: () -> Unit
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) {
+    ) { resumePending() }
+    resumePending = {
         val path = pendingStoragePath
         pendingStoragePath = null
         if (path != null) {
@@ -327,30 +355,47 @@ fun LauncherApp(
         }
     }
 
-    fun hasStoragePermission(): Boolean {
-        val readGranted = ContextCompat.checkSelfPermission(
-            context,
-            android.Manifest.permission.READ_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED
-        val writeGranted = ContextCompat.checkSelfPermission(
-            context,
-            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED
-        return readGranted && writeGranted
-    }
+    fun hasStoragePermission(): Boolean = StorageAccess.granted(context)
 
     fun launchExePickerWithPermission() {
         if (hasStoragePermission()) {
             exePickerLauncher.launch(arrayOf("*/*"))
         } else {
             pendingStoragePath = "__PICK__"
-            storagePermissionLauncher.launch(
-                arrayOf(
-                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
-                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-                )
-            )
+            showStorageDialog = true
         }
+    }
+
+    // Startup prompt (once per app open) + re-check when returning from Settings.
+    LaunchedEffect(Unit) {
+        if (!storageAsked && !StorageAccess.granted(context)) { storageAsked = true; showStorageDialog = true }
+    }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME && StorageAccess.granted(context)) {
+                showStorageDialog = false
+                if (pendingStoragePath != null) resumePending()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+    if (showStorageDialog) {
+        AlertDialog(
+            onDismissRequest = { showStorageDialog = false; pendingStoragePath = null },
+            title = { Text("Allow access to all files") },
+            text = { Text("Games stored on your phone (Download, Games, SD card) need All files access so Wine can read the game's DLLs and data. Without it launching fails with exit code 53.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStorageDialog = false
+                    StorageAccess.request(context) { storagePermissionLauncher.launch(StorageAccess.legacyPerms) }
+                }) { Text("Grant") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStorageDialog = false; pendingStoragePath = null }) { Text("Not now") }
+            }
+        )
     }
 
     fun runExeWithPermission(path: String, sc: Shortcut? = null) {
@@ -361,12 +406,7 @@ fun LauncherApp(
             runWineExe(path, sc)
         } else {
             pendingStoragePath = if (sc != null) "__SC__:${sc.id}" else path
-            storagePermissionLauncher.launch(
-                arrayOf(
-                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
-                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-                )
-            )
+            showStorageDialog = true
         }
     }
 

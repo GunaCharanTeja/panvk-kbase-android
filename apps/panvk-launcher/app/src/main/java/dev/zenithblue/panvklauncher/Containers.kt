@@ -158,53 +158,7 @@ object ContainerManager {
                 }
             }
 
-            if (fex != null) {
-                val fexProfile = File(fex.dir, "profile.json")
-                if (fexProfile.isFile) {
-                    val fexJson = JSONObject(fexProfile.readText())
-                    val filesArray = fexJson.optJSONArray("files")
-                    if (filesArray != null) {
-                        val fexCanonical = fex.dir.canonicalPath
-                        val prefixCanonical = winePrefix.canonicalPath
-                        for (i in 0 until filesArray.length()) {
-                            val item = filesArray.optJSONObject(i) ?: continue
-                            val sourceRel = item.optString("source", "")
-                            val targetRel = item.optString("target", "")
-
-                            val destFile = when {
-                                targetRel.startsWith("\${system32}/") -> {
-                                    File(system32, targetRel.removePrefix("\${system32}/"))
-                                }
-                                targetRel.startsWith("\${syswow64}/") -> {
-                                    File(syswow64, targetRel.removePrefix("\${syswow64}/"))
-                                }
-                                else -> null
-                            } ?: continue
-
-                            val sourceFile = File(fex.dir, sourceRel)
-                            val sourceCanon = sourceFile.canonicalPath
-                            val destCanon = destFile.canonicalPath
-
-                            if (sourceCanon != fexCanonical && !sourceCanon.startsWith(fexCanonical + File.separator)) {
-                                throw SecurityException("FEX source path escapes fex directory: $sourceRel")
-                            }
-                            if (destCanon != prefixCanonical && !destCanon.startsWith(prefixCanonical + File.separator)) {
-                                throw SecurityException("FEX destination path escapes prefix directory: $targetRel")
-                            }
-
-                            if (!sourceFile.exists()) {
-                                throw IOException("FEX source file not found: ${sourceFile.absolutePath}")
-                            }
-
-                            destFile.parentFile?.mkdirs()
-                            sourceFile.copyTo(destFile, overwrite = true)
-                            if (sourceFile.canExecute()) {
-                                destFile.setExecutable(true, false)
-                            }
-                        }
-                    }
-                }
-            }
+            if (fex != null) applyFex(fex.dir, winePrefix)
 
             val containerJson = JSONObject().apply {
                 put("wine", wine.dir.absolutePath)
@@ -238,9 +192,62 @@ object ContainerManager {
         }
     }
 
+    private fun applyFex(fexDir: File, winePrefix: File) {
+        val system32 = File(winePrefix, "drive_c/windows/system32")
+        val syswow64 = File(winePrefix, "drive_c/windows/syswow64")
+        val fexProfile = File(fexDir, "profile.json")
+        if (!fexProfile.isFile) return
+        val filesArray = JSONObject(fexProfile.readText()).optJSONArray("files") ?: return
+        val fexCanonical = fexDir.canonicalPath
+        val prefixCanonical = winePrefix.canonicalPath
+        for (i in 0 until filesArray.length()) {
+            val item = filesArray.optJSONObject(i) ?: continue
+            val sourceRel = item.optString("source", "")
+            val targetRel = item.optString("target", "")
+            val destFile = when {
+                targetRel.startsWith("\${system32}/") -> File(system32, targetRel.removePrefix("\${system32}/"))
+                targetRel.startsWith("\${syswow64}/") -> File(syswow64, targetRel.removePrefix("\${syswow64}/"))
+                else -> null
+            } ?: continue
+            val sourceFile = File(fexDir, sourceRel)
+            val sourceCanon = sourceFile.canonicalPath
+            val destCanon = destFile.canonicalPath
+            if (sourceCanon != fexCanonical && !sourceCanon.startsWith(fexCanonical + File.separator)) {
+                throw SecurityException("FEX source path escapes fex directory: $sourceRel")
+            }
+            if (destCanon != prefixCanonical && !destCanon.startsWith(prefixCanonical + File.separator)) {
+                throw SecurityException("FEX destination path escapes prefix directory: $targetRel")
+            }
+            if (!sourceFile.exists()) {
+                throw IOException("FEX source file not found: ${sourceFile.absolutePath}")
+            }
+            destFile.parentFile?.mkdirs()
+            sourceFile.copyTo(destFile, overwrite = true)
+            if (sourceFile.canExecute()) destFile.setExecutable(true, false)
+        }
+    }
+
+    /** Container made before FEX was installed lacks its dlls; copy them in (arm64ec wine needs libarm64ecfex.dll). */
+    private fun ensureFex(ctx: Context) {
+        val containerDir = File(ctx.filesDir, "container")
+        val prefix = File(containerDir, ".wine")
+        if (!prefix.isDirectory) return
+        if (File(prefix, "drive_c/windows/system32/libarm64ecfex.dll").exists()) return
+        val fex = ContentManager.list(ctx).firstOrNull { it.type == "FEXCore" } ?: return
+        try {
+            applyFex(fex.dir, prefix)
+            val cj = File(containerDir, "container.json")
+            val json = if (cj.isFile) JSONObject(cj.readText()) else JSONObject()
+            json.put("fex", fex.dir.absolutePath)
+            cj.writeText(json.toString(2))
+        } catch (_: Exception) {}
+    }
+
     fun env(ctx: Context, extra: Map<String, String>? = null): Map<String, String> {
         val containerDir = File(ctx.filesDir, "container")
         containerDir.mkdirs()
+        ensureFex(ctx)
+        ensureDxvk(ctx)
         val imagefs = File(ctx.filesDir, "contents/imagefs/bionic")
         val tmpDir = File(imagefs, "usr/tmp")
         tmpDir.mkdirs()
@@ -831,6 +838,14 @@ object ContainerManager {
     fun isDxvkEnabled(ctx: Context): Boolean {
         val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean("dxvk_enabled", false)
+    }
+
+    /** DXVK defaults on (wined3d needs GL, which Android lacks); also restores DLLs wiped by a container rebuild. */
+    private fun ensureDxvk(ctx: Context) {
+        if (!isSetup(ctx)) return
+        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val missing = !File(ctx.filesDir, "container/.wine/drive_c/windows/system32/dxgi.dll").exists()
+        if (!prefs.contains("dxvk_enabled") || (isDxvkEnabled(ctx) && missing)) setDxvkEnabled(ctx, true)
     }
 
     fun setDxvkEnabled(ctx: Context, on: Boolean): String? {
