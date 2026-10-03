@@ -1,0 +1,36 @@
+# 089 device run log (Mali-G615 MC6, adb 192.168.1.34:40501)
+
+## baseline (series without 089, build/android-vpsa2-final)
+RESULT FAIL
+A: depthL 0.375 expected 0.25; depthR 0.0 expected 0.5
+B: depthL 0.375 expected 0.125; depthR 0.25 expected 0.75
+C: depthL 0.375 expected 0.125; depthR 0.25 expected 0.75
+1024 bad pixels in each case
+
+## series with 089 (tmp/build-089-series, sha256 9eba1118...a450fb): A/B/C exact 0.25/0.5 and 0.125/0.75
+## tmp/rep-089.log
+series gs_viewport_depth: PASS  PASS  PASS  PASS  PASS  PASS
+series swapchain_lifecycle: PASS  PASS  PASS  PASS  PASS  PASS
+fixed gs_viewport_depth: PASS  PASS  PASS  PASS  PASS  PASS
+fixed swapchain_lifecycle: PASS  PASS  PASS  PASS  PASS  PASS
+DONE
+
+## tmp/first-089.log (first run after fresh install)
+cycle 1: PASSA_clamp PASSB_clamp_clip PASSC_noclamp
+cycle 2: PASSA_clamp PASSB_clamp_clip PASSC_noclamp
+cycle 3: PASSA_clamp PASSB_clamp_clip PASSC_noclamp
+cycle 4: PASSA_clamp PASSB_clamp_clip PASSC_noclamp
+DONE
+
+## full APK autorun (series driver): 11/12
+On the very first run after install, case B once drew nothing (depth 1.0, all color bad);
+swapchain_lifecycle failed once in the same "all" run.
+Not reproduced in 11 later gs runs and 6 swapchain runs. Unreproduced intermittent.
+
+## work-tree driver (tmp/build-089, with uncommitted kbase_kmod.c change)
+full autorun 12/12; gs repeats 6/6; swapchain repeats 6/6
+
+## host / build
+vp_runs ok (tmp/vp-runs)
+csf-v11 series applies cleanly on Mesa 5a07217f034b
+Android ninja build 1134/1134

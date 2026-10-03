@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
         TestCase("xfb", isDraw = true),
         TestCase("pipeline_stats", isDraw = true),
         TestCase("vertex_stores", isDraw = false),
+        TestCase("gs_viewport_depth", isDraw = false),
         TestCase("swapchain_lifecycle", isDraw = true)
     )
 
@@ -125,10 +126,11 @@ class MainActivity : ComponentActivity() {
         refreshLogsList()
 
         val autorunExtra = intent.getStringExtra("autorun")
-        if (autorunExtra == "all" && savedInstanceState == null) {
+        // autorun = "all" or a single test name (e.g. gs_viewport_depth)
+        if (autorunExtra != null && savedInstanceState == null) {
             selectedTabState.intValue = 2 // Switch UI to Tests tab
             lifecycleScope.launch(Dispatchers.IO) {
-                runHeadlessAutorun()
+                runHeadlessAutorun(autorunExtra)
             }
         }
 
@@ -342,7 +344,7 @@ class MainActivity : ComponentActivity() {
         java.io.File(filesDir, "autorun.txt").appendText(s + "\n")
     }
 
-    private suspend fun runHeadlessAutorun() {
+    private suspend fun runHeadlessAutorun(which: String) {
         java.io.File(filesDir, "autorun.txt").delete()
         val (json, _) = runInfo()
         val devicesArr = json?.optJSONArray("devices")
@@ -355,8 +357,8 @@ class MainActivity : ComponentActivity() {
         say("INFO devices=$numDevices exts=$numExts formats=$numFormats")
 
         var passCount = 0
-        for (i in testCases.indices) {
-            val test = testCases[i]
+        val selected = if (which == "all") testCases else testCases.filter { it.name == which }
+        for (test in selected) {
             withContext(Dispatchers.Main) {
                 updateTestStatus(test.name, "RUNNING")
             }
@@ -369,7 +371,7 @@ class MainActivity : ComponentActivity() {
                 passCount++
             }
         }
-        say("AUTORUN DONE pass=$passCount total=${testCases.size}")
+        say("AUTORUN DONE pass=$passCount total=${selected.size}")
     }
 
     private fun updateTestStatus(testName: String, status: String) {
