@@ -81,6 +81,7 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
 8. Exact tessellation primitives-generated count: code may be present; needs a targeted check.
 9. X11 present: DRI3 / MIT-SHM path instead of CPU `PutImage`; FIFO is not vsync-paced.
 10. Optional cleanups: v10-v12 gating for 085/087/088, and no `DEVICE_LOST` return from `SetEvent`/`ResetEvent`.
+11. **Asynchronous kbase queue submission.** STATUS: Not started (deferred by the user 2026-10-03). Problem: `panvk_vX_gpu_queue.c` submits synchronously; each `vkQueueSubmit` blocks until the GPU finishes, so CPU and GPU never overlap. Effect: the MTK GED DVFS governor keeps the GPU at 265 MHz (lowest OPP), GPU busy 0-11%. NFS MW evidence: dxvk-submit sits in `do_sys_poll`; 30-50 fps with FEX Extreme while the GPU idles. Fix: return from submit after the kick; signal fences/timelines from CS sync objects or a completion thread. Keep sync_file export (075) and the dma-heap placed maps (091) correct. Gate: CTS synchronization subsets, plus NFS FPS and GPU busy before/after.
 
 ## Open problems
 
