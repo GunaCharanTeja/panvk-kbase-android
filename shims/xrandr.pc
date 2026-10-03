@@ -1,0 +1,5 @@
+Name: xrandr
+Description: xrandr
+Version: 1.15
+Libs: -lXrandr
+Cflags:

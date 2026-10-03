@@ -1,0 +1,5 @@
+Name: xcb-sync
+Description: xcb-sync
+Version: 1.15
+Libs: -lxcb-sync
+Cflags:
