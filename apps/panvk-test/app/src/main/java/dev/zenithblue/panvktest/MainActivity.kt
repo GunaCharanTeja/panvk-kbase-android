@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
         TestCase("depth_bounds", isDraw = false),
         TestCase("large_draw", isDraw = false),
         TestCase("vmr_secondary", isDraw = false),
+        TestCase("tess_cond_state", isDraw = false),
         TestCase("swapchain_lifecycle", isDraw = true)
     )
 
