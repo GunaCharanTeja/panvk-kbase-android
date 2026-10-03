@@ -285,6 +285,8 @@ public abstract class WindowRequests {
         }
     }
 
+    private static int warps;
+
     public static void warpPointer(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
         if (client.xServer.isRelativeMouseMovement()) {
             client.skipRequest();
@@ -309,6 +311,8 @@ public abstract class WindowRequests {
             if (!isContained) return;
         }
 
+        if (warps++ % 500 == 0) com.winlator.core.XLog.log("WarpPointer #" + warps + " dst=" + (dstWindow != null ? dstWindow.id : 0) + " " + dstX + "," + dstY);
+        client.xServer.lastWarpMs = android.os.SystemClock.uptimeMillis();
         if (dstWindow == null) {
             client.xServer.pointer.setX(client.xServer.pointer.getX() + dstX);
             client.xServer.pointer.setY(client.xServer.pointer.getY() + dstY);
@@ -325,19 +329,16 @@ public abstract class WindowRequests {
         int windowId = inputStream.readInt();
         inputStream.skip(4);
 
-        switch (focusRevertTo) {
-            case NONE:
-                client.xServer.windowManager.setFocus(null, focusRevertTo);
-                break;
-            case POINTER_ROOT:
-                client.xServer.windowManager.setFocus(client.xServer.windowManager.rootWindow, focusRevertTo);
-                break;
-            case PARENT:
-                Window window = client.xServer.windowManager.getWindow(windowId);
-                if (window == null) throw new BadWindow(windowId);
-                client.xServer.windowManager.setFocus(window, focusRevertTo);
-                break;
+        // panvk: the focus target is the window argument (0 = None, 1 = PointerRoot); revert-to is independent.
+        // Winlator keyed the target off revert-to, so XSetInputFocus(win, RevertToPointerRoot) focused the root.
+        Window window;
+        if (windowId == 0) window = null;
+        else if (windowId == 1) window = client.xServer.windowManager.rootWindow;
+        else {
+            window = client.xServer.windowManager.getWindow(windowId);
+            if (window == null) throw new BadWindow(windowId);
         }
+        client.xServer.windowManager.setFocus(window, focusRevertTo);
     }
 
     public static void getInputFocus(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {

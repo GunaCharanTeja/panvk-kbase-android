@@ -101,6 +101,7 @@ object ShortcutStore {
     fun delete(ctx: Context, s: Shortcut) {
         File(dir(ctx), "${s.id}.json").delete()
         File(dir(ctx), "${s.id}.png").delete()
+        ControllerConfig.file(ctx, s.id).delete()
     }
 
     fun duplicate(ctx: Context, s: Shortcut): Shortcut {
@@ -111,6 +112,7 @@ object ShortcutStore {
             src.copyTo(dst, overwrite = true)
             icon = dst.name
         }
+        ControllerConfig.file(ctx, s.id).takeIf { it.isFile }?.copyTo(ControllerConfig.file(ctx, id), overwrite = true)
         val copy = s.copy(id = id, name = s.name + " (copy)", icon = icon, created = System.currentTimeMillis(), lastPlayed = 0)
         save(ctx, copy)
         return copy

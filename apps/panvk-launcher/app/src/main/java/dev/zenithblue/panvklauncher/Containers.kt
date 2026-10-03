@@ -36,6 +36,22 @@ object ContainerManager {
     private var stopRequested = false
     private var currentProcess: Process? = null
 
+    /** Last real (non-registry) Wine run: log file, env, exit code. Read by [SessionLogs] after the run returns. */
+    class RunInfo(val logFile: File, val startMs: Long, val command: List<String>, val env: Map<String, String>) {
+        @Volatile var exit: Int = Int.MIN_VALUE
+        @Volatile var endMs: Long = 0
+    }
+    @Volatile var lastRun: RunInfo? = null
+
+    /** True when the current/last run was ended by Stop / the overlay EXIT button (not by the game itself). */
+    @Volatile var userStopped = false
+
+    /** Overlay EXIT: stop Wine + wineserver, then the X server (finishes the display activity). Blocking, call off the UI thread. */
+    fun exitSession(ctx: Context) {
+        stop(ctx) // no-op unless a run is active
+        DisplayServer.stopOwned()
+    }
+
     fun isRunning(): Boolean = synchronized(lifecycleLock) {
         state == State.RUNNING || state == State.STOPPING
     }
@@ -300,8 +316,7 @@ object ContainerManager {
 
         if (dxvk) {
             envMap["DXVK_LOG_LEVEL"] = "info"
-            // HUD on by default; a user-set DXVK_HUD (extra or app env) wins.
-            envMap["DXVK_HUD"] = extra?.get("DXVK_HUD") ?: System.getenv("DXVK_HUD") ?: "full"
+            envMap["DXVK_HUD"] = "full"
         }
 
         val fexDll = File(containerDir, ".wine/drive_c/windows/system32/libwow64fex.dll")
@@ -317,7 +332,7 @@ object ContainerManager {
         // Gamepad: LD_PRELOAD shim -> SDL virtual Xbox pad -> winebus. Graphical runs only.
         if (extra?.containsKey("DISPLAY") == true) envMap.putAll(GamepadBridge.env(ctx))
         // Per-game shortcut env wins over defaults (but not DISPLAY / display plumbing above).
-        launchOpts.get()?.env?.forEach { (k, v) -> if (k != "DISPLAY") envMap[k] = v }
+        launchOpts.get()?.env?.forEach { (k, v) -> if (k != "DISPLAY" && k != "DXVK_HUD") envMap[k] = v }
         return envMap
     }
 
@@ -373,11 +388,14 @@ object ContainerManager {
 
         val pb = ProcessBuilder(command)
         pb.directory(workingDirectory)
-        pb.environment().putAll(env(ctx, extraEnv))
+        val runEnv = env(ctx, extraEnv)
+        pb.environment().putAll(runEnv)
         if (extraEnv == null || !extraEnv.containsKey("DISPLAY")) {
             pb.environment().remove("DISPLAY")
         }
         pb.redirectErrorStream(true)
+        val info = RunInfo(logFile, System.currentTimeMillis(), command, runEnv)
+        if (args.firstOrNull() != "reg") lastRun = info
 
         val process = try {
             pb.start()
@@ -416,6 +434,7 @@ object ContainerManager {
                 }
             }
             val exitCode = process.waitFor()
+            info.exit = exitCode; info.endMs = System.currentTimeMillis()
             val exitMsg = "exit=$exitCode"
             try { logFile.appendText(exitMsg + "\n") } catch (_: Exception) {}
             onLine(exitMsg)
@@ -481,6 +500,7 @@ object ContainerManager {
             }
             state = State.RUNNING
             stopRequested = false
+            userStopped = false
             currentProcess = null
         }
 
@@ -510,6 +530,16 @@ object ContainerManager {
                         x11Marker.createNewFile()
                         File(containerDir, ".graphics-null").delete()
                     } catch (_: Exception) {}
+                }
+                // No XInput2 on our X servers: Wine's cursor clipping (ClipCursor / fullscreen clip) cannot grab, resets,
+                // and retries in a tight loop on the game's input thread, so clicks and keys stall. GrabPointer=N makes
+                // Wine skip clipping; mouse look still works through SetCursorPos warps.
+                val noGrabMarker = File(containerDir, ".grabpointer-off")
+                if (!noGrabMarker.isFile) {
+                    val code = runInternal(ctx, listOf("reg", "add", """HKCU\Software\Wine\X11 Driver""", "/v", "GrabPointer", "/d", "N", "/f"),
+                        containerDir, onLine, session.env)
+                    if (code == 0) try { noGrabMarker.createNewFile() } catch (_: Exception) {}
+                    else onLine("Wine GrabPointer=N failed (exit=$code); mouse clicks may stall in fullscreen games.")
                 }
                 if (synchronized(lifecycleLock) {
                         LaunchGate.cancelled(stopRequested, state == State.STOPPING)
@@ -575,14 +605,9 @@ object ContainerManager {
         }
         state = State.STOPPING
         stopRequested = true
-        DisplayServer.stopOwned()
-
-        val proc = currentProcess
-        if (proc != null) {
-            try {
-                proc.destroyForcibly()
-            } catch (_: Exception) {}
-        }
+        userStopped = true
+        // Order matters for a clean exit: wineserver -k first (Wine tears its clients down while the X server
+        // still answers), then the launcher process, then anything left, and only then the X server.
 
         try {
             val config = getContainerConfig(ctx)
@@ -614,6 +639,8 @@ object ContainerManager {
                 } catch (_: Exception) {}
             }
 
+            currentProcess?.let { try { it.destroyForcibly() } catch (_: Exception) {} }
+
             try {
                 val winePrefix = File(ctx.filesDir, "container/.wine")
                 val prefixAbs = winePrefix.absolutePath
@@ -628,11 +655,16 @@ object ContainerManager {
                     val pid = f.name.toIntOrNull() ?: continue
                     if (pid == myPid) continue
                     try {
-                        val environFile = File(f, "environ")
-                        if (!environFile.canRead()) continue
-                        val bytes = FileInputStream(environFile).use { it.readBytes() }
-                        val entries = String(bytes, Charsets.UTF_8).split('\u0000')
-                        if (entries.contains(target1) || entries.contains(target2)) {
+                        // A Wine process whose main thread exited is a zombie leader with an empty environ while its
+                        // other threads live on (pipe_read on the dead wineserver), so also check each thread's environ.
+                        val environs = sequenceOf(File(f, "environ")) +
+                            (File(f, "task").listFiles() ?: emptyArray()).asSequence().map { File(it, "environ") }
+                        val match = environs.any { environFile ->
+                            val bytes = try { FileInputStream(environFile).use { it.readBytes() } } catch (_: Exception) { ByteArray(0) }
+                            val entries = String(bytes, Charsets.UTF_8).split('\u0000')
+                            entries.contains(target1) || entries.contains(target2)
+                        }
+                        if (match) {
                             try {
                                 Os.kill(pid, OsConstants.SIGKILL)
                             } catch (_: Exception) {}
@@ -640,6 +672,9 @@ object ContainerManager {
                     } catch (_: Exception) {}
                 }
             } catch (_: Exception) {}
+            // A killed Wine leaves its ntsync shm behind, which makes the next start hang.
+            try { File(ctx.filesDir, "contents/imagefs/bionic/usr/tmp/ntsync_userspace.v9.shm").delete() } catch (_: Exception) {}
+            DisplayServer.stopOwned()
         } finally {
             currentProcess = null
             // Latch and STOPPING stay until run() returns. Clearing them here

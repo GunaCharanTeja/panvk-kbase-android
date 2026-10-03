@@ -11,6 +11,7 @@ import com.winlator.xserver.events.ConfigureRequest;
 import com.winlator.xserver.events.DestroyNotify;
 import com.winlator.xserver.events.Event;
 import com.winlator.xserver.events.Expose;
+import com.winlator.xserver.events.FocusEvent;
 import com.winlator.xserver.events.MapNotify;
 import com.winlator.xserver.events.MapRequest;
 import com.winlator.xserver.events.ResizeRequest;
@@ -51,6 +52,10 @@ public class WindowManager extends XResourceManager {
         rootWindow = new Window(id, drawable, 0, 0, screenInfo.width, screenInfo.height, null);
         rootWindow.attributes.setMapped(true);
         windows.put(id, rootWindow);
+        // panvk: X servers start with focus PointerRoot (keys go to the window under the pointer). Winlator started
+        // with no focus, which dropped every key until a client called SetInputFocus.
+        focusedWindow = rootWindow;
+        focusRevertTo = FocusRevertTo.POINTER_ROOT;
     }
 
     public Window getWindow(int id) {
@@ -119,20 +124,28 @@ public class WindowManager extends XResourceManager {
     public void revertFocus() {
         switch (focusRevertTo) {
             case NONE:
-                focusedWindow = null;
+                setFocus(null, focusRevertTo);
                 break;
             case POINTER_ROOT:
-                focusedWindow = rootWindow;
+                setFocus(rootWindow, focusRevertTo);
                 break;
             case PARENT:
-                if (focusedWindow.getParent() != null) focusedWindow = focusedWindow.getParent();
+                Window parent = focusedWindow.getParent();
+                // X: reverting to an unviewable parent falls back to the root (PointerRoot).
+                setFocus(parent != null && parent.attributes.isMapped() ? parent : rootWindow, focusRevertTo);
                 break;
         }
     }
 
     public void setFocus(Window focusedWindow, FocusRevertTo focusRevertTo) {
+        Window old = this.focusedWindow;
         this.focusedWindow = focusedWindow;
         this.focusRevertTo = focusRevertTo;
+        if (old == focusedWindow) return;
+        com.winlator.core.XLog.log("focus " + (old != null ? old.id : 0) + " -> " + (focusedWindow != null ? focusedWindow.id + " '" + focusedWindow.getName() + "'" : "None"));
+        // panvk: real X sends FocusOut/FocusIn; Wine tracks keyboard focus (and activation without WM_TAKE_FOCUS) from them.
+        if (old != null && old != rootWindow) old.sendEvent(Event.FOCUS_CHANGE, new FocusEvent(false, old));
+        if (focusedWindow != null && focusedWindow != rootWindow) focusedWindow.sendEvent(Event.FOCUS_CHANGE, new FocusEvent(true, focusedWindow));
     }
 
     public FocusRevertTo getFocusRevertTo() {

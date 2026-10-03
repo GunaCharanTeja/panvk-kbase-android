@@ -54,12 +54,16 @@ object GamepadBridge {
 
     /** Env vars to add to the Wine process environment; empty if libpadshim.so is not installed. */
     fun env(ctx: Context): Map<String, String> {
+        if (!ControllerInput.gamepadOutput) return emptyMap() // keyboard-only: no virtual XInput pad for the game to see
         val so = File(ctx.applicationInfo.nativeLibraryDir, "libpadshim.so")
         if (!so.exists()) return emptyMap()
         return mapOf("LD_PRELOAD" to so.path, "PANVK_PAD_SHM" to map(ctx).path)
     }
 
-    fun start(ctx: Context) { map(ctx); synchronized(lock) { connected = 1; flush() } }
+    fun start(ctx: Context) {
+        if (ControllerInput.gamepadOutput) map(ctx)
+        synchronized(lock) { connected = if (ControllerInput.gamepadOutput) 1 else 0; flush() }
+    }
 
     fun stop() = synchronized(lock) {
         pBtn = 0; pKeyHat = 0; pAxisHat = 0; pStick = FloatArray(4); pLtAxis = 0f; pRtAxis = 0f
@@ -173,12 +177,17 @@ object GamepadBridge {
     }
 
     private fun flush() {
-        val b = buf ?: return
         val (lx, ly) = stick(0); val (rx, ry) = stick(2)
+        val lt = trig(pLtAxis, pLtKey, vLt); val rt = trig(pRtAxis, pRtKey, vRt)
+        val btn = pBtn or vBtn; val hat = pKeyHat or pAxisHat or vHat
+        // Keyboard/mouse output (default): same merged state, X11 events instead of the virtual pad.
+        ControllerInput.update(lx, ly, rx, ry, lt, rt, btn, hat)
+        val b = buf ?: return
+        if (!ControllerInput.gamepadOutput) return
         b.putShort(8, s16(lx)); b.putShort(10, s16(ly)); b.putShort(12, s16(rx)); b.putShort(14, s16(ry))
-        b.putShort(16, s16(trig(pLtAxis, pLtKey, vLt))); b.putShort(18, s16(trig(pRtAxis, pRtKey, vRt)))
-        b.putShort(20, (pBtn or vBtn).toShort())
-        b.put(22, (pKeyHat or pAxisHat or vHat).toByte())
+        b.putShort(16, s16(lt)); b.putShort(18, s16(rt))
+        b.putShort(20, btn.toShort())
+        b.put(22, hat.toByte())
         b.putInt(4, connected)
         b.putInt(0, b.getInt(0) + 1) // seq last
     }

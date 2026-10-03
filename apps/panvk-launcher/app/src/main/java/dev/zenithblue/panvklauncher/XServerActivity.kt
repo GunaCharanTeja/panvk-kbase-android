@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import com.winlator.core.XLog
 import com.winlator.widget.TouchpadView
 import com.winlator.widget.XServerView
 
@@ -35,6 +36,11 @@ class XServerActivity : Activity() {
         // Touch overlay collapses to a SHOW button when a hardware pad is attached; four-finger tap toggles.
         overlay.hidden = GamepadBridge.physicalConnected()
         pad.setFourFingersTapCallback { overlay.hidden = !overlay.hidden }
+        // EXIT (held): close the game, wineserver and the X server; the run thread then opens the session logs.
+        overlay.onExit = {
+            val app = applicationContext
+            Thread({ ContainerManager.exitSession(app) }, "exit-session").start()
+        }
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             window.attributes = window.attributes.apply {
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -46,6 +52,10 @@ class XServerActivity : Activity() {
         setContentView(root)
         xView = view
         touchpad = pad
+        // In touch mode Android eats the first arrow/Tab key to "leave touch mode" and move focus, unless a
+        // (non-ViewGroup) view already holds focus. Keep focus on the touchpad so every key reaches the game.
+        pad.isFocusableInTouchMode = true
+        pad.requestFocus()
         BuiltinXServer.attach(this)
         hideSystemBars()
     }
@@ -80,13 +90,23 @@ class XServerActivity : Activity() {
 
     // Back leaves the display. The game keeps running; Open display in the launcher returns.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.repeatCount == 0) XLog.log("android key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} src=0x${Integer.toHexString(event.source)} dev=${event.deviceId}")
         val xs = BuiltinXServer.xServer ?: return super.dispatchKeyEvent(event)
         if (event.keyCode == KeyEvent.KEYCODE_BACK) return super.dispatchKeyEvent(event)
         if (GamepadBridge.onKeyEvent(event)) return true
         return xs.keyboard.onKeyEvent(event) || super.dispatchKeyEvent(event)
     }
 
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        GamepadBridge.onMotionEvent(event) || touchpad?.onExternalMouseEvent(event) == true ||
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        val a = event.actionMasked
+        if (a != MotionEvent.ACTION_MOVE) XLog.log("android touch ${MotionEvent.actionToString(event.action)} src=0x${Integer.toHexString(event.source)} tool=${event.getToolType(0)} ${event.x.toInt()},${event.y.toInt()} btn=${event.buttonState}")
+        return super.dispatchTouchEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        val a = event.actionMasked
+        if (a != MotionEvent.ACTION_HOVER_MOVE && a != MotionEvent.ACTION_MOVE) XLog.log("android generic ${MotionEvent.actionToString(event.action)} src=0x${Integer.toHexString(event.source)} btn=${event.actionButton}")
+        return GamepadBridge.onMotionEvent(event) || touchpad?.onExternalMouseEvent(event) == true ||
             super.dispatchGenericMotionEvent(event)
+    }
 }

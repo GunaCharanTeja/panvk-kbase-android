@@ -10,6 +10,7 @@ import com.winlator.xserver.extensions.Extension;
 import com.winlator.xserver.extensions.MITSHMExtension;
 import com.winlator.xserver.extensions.PresentExtension;
 import com.winlator.xserver.extensions.SyncExtension;
+import com.winlator.xserver.extensions.XInput2Extension;
 
 import java.nio.charset.Charset;
 import java.util.EnumMap;
@@ -36,7 +37,10 @@ public class XServer {
     public final CursorLocker cursorLocker;
     private SHMSegmentManager shmSegmentManager;
     private GLRenderer renderer;
-    private WinHandler winHandler;
+    private WinHandler winHandler = new WinHandler(); // panvk: no-op stub, never null (DesktopHelper calls it on focus)
+    /** uptimeMillis of the last client WarpPointer; a recent warp means the game holds the cursor (mouse look). */
+    public volatile long lastWarpMs;
+    public final XInput2Extension xInput2 = new XInput2Extension();
     private final EnumMap<Lockable, ReentrantLock> locks = new EnumMap<>(Lockable.class);
     private boolean relativeMouseMovement = false;
 
@@ -142,13 +146,16 @@ public class XServer {
 
     public void injectPointerMove(int x, int y) {
         try (XLock lock = lock(Lockable.WINDOW_MANAGER, Lockable.INPUT_DEVICE)) {
+            int dx = x - pointer.getX(), dy = y - pointer.getY();
             pointer.setPosition(x, y);
+            xInput2.sendRawMotion(dx, dy);
         }
     }
 
     public void injectPointerMoveDelta(int dx, int dy) {
         try (XLock lock = lock(Lockable.WINDOW_MANAGER, Lockable.INPUT_DEVICE)) {
             pointer.setPosition(pointer.getX() + dx, pointer.getY() + dy);
+            xInput2.sendRawMotion(dx, dy);
         }
     }
 
@@ -185,6 +192,7 @@ public class XServer {
         extensions.put(MITSHMExtension.MAJOR_OPCODE, new MITSHMExtension());
         extensions.put(PresentExtension.MAJOR_OPCODE, new PresentExtension());
         extensions.put(SyncExtension.MAJOR_OPCODE, new SyncExtension());
+        extensions.put(XInput2Extension.MAJOR_OPCODE, xInput2);
     }
 
     public <T extends Extension> T getExtension(int opcode) {

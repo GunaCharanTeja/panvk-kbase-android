@@ -1,0 +1,25 @@
+{
+  "name": "MiSide",
+  "exe": ["MiSide.exe", "MiSideFull.exe"],
+  "output": "keyboard",
+  "bindings": {
+    "A": "e", "B": "Escape", "X": "mouse:left", "Y": "space",
+    "LB": "q", "RB": "Shift_L", "LT": "mouse:right", "RT": "mouse:left",
+    "BACK": "Tab", "START": "Escape", "L3": "Shift_L", "R3": "c",
+    "DPAD_UP": "Up", "DPAD_DOWN": "Down", "DPAD_LEFT": "Left", "DPAD_RIGHT": "Right"
+  },
+  "labels": {
+    "A": "Use", "B": "Esc", "X": "Click", "Y": "Jump", "LB": "Q", "RB": "Run",
+    "LT": "RMB", "RT": "Click", "BACK": "Tab", "START": "Menu", "L3": "Run"
+  },
+  "leftStick": { "mode": "keys", "up": "w", "down": "s", "left": "a", "right": "d", "deadzone": 0.3 },
+  "rightStick": { "mode": "mouse", "sensitivity": 1.0, "deadzone": 0.12, "invertY": false },
+  "_sources": [
+    "WASD move, arrow keys also work: https://steamcommunity.com/app/2527500/discussions/0/715609860235864784/",
+    "Shift run, E interact/use/phone, mouse clicks in phone/minigames, LMB place item, A/D/W/S/E Milk Scandal, Space + LMB Hetoor arcade: https://showgamer.com/en/prohozhdeniya-igr/2739-prohozhdenie-miside",
+    "Q and Shift are used (players bind them in Steam Input; WASD+mouse template): https://steamcommunity.com/app/2527500/discussions/0/575995207062948059/",
+    "No native gamepad, no in-game key rebinding (QWERTY positions): https://steamcommunity.com/app/2527500/discussions/0/604143740583477159/ and .../596263818508692624/",
+    "Minigame notes (kart Shift nitro, dance A/S/D, hammer E): https://www.thegamer.com/miside-all-minigames-how-to-play-them/ and https://www.neoseeker.com/miside/Minigames",
+    "UNVERIFIED by any source: jump (Space) and crouch outside minigames, Tab/Esc menu, inventory, flashlight. Esc/Tab/Space/C are conventional Unity guesses to be confirmed on device."
+  ]
+}

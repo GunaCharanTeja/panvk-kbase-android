@@ -122,17 +122,21 @@ public class TouchpadView extends View {
         switch (actionMasked) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                if (event.isFromSource(InputDevice.SOURCE_MOUSE)) return true;
+                if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+                    // panvk: not every mouse source sends ACTION_BUTTON_PRESS (adb `input mouse`, some injectors);
+                    // press here too. Pointer.setButton ignores the duplicate when BUTTON_PRESS follows.
+                    injectMouseMove(event.getX(), event.getY());
+                    int bs = event.getButtonState();
+                    xServer.injectPointerButtonPress((bs & MotionEvent.BUTTON_SECONDARY) != 0 ? Pointer.Button.BUTTON_RIGHT : Pointer.Button.BUTTON_LEFT);
+                    return true;
+                }
                 scrollAccumY = 0;
                 scrolling = false;
                 fingers[pointerId] = new Finger(event.getX(actionIndex), event.getY(actionIndex));
                 numFingers++;
                 break;
             case MotionEvent.ACTION_MOVE:
-                if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-                    float[] transformedPoint = XForm.transformPoint(xform, event.getX(), event.getY());
-                    xServer.injectPointerMove((int)transformedPoint[0], (int)transformedPoint[1]);
-                }
+                if (event.isFromSource(InputDevice.SOURCE_MOUSE)) injectMouseMove(event.getX(), event.getY());
                 else {
                     for (byte i = 0; i < MAX_FINGERS; i++) {
                         if (fingers[i] != null) {
@@ -152,6 +156,11 @@ public class TouchpadView extends View {
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP:
+                if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+                    xServer.injectPointerButtonRelease(Pointer.Button.BUTTON_LEFT);
+                    xServer.injectPointerButtonRelease(Pointer.Button.BUTTON_RIGHT);
+                    return true;
+                }
                 if (fingers[pointerId] != null) {
                     fingers[pointerId].update(event.getX(actionIndex), event.getY(actionIndex));
                     handleFingerUp(fingers[pointerId]);
@@ -296,6 +305,26 @@ public class TouchpadView extends View {
         this.fourFingersTapCallback = fourFingersTapCallback;
     }
 
+    // panvk: an absolute mouse (scrcpy, USB/BT mouse) normally sets the X pointer position. While the game holds the
+    // cursor (it warps it back every frame for mouse look) absolute positions would snap the view around, so the
+    // movement is sent as a delta from the previous mouse position instead.
+    private float lastMouseX = Float.NaN, lastMouseY = Float.NaN;
+
+    private void injectMouseMove(float ex, float ey) {
+        float[] p = XForm.transformPoint(xform, ex, ey);
+        boolean held = android.os.SystemClock.uptimeMillis() - xServer.lastWarpMs < 300;
+        if (held && !Float.isNaN(lastMouseX)) {
+            int dx = Math.round(p[0] - lastMouseX), dy = Math.round(p[1] - lastMouseY);
+            if (dx == 0 && dy == 0) return;
+            xServer.injectPointerMoveDelta(dx, dy);
+            lastMouseX += dx; lastMouseY += dy;
+        }
+        else {
+            xServer.injectPointerMove((int)p[0], (int)p[1]);
+            lastMouseX = p[0]; lastMouseY = p[1];
+        }
+    }
+
     public boolean onExternalMouseEvent(MotionEvent event) {
         boolean handled = false;
         if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
@@ -320,8 +349,7 @@ public class TouchpadView extends View {
                     handled = true;
                     break;
                 case MotionEvent.ACTION_HOVER_MOVE:
-                    float[] transformedPoint = XForm.transformPoint(xform, event.getX(), event.getY());
-                    xServer.injectPointerMove((int)transformedPoint[0], (int)transformedPoint[1]);
+                    injectMouseMove(event.getX(), event.getY());
                     handled = true;
                     break;
                 case MotionEvent.ACTION_SCROLL:

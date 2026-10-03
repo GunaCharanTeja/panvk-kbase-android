@@ -82,6 +82,7 @@ object BuiltinXServer {
                 env["TMPDIR"] = File(usr, "tmp").absolutePath
                 xServer = xs
                 GamepadBridge.start(ctx)
+                ControllerInput.start()
                 if (!dumping) { dumping = true; startDumpThread(ctx) }
                 onLine("Built-in X server $resolution on ${cfg.path}${if (useShm) " (MIT-SHM via SysV broker)" else ""}")
                 DisplayServer.Session(":0", cfg.path, env, true)
@@ -122,7 +123,7 @@ object BuiltinXServer {
         shm?.deleteAll()
         shm = null
         xServer?.cursorLocker?.stop()
-        if (xServer != null) GamepadBridge.stop()
+        if (xServer != null) { GamepadBridge.stop(); ControllerInput.stop() }
         xServer = null
         a?.runOnUiThread { a.finish() }
     }
@@ -131,8 +132,14 @@ object BuiltinXServer {
     fun dump(): String {
         val xs = xServer ?: return "no server"
         val sb = StringBuilder("renderer: ${xs.renderer?.debugState()}\n")
+        sb.append("focus=${xs.windowManager.focusedWindow?.id} pointer=${xs.pointer.x},${xs.pointer.y}\n")
         fun walk(w: com.winlator.xserver.Window, depth: Int) {
             val d = w.content
+            if (d == null) { // InputOnly
+                sb.append("  ".repeat(depth)).append("win ${w.id} ${w.x},${w.y} ${w.width}x${w.height} mapped=${w.attributes.isMapped} inputonly\n")
+                for (c in w.children) walk(c, depth + 1)
+                return
+            }
             var nz = 0
             val data = d.data
             if (data != null) {
@@ -144,7 +151,7 @@ object BuiltinXServer {
                 nz = if (seen > 0) nz * 100 / seen else 0
             }
             sb.append("  ".repeat(depth)).append("win ${w.id} ${w.x},${w.y} ${w.width}x${w.height} mapped=${w.attributes.isMapped} ")
-                .append("cls=${w.className} name=${w.name} content=${d.width}x${d.height} nonzero%=$nz\n")
+                .append("cls=${w.className} name=${w.name} app=${w.isApplicationWindow} content=${d.width}x${d.height} nonzero%=$nz\n")
             for (c in w.children) walk(c, depth + 1)
         }
         walk(xs.windowManager.rootWindow, 0)

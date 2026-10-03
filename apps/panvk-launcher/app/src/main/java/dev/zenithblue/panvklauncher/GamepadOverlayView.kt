@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.SystemClock
 import android.util.SparseArray
 import android.view.MotionEvent
 import android.view.View
@@ -19,7 +20,7 @@ import kotlin.math.hypot
  * gesture cannot press a control (Android routes a gesture to one target).
  */
 class GamepadOverlayView(context: Context) : View(context) {
-    private enum class Kind { STICK, DPAD, BTN, TRIG, TOGGLE }
+    private enum class Kind { STICK, DPAD, BTN, TRIG, TOGGLE, EXIT }
 
     private class Ctl(val kind: Kind, val arg: Int, var label: String, val round: Boolean, val color: Int) {
         val rect = RectF()
@@ -69,7 +70,14 @@ class GamepadOverlayView(context: Context) : View(context) {
         set(v) { releaseAll(); field = v; invalidate() }
 
     private var toggle: Ctl? = null
-    private fun active(): List<Ctl> = if (hidden) listOfNotNull(toggle) else ctls
+    private var exitCtl: Ctl? = null
+    private fun active(): List<Ctl> = if (hidden) listOfNotNull(toggle, exitCtl) else ctls
+
+    /** Called after EXIT was held for [EXIT_HOLD_MS]. */
+    var onExit: (() -> Unit)? = null
+    private val exitRun = Runnable { exitCtl?.let { c -> owner.remove(c.pid); release(c) }; invalidate(); onExit?.invoke() }
+    private var exitDownAt = 0L
+    private val EXIT_HOLD_MS = 1500L
 
     // Sizes: dp base value * scale k, clamped to a dp minimum (>= 40dp touch targets), then converted to px
     // with the display density, so the pad follows UI density / "display size". The search below picks the
@@ -96,6 +104,7 @@ class GamepadOverlayView(context: Context) : View(context) {
         }
         ctls.addAll(last)
         toggle = ctls.firstOrNull { it.kind == Kind.TOGGLE }
+        exitCtl = ctls.firstOrNull { it.kind == Kind.EXIT }
     }
 
     private fun fits(l: List<Ctl>): Boolean {
@@ -162,10 +171,12 @@ class GamepadOverlayView(context: Context) : View(context) {
             add(Ctl(Kind.TRIG, 0, "LT", false, Color.WHITE), lStart, shY, shW / 2, shH / 2)
             add(Ctl(Kind.TRIG, 1, "RT", false, Color.WHITE), rEnd, shY, shW / 2, shH / 2)
         }
-        val cx = (ax0 + ax1) / 2
-        add(Ctl(Kind.BTN, GamepadBridge.BTN_BACK, "BACK", false, Color.WHITE), cx - cw - g, cyC, cw / 2, cH / 2)
-        add(Ctl(Kind.BTN, GamepadBridge.BTN_START, "START", false, Color.WHITE), cx, cyC, cw / 2, cH / 2)
-        add(Ctl(Kind.TOGGLE, 0, if (hidden) "SHOW" else "HIDE", false, Color.WHITE), cx + cw + g, cyC, cw / 2, cH / 2)
+        // Top row: BACK START HIDE EXIT (EXIT = hold to confirm, red).
+        val x0 = (ax0 + ax1) / 2 - (4 * cw + 3 * g) / 2 + cw / 2
+        add(Ctl(Kind.BTN, GamepadBridge.BTN_BACK, "BACK", false, Color.WHITE), x0, cyC, cw / 2, cH / 2)
+        add(Ctl(Kind.BTN, GamepadBridge.BTN_START, "START", false, Color.WHITE), x0 + (cw + g), cyC, cw / 2, cH / 2)
+        add(Ctl(Kind.TOGGLE, 0, if (hidden) "SHOW" else "HIDE", false, Color.WHITE), x0 + 2 * (cw + g), cyC, cw / 2, cH / 2)
+        add(Ctl(Kind.EXIT, 0, "EXIT", false, 0xFFE5534B.toInt()), x0 + 3 * (cw + g), cyC, cw / 2, cH / 2)
         line.strokeWidth = maxOf(1.5f, 1.5f * dp * k)
         text.textSize = 13f * dp * maxOf(k, 0.85f)
         shownScale = k
@@ -199,6 +210,11 @@ class GamepadOverlayView(context: Context) : View(context) {
             Kind.BTN -> { c.pressed = down; GamepadBridge.setVirtualButton(c.arg, down) }
             Kind.TRIG -> { c.pressed = down; GamepadBridge.setVirtualTrigger(c.arg == 0, if (down) 1f else 0f) }
             Kind.TOGGLE -> { c.pressed = down; if (down) post { hidden = !hidden; c.label = if (hidden) "SHOW" else "HIDE" } }
+            Kind.EXIT -> {
+                c.pressed = down
+                removeCallbacks(exitRun)
+                if (down) { exitDownAt = SystemClock.uptimeMillis(); postDelayed(exitRun, EXIT_HOLD_MS); postInvalidateOnAnimation() }
+            }
         }
         if (c.kind == Kind.STICK) c.pressed = down
     }
@@ -256,6 +272,10 @@ class GamepadOverlayView(context: Context) : View(context) {
                     val rad = r.width() / 2f
                     canvas.drawCircle(c.cx, c.cy, rad, line)
                     canvas.drawCircle(c.cx + c.dx * rad, c.cy + c.dy * rad, rad * 0.45f, fill)
+                    if (ControllerInput.config.output != "gamepad") {
+                        val cap = ControllerInput.config.stickCaption(c.arg == 0)
+                        if (cap.isNotEmpty()) drawFit(canvas, cap, c.cx, c.cy - rad * 0.62f, rad * 1.2f)
+                    }
                 }
                 Kind.DPAD -> {
                     val h = r.width() / 2f; val w = h / 3f
@@ -266,11 +286,43 @@ class GamepadOverlayView(context: Context) : View(context) {
                 }
                 else -> {
                     if (c.round) { canvas.drawCircle(c.cx, c.cy, r.width() / 2f, fill); canvas.drawCircle(c.cx, c.cy, r.width() / 2f, line) }
-                    else { val k = r.height() / 3f; canvas.drawRoundRect(r, k, k, fill); canvas.drawRoundRect(r, k, k, line) }
-                    canvas.drawText(c.label, c.cx, c.cy + text.textSize * 0.35f, text)
+                    else {
+                        val k = r.height() / 3f
+                        canvas.drawRoundRect(r, k, k, fill)
+                        if (c.kind == Kind.EXIT && c.pressed) { // hold progress
+                            val p = ((SystemClock.uptimeMillis() - exitDownAt) / EXIT_HOLD_MS.toFloat()).coerceIn(0f, 1f)
+                            canvas.save(); canvas.clipRect(r.left, r.top, r.left + r.width() * p, r.bottom)
+                            fill.alpha = 255; canvas.drawRoundRect(r, k, k, fill); canvas.restore()
+                            postInvalidateOnAnimation()
+                        }
+                        canvas.drawRoundRect(r, k, k, line)
+                    }
+                    drawFit(canvas, if (c.kind == Kind.EXIT && c.pressed) "HOLD" else caption(c), c.cx, c.cy, r.width() * 0.92f)
                 }
             }
         }
+    }
+
+    private val btnIds = arrayOf("A", "B", "X", "Y", "BACK", "", "START", "L3", "R3", "LB", "RB")
+
+    // Overlay caption from the controller config (label, else the bound key); stock pad names in gamepad output mode.
+    private fun caption(c: Ctl): String {
+        if (ControllerInput.config.output == "gamepad") return c.label
+        val id = when (c.kind) {
+            Kind.BTN -> btnIds.getOrNull(c.arg)
+            Kind.TRIG -> if (c.arg == 0) "LT" else "RT"
+            else -> null
+        }
+        return if (id.isNullOrEmpty()) c.label else ControllerInput.config.caption(id).ifEmpty { c.label }
+    }
+
+    /** Text centred at (x, y), shrunk to fit maxW. */
+    private fun drawFit(canvas: Canvas, s: String, x: Float, y: Float, maxW: Float) {
+        val saved = text.textSize
+        val w = text.measureText(s)
+        if (w > maxW) text.textSize = saved * maxW / w
+        canvas.drawText(s, x, y + text.textSize * 0.35f, text)
+        text.textSize = saved
     }
 
     private fun arm(canvas: Canvas, c: Ctl, bit: Int, l: Float, t: Float, r: Float, b: Float) {

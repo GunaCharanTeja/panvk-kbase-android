@@ -171,7 +171,12 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
         if (isWineRunning || isSettingUp) return
         isWineRunning = true
         scope.launch(Dispatchers.IO) {
+            val startMs = System.currentTimeMillis()
+            val launcherLog = StringBuffer()
+            var launched = false
             try {
+                // Controller mapping (shortcut file, exe preset or default) must be set before Wine/X server start.
+                ControllerInput.config = ControllerConfig.resolve(context, sc?.id, exePath)
                 ContainerManager.addRecent(context, exePath)
                 mainHandler.post {
                     recentExes = ContainerManager.recentExes(context)
@@ -182,15 +187,25 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
                     ShortcutStore.save(context, sc.copy(lastPlayed = System.currentTimeMillis()))
                     mainHandler.post { addLog("Launch shortcut '${sc.name}' (${sc.id})") }
                 }
+                launched = true
                 ContainerManager.runExe(context, exePath, { line ->
+                    launcherLog.append(line).append('\n')
                     mainHandler.post { addLog(line) }
                 }, sc?.let { ShortcutStore.launchOptions(context, it) })
             } catch (t: Throwable) {
+                launcherLog.append("Run error: ${t.message}\n")
                 mainHandler.post { addLog("Run error: ${t.message}") }
             } finally {
                 mainHandler.post {
                     isWineRunning = ContainerManager.isRunning()
                     isContainerSetup = ContainerManager.isSetup(context)
+                }
+                // Game returned (exit, crash or driver failure): collect every log and show the Session logs screen.
+                try {
+                    val dir = SessionLogs.collect(context, sc, exePath, startMs, launcherLog.toString(), launched)
+                    mainHandler.post { SessionLogsActivity.open(context, dir.name) }
+                } catch (t: Throwable) {
+                    mainHandler.post { addLog("Session logs failed: $t") }
                 }
             }
         }

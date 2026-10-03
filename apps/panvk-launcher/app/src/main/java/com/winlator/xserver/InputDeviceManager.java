@@ -147,6 +147,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
                 short[] localPoint = grabWindow.rootPointToLocal(x, y);
 
                 Window child = grabWindow.isAncestorOf(pointWindow) ? pointWindow : null;
+                com.winlator.core.XLog.log("ButtonPress " + button.code() + " at " + x + "," + y + " -> " + grabWindow.id + " (point " + pointWindow.id + ")");
                 grabWindow.sendEvent(Event.BUTTON_PRESS, new ButtonPress(button.code(), xServer.windowManager.rootWindow, grabWindow, child, x, y, localPoint[0], localPoint[1], eventMask));
             }
         }
@@ -200,21 +201,22 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
     @Override
     public void onKeyPress(byte keycode, int keysym) {
         Window focusedWindow = xServer.windowManager.getFocusedWindow();
-        if (focusedWindow == null) return;
+        if (focusedWindow == null) { com.winlator.core.XLog.log("KeyPress " + (keycode & 0xff) + " dropped: focus None"); return; }
         updatePointWindow();
 
         Window eventWindow = null;
         Window child = null;
         if (focusedWindow.isAncestorOf(pointWindow)) {
             eventWindow = pointWindow.getAncestorWithEventId(Event.KEY_PRESS, focusedWindow);
-            child = eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
+            child = eventWindow != null && eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
         }
         if (eventWindow == null) {
-            if (!focusedWindow.hasEventListenerFor(Event.KEY_PRESS)) return;
+            if (!focusedWindow.hasEventListenerFor(Event.KEY_PRESS)) { com.winlator.core.XLog.log("KeyPress " + (keycode & 0xff) + " dropped: focus " + focusedWindow.id + " has no listener"); return; }
             eventWindow = focusedWindow;
         }
 
         if (!eventWindow.attributes.isEnabled()) return;
+        com.winlator.core.XLog.log("KeyPress " + (keycode & 0xff) + " sym=0x" + Integer.toHexString(keysym) + " -> " + eventWindow.id + " (focus " + focusedWindow.id + ", point " + pointWindow.id + ")");
 
         Bitmask keyButMask = getKeyButMask();
         short x = xServer.pointer.getX();
@@ -239,7 +241,7 @@ public class InputDeviceManager implements Pointer.OnPointerMotionListener, Keyb
         Window child = null;
         if (focusedWindow.isAncestorOf(pointWindow)) {
             eventWindow = pointWindow.getAncestorWithEventId(Event.KEY_RELEASE, focusedWindow);
-            child = eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
+            child = eventWindow != null && eventWindow.isAncestorOf(pointWindow) ? pointWindow : null;
         }
         if (eventWindow == null) {
             if (!focusedWindow.hasEventListenerFor(Event.KEY_RELEASE)) return;

@@ -60,15 +60,27 @@ fun GamesTabContent(
         }
     }
 
+    // Games whose exe matches a controller preset (e.g. MiSide.exe) get that preset as their own editable file.
+    LaunchedEffect(games) {
+        withContext(Dispatchers.IO) { games.forEach { ControllerConfig.attachPreset(ctx, it.id, ShortcutStore.resolveExe(ctx, it.exe)) } }
+    }
+
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button(
-            onClick = {
-                editingIsNew = true
-                editing = Shortcut(id = ShortcutStore.newId(), name = "", exe = "")
-            },
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                .semantics { contentDescription = "Add game" }
-        ) { Text("Add game") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = {
+                    editingIsNew = true
+                    editing = Shortcut(id = ShortcutStore.newId(), name = "", exe = "")
+                },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                    .semantics { contentDescription = "Add game" }
+            ) { Text("Add game") }
+            OutlinedButton(
+                onClick = { SessionLogsActivity.open(ctx) },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                    .semantics { contentDescription = "Last session logs" }
+            ) { Text("Last session logs") }
+        }
 
         if (games.isEmpty()) {
             Text(
@@ -201,6 +213,8 @@ private fun ShortcutEditor(
     var driver by remember { mutableStateOf(initial.driver) }
     var importing by remember { mutableStateOf(false) }
     var detected by remember { mutableStateOf<String?>(null) }
+    var editCtl by remember { mutableStateOf(false) }
+    if (editCtl) ControllerEditorDialog(initial.id, ShortcutStore.resolveExe(ctx, exe)) { editCtl = false }
 
     LaunchedEffect(exe) {
         detected = withContext(Dispatchers.IO) { PeInfo.arch(ShortcutStore.resolveExe(ctx, exe)) }
@@ -252,6 +266,10 @@ private fun ShortcutEditor(
                     "Driver",
                     listOf("" to "default") + drivers.map { it.id to it.name }, driver
                 ) { driver = it }
+                OutlinedButton(
+                    onClick = { editCtl = true },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Edit controller" }
+                ) { Text("Edit controller (keys / mouse)") }
             }
         },
         confirmButton = {

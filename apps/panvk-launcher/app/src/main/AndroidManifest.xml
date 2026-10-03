@@ -33,6 +33,19 @@
             android:screenOrientation="fullUser"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <activity
+            android:name=".SessionLogsActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode|density"
+            android:exported="false" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        <activity
             android:name=".ScreenActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false"

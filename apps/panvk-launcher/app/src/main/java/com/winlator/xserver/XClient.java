@@ -58,6 +58,17 @@ public class XClient implements XResourceManager.OnResourceLifecycleListener {
         }
     }
 
+    /** panvk: like sendEvent, but reports a dead connection so callers can drop it. */
+    public boolean sendEventChecked(Event event) {
+        try {
+            event.send(sequenceNumber, outputStream);
+            return true;
+        }
+        catch (IOException e) {
+            return false;
+        }
+    }
+
     public boolean isInterestedIn(int eventId, Window window) {
         EventListener eventListener = eventListeners.get(window);
         return eventListener != null && eventListener.isInterestedIn(eventId);
