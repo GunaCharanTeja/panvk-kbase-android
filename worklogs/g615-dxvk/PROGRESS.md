@@ -71,7 +71,7 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
 2. 089: DONE, device-verified (GS-selected viewport depth clamp/clip as ordered runs). Follow-up: in `panvk_vX_cmd_draw.c`, the `cs_if(pred)` tessellation conditional skips prepare_draw's GPU state writes on a false predicate but still clears their dirty flags (from 087; same bug as item 1).
 3. Re-check DXVK FL11_1 (VPSA is in since 078).
 4. `shaderOutputViewportIndex` from VS/TES: DONE on v10/v11 (patch 090, `worklogs/driver-remaining/090-vs-viewport-index.md`), device-verified. v12+ keeps the bit off (no run splitting there). Open: FS `gl_PrimitiveID` restarts per viewport run.
-5. `depthBounds`: BLOCKED, bit stays off (`worklogs/driver-remaining/091-depth-bounds.md`). No hardware depth-bounds test on v10+, and the FS cannot read the stored depth.
+5. `depthBounds`: DONE on v10/v11 (patch 092, `worklogs/driver-remaining/092-depth-bounds.md`), device-verified incl. 4x MSAA and no-FS draws. FS emulation: LD_TILE reads each sample's stored depth and clears SampleMask bits outside the bounds; a device-owned FS covers pipelines without one. Limits: lowered pipelines lose FPK, EarlyFragmentTests shaders with depth writes see the new depth. v12+ keeps the bit off.
 6. Prerast limits: 65536 invocations per draw (`PANVK_GPU_PRERAST_MAX_INVOCATIONS`), topology and indirect limits.
 7. `variableMultisampleRate` in secondary / inherited command buffers. The unsafe 086 was removed; this needs execution segmentation.
 8. Exact tessellation primitives-generated count: code may be present; needs a targeted check.
