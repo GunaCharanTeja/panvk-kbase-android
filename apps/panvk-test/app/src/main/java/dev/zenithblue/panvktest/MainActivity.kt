@@ -82,6 +82,8 @@ class MainActivity : ComponentActivity() {
         TestCase("gs_viewport_depth", isDraw = false),
         TestCase("vs_viewport_index", isDraw = false),
         TestCase("depth_bounds", isDraw = false),
+        TestCase("large_draw", isDraw = false),
+        TestCase("vmr_secondary", isDraw = false),
         TestCase("swapchain_lifecycle", isDraw = true)
     )
 

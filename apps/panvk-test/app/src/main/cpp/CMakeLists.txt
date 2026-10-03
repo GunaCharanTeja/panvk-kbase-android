@@ -38,6 +38,8 @@ add_vk_test(vertex_stores tests/dxvk/vulkan/vertex-stores/vertex_stores.c)
 add_vk_test(gs_viewport_depth device/gs-viewport-depth.c)
 add_vk_test(vs_viewport_index device/vs-viewport-index.c)
 add_vk_test(depth_bounds device/depth-bounds.c)
+add_vk_test(large_draw tests/dxvk/vulkan/large-draw/large_draw.c)
+add_vk_test(vmr_secondary tests/dxvk/vulkan/vmr-secondary/vmr_secondary.c)
 
 # SHARED lib t_vkinfo from vkinfo.c
 add_library(t_vkinfo SHARED "${CMAKE_CURRENT_SOURCE_DIR}/vkinfo.c")
