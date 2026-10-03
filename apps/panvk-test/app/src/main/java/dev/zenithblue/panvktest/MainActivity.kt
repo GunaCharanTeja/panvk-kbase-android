@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
         TestCase("pipeline_stats", isDraw = true),
         TestCase("vertex_stores", isDraw = false),
         TestCase("gs_viewport_depth", isDraw = false),
+        TestCase("vs_viewport_index", isDraw = false),
         TestCase("swapchain_lifecycle", isDraw = true)
     )
 

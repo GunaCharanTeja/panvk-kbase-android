@@ -1,0 +1,69 @@
+# 090 device run log (Mali-G615 MC6, adb 192.168.1.34:40501)
+
+## baseline (089 series, shaderOutputViewportIndex off): tmp/dev-090-base.log
+FEATURE multiVp=1 depthClamp=1 tess=1 shaderOutputViewportIndex=0 shaderOutputLayer=1 clipExt=1 depthClipEnable=1
+FAIL shaderOutputViewportIndex not reported
+FAIL CreateGraphicsPipelines r=-13 line=550
+
+## series with 090 (final build), tmp/dev-090-final.log
+== vs_viewport_index x6
+run 1: RESULT vs_viewport_index PASS mismatch=0 fps=0 ms=182 
+FEATURE multiVp=1 depthClamp=1 tess=1 shaderOutputViewportIndex=1 shaderOutputLayer=1 clipExt=1 depthClipEnable=1
+PASS case A_vs_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case B_vs_clamp_clip depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case C_vs_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case D_vs_instanced depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case E_tes_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case F_tes_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+run 2: RESULT vs_viewport_index PASS mismatch=0 fps=0 ms=180 
+FEATURE multiVp=1 depthClamp=1 tess=1 shaderOutputViewportIndex=1 shaderOutputLayer=1 clipExt=1 depthClipEnable=1
+PASS case A_vs_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case B_vs_clamp_clip depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case C_vs_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case D_vs_instanced depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case E_tes_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case F_tes_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+run 3: RESULT vs_viewport_index PASS mismatch=0 fps=0 ms=174 
+FEATURE multiVp=1 depthClamp=1 tess=1 shaderOutputViewportIndex=1 shaderOutputLayer=1 clipExt=1 depthClipEnable=1
+PASS case A_vs_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case B_vs_clamp_clip depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case C_vs_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case D_vs_instanced depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case E_tes_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case F_tes_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+run 4: RESULT vs_viewport_index PASS mismatch=0 fps=0 ms=181 
+FEATURE multiVp=1 depthClamp=1 tess=1 shaderOutputViewportIndex=1 shaderOutputLayer=1 clipExt=1 depthClipEnable=1
+PASS case A_vs_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case B_vs_clamp_clip depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case C_vs_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case D_vs_instanced depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case E_tes_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case F_tes_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+run 5: RESULT vs_viewport_index PASS mismatch=0 fps=0 ms=163 
+FEATURE multiVp=1 depthClamp=1 tess=1 shaderOutputViewportIndex=1 shaderOutputLayer=1 clipExt=1 depthClipEnable=1
+PASS case A_vs_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case B_vs_clamp_clip depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case C_vs_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case D_vs_instanced depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case E_tes_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case F_tes_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+run 6: RESULT vs_viewport_index PASS mismatch=0 fps=0 ms=160 
+FEATURE multiVp=1 depthClamp=1 tess=1 shaderOutputViewportIndex=1 shaderOutputLayer=1 clipExt=1 depthClipEnable=1
+PASS case A_vs_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case B_vs_clamp_clip depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case C_vs_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+PASS case D_vs_instanced depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case E_tes_clamp depthL=[0.250000..0.250000] expL=0.250000 depthR=[0.500000..0.500000] expR=0.500000 badDepth=0 badColor=0
+PASS case F_tes_noclamp depthL=[0.125000..0.125000] expL=0.125000 depthR=[0.750000..0.750000] expR=0.750000 badDepth=0 badColor=0
+== gs_viewport_depth x2
+run 1: RESULT gs_viewport_depth PASS mismatch=0 fps=0 ms=180 
+run 2: RESULT gs_viewport_depth PASS mismatch=0 fps=0 ms=140 
+== all
+run 1: RESULT gpu_prerast_slice PASS mismatch=0 fps=0 ms=74  ...
+== swapchain_lifecycle x3
+run 1: RESULT swapchain_lifecycle PASS mismatch=0 fps=121.0 ms=5424 extra=resized FPS 107.8 | present_main 2479ms, resize 7ms, present_resized 1114ms, destroy 2ms, cycle 1659ms, teardown 20ms 
+run 2: RESULT swapchain_lifecycle PASS mismatch=0 fps=121.0 ms=5378 extra=resized FPS 108.9 | present_main 2480ms, resize 3ms, present_resized 1101ms, destroy 1ms, cycle 1659ms, teardown 11ms 
+run 3: RESULT swapchain_lifecycle FAIL mismatch=0 fps=167.8 ms=1998 extra=resized FPS  | present_main 1787ms 
+
+## second --es autorun all after the swapchain failure
+13/13 PASS (gpu_prerast_slice clip_cull multi_viewport fill_mode bc_decode geometry tessellation xfb pipeline_stats vertex_stores gs_viewport_depth vs_viewport_index swapchain_lifecycle)
