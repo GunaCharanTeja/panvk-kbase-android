@@ -42,16 +42,25 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val autoprobe = intent?.getBooleanExtra("autoprobe", false) ?: false
+        // adb: am start -n dev.zenithblue.panvklauncher/.MainActivity --es run_exe /path/to/game.exe
+        val autoRunExe = intent?.getStringExtra("run_exe")
+        ShortcutRequests.fromIntent(this, intent) // --es dev.zenithblue.panvklauncher.LAUNCH_SHORTCUT <id|name>
         setContent {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    LauncherApp(autoprobe = autoprobe)
+                    LauncherApp(autoprobe = autoprobe, autoRunExe = autoRunExe)
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        ShortcutRequests.fromIntent(this, intent)
     }
 }
 
@@ -59,12 +68,13 @@ enum class LauncherTab(val title: String, val iconSymbol: String) {
     Drivers("Drivers", "⚙"),
     Components("Components", "🧩"),
     Wine("Wine", "🍷"),
+    Games("Games", "🎮"),
     Logs("Logs", "📋")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LauncherApp(autoprobe: Boolean) {
+fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -157,7 +167,7 @@ fun LauncherApp(autoprobe: Boolean) {
         }
     }
 
-    fun runWineExe(exePath: String) {
+    fun runWineExe(exePath: String, sc: Shortcut? = null) {
         if (isWineRunning || isSettingUp) return
         isWineRunning = true
         scope.launch(Dispatchers.IO) {
@@ -166,9 +176,15 @@ fun LauncherApp(autoprobe: Boolean) {
                 mainHandler.post {
                     recentExes = ContainerManager.recentExes(context)
                 }
-                ContainerManager.runExe(context, exePath) { line ->
-                    mainHandler.post { addLog(line) }
+                if (sc != null) {
+                    // Shortcut: per-game resolution (global display pref), lastPlayed, args/env/driver via LaunchOptions.
+                    if (sc.resolution in BuiltinXServer.RESOLUTIONS) DisplayServer.setResolution(context, sc.resolution)
+                    ShortcutStore.save(context, sc.copy(lastPlayed = System.currentTimeMillis()))
+                    mainHandler.post { addLog("Launch shortcut '${sc.name}' (${sc.id})") }
                 }
+                ContainerManager.runExe(context, exePath, { line ->
+                    mainHandler.post { addLog(line) }
+                }, sc?.let { ShortcutStore.launchOptions(context, it) })
             } catch (t: Throwable) {
                 mainHandler.post { addLog("Run error: ${t.message}") }
             } finally {
@@ -231,6 +247,11 @@ fun LauncherApp(autoprobe: Boolean) {
         }
     }
 
+    var displayRev by remember { mutableStateOf(0) }
+    val builtinDisplay = displayRev.let { DisplayServer.mode(context) == DisplayServer.Mode.BUILTIN }
+    val displayRes = displayRev.let { DisplayServer.resolution(context) }
+    val displayShm = displayRev.let { DisplayServer.useShm(context) }
+
     fun openScreen() {
         val intent = Intent(context, ScreenActivity::class.java)
         context.startActivity(intent)
@@ -264,6 +285,10 @@ fun LauncherApp(autoprobe: Boolean) {
         if (path != null) {
             if (path == "__PICK__") {
                 exePickerLauncher.launch(arrayOf("*/*"))
+            } else if (path.startsWith("__SC__:")) {
+                ShortcutStore.find(context, path.removePrefix("__SC__:"))?.let {
+                    runWineExe(ShortcutStore.resolveExe(context, it.exe), it)
+                }
             } else {
                 runWineExe(path)
             }
@@ -296,14 +321,14 @@ fun LauncherApp(autoprobe: Boolean) {
         }
     }
 
-    fun runExeWithPermission(path: String) {
+    fun runExeWithPermission(path: String, sc: Shortcut? = null) {
         val appFiles = context.filesDir.absolutePath
         val appData = context.applicationInfo.dataDir
         val privatePath = path.startsWith("$appFiles/") || path.startsWith("$appData/")
         if (privatePath || hasStoragePermission()) {
-            runWineExe(path)
+            runWineExe(path, sc)
         } else {
-            pendingStoragePath = path
+            pendingStoragePath = if (sc != null) "__SC__:${sc.id}" else path
             storagePermissionLauncher.launch(
                 arrayOf(
                     android.Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -341,6 +366,28 @@ fun LauncherApp(autoprobe: Boolean) {
         if (autoprobe && !autoprobeTriggered) {
             autoprobeTriggered = true
             runProbe(selectedDriver)
+        }
+    }
+
+    var autoRunTriggered by remember { mutableStateOf(false) }
+    LaunchedEffect(autoRunExe, isContainerSetup) {
+        if (autoRunExe != null && !autoRunTriggered && isContainerSetup && !isWineRunning) {
+            autoRunTriggered = true
+            runWineExe(autoRunExe)
+        }
+    }
+
+    fun runShortcut(sc: Shortcut) = runExeWithPermission(ShortcutStore.resolveExe(context, sc.exe), sc)
+
+    // adb / script: LAUNCH_SHORTCUT intent extra (debug builds). Waits for container setup + idle Wine.
+    val shortcutReq = ShortcutRequests.pending.value
+    LaunchedEffect(shortcutReq, isContainerSetup, isSettingUp) {
+        if (shortcutReq != null && isContainerSetup && !isSettingUp) {
+            ShortcutRequests.pending.value = null
+            val sc = ShortcutStore.find(context, shortcutReq)
+            if (sc == null) addLog("Shortcut not found: $shortcutReq")
+            else if (ContainerManager.isRunning()) addLog("Wine busy, not launching '${sc.name}' (stop it first)")
+            else runShortcut(sc)
         }
     }
 
@@ -508,6 +555,12 @@ fun LauncherApp(autoprobe: Boolean) {
                     icon = { Text(LauncherTab.Wine.iconSymbol, fontSize = 18.sp) }
                 )
                 NavigationBarItem(
+                    selected = selectedTab == LauncherTab.Games,
+                    onClick = { selectedTab = LauncherTab.Games },
+                    label = { Text("Games") },
+                    icon = { Text(LauncherTab.Games.iconSymbol, fontSize = 18.sp) }
+                )
+                NavigationBarItem(
                     selected = selectedTab == LauncherTab.Logs,
                     onClick = { selectedTab = LauncherTab.Logs },
                     label = { Text("Logs") },
@@ -580,10 +633,29 @@ fun LauncherApp(autoprobe: Boolean) {
                         selectedDriver = selectedDriver,
                         isDxvkEnabled = isDxvkEnabled,
                         onToggleDxvk = { toggleDxvk(it) },
-                        displayStatus = DisplayServer.describe(context),
+                        displayStatus = displayRev.let { DisplayServer.describe(context) },
+                        builtinDisplay = builtinDisplay,
+                        onToggleBuiltin = {
+                            DisplayServer.setMode(
+                                context,
+                                if (it) DisplayServer.Mode.BUILTIN else DisplayServer.Mode.TERMUX
+                            )
+                            displayRev++
+                        },
+                        displayRes = displayRes,
+                        onCycleRes = {
+                            val all = BuiltinXServer.RESOLUTIONS
+                            DisplayServer.setResolution(context, all[(all.indexOf(displayRes) + 1) % all.size])
+                            displayRev++
+                        },
+                        displayShm = displayShm,
+                        onToggleShm = {
+                            DisplayServer.setShm(context, it)
+                            displayRev++
+                        },
                         onOpenDisplay = {
                             val err = DisplayServer.open(context)
-                            if (err != null) addLog(err) else addLog("Opened Termux:X11")
+                            if (err != null) addLog(err) else addLog("Opened display")
                         },
                         onOpenScreen = { openScreen() },
                         onLaunchExplorer = { runExplorer() },
@@ -592,6 +664,13 @@ fun LauncherApp(autoprobe: Boolean) {
                         onRunManualExe = { path -> runExeWithPermission(path) },
                         onRunRecentExe = { path -> runExeWithPermission(path) },
                         onStop = { stopWine() }
+                    )
+                }
+                LauncherTab.Games -> {
+                    GamesTabContent(
+                        drivers = drivers,
+                        busy = isWineRunning || isSettingUp,
+                        onLaunch = { runShortcut(it) }
                     )
                 }
                 LauncherTab.Logs -> {
@@ -966,6 +1045,12 @@ fun WineTabContent(
     isDxvkEnabled: Boolean,
     onToggleDxvk: (Boolean) -> Unit,
     displayStatus: String,
+    builtinDisplay: Boolean,
+    onToggleBuiltin: (Boolean) -> Unit,
+    displayRes: String,
+    onCycleRes: () -> Unit,
+    displayShm: Boolean,
+    onToggleShm: (Boolean) -> Unit,
     onOpenDisplay: () -> Unit,
     onOpenScreen: () -> Unit,
     onLaunchExplorer: () -> Unit,
@@ -1055,6 +1140,41 @@ fun WineTabContent(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Built-in X server (off = Termux:X11)",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Switch(
+                            checked = builtinDisplay,
+                            onCheckedChange = onToggleBuiltin,
+                            enabled = !isRunning
+                        )
+                    }
+                    if (builtinDisplay) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "MIT-SHM present",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Switch(
+                                checked = displayShm,
+                                onCheckedChange = onToggleShm,
+                                enabled = !isRunning
+                            )
+                        }
+                        Button(onClick = onCycleRes, enabled = !isRunning) {
+                            Text("Resolution: $displayRes (tap to cycle)")
+                        }
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),

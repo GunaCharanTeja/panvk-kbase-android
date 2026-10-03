@@ -235,7 +235,9 @@ object ContainerManager {
             installed.firstOrNull { it.type == "Proton" }?.dir ?: File(ctx.filesDir, "contents/Proton/default")
         }
 
-        val selectedDriver = DriverManager.getSelectedDriver(ctx, DriverManager.getDrivers(ctx))
+        val drivers = DriverManager.getDrivers(ctx)
+        val selectedDriver = launchOpts.get()?.driverId?.let { id -> drivers.firstOrNull { it.id == id } }
+            ?: DriverManager.getSelectedDriver(ctx, drivers)
         val icdJson = JSONObject().apply {
             put("file_format_version", "1.0.0")
             put("ICD", JSONObject().apply {
@@ -310,6 +312,12 @@ object ContainerManager {
         extra?.get("DISPLAY")?.let { envMap["DISPLAY"] = it }
         extra?.get("TMPDIR")?.let { envMap["TMPDIR"] = it }
         extra?.get("XKB_CONFIG_ROOT")?.let { envMap["XKB_CONFIG_ROOT"] = it }
+        // Built-in X server publishes a real SysV shm broker socket here (replaces the /dev/null fallback).
+        extra?.get("ANDROID_SYSVSHM_SERVER")?.let { envMap["ANDROID_SYSVSHM_SERVER"] = it }
+        // Gamepad: LD_PRELOAD shim -> SDL virtual Xbox pad -> winebus. Graphical runs only.
+        if (extra?.containsKey("DISPLAY") == true) envMap.putAll(GamepadBridge.env(ctx))
+        // Per-game shortcut env wins over defaults (but not DISPLAY / display plumbing above).
+        launchOpts.get()?.env?.forEach { (k, v) -> if (k != "DISPLAY") envMap[k] = v }
         return envMap
     }
 
@@ -536,7 +544,10 @@ object ContainerManager {
         return run(ctx, args, null, onLine)
     }
 
-    fun runExe(ctx: Context, exePath: String, onLine: (String) -> Unit = {}): Int {
+    // Per-launch shortcut overrides (args/env/driver); thread-local so run()/runInternal()/env() need no new params.
+    private val launchOpts = ThreadLocal<LaunchOptions?>()
+
+    fun runExe(ctx: Context, exePath: String, onLine: (String) -> Unit = {}, opts: LaunchOptions? = null): Int {
         val exeFile = File(exePath)
         if (!exeFile.isFile) {
             val msg = "File not found: $exePath"
@@ -546,7 +557,12 @@ object ContainerManager {
         val fbFile = File(ctx.filesDir, "container/fb.bin")
         try { fbFile.delete() } catch (_: Exception) {}
         val workDir = exeFile.parentFile ?: File(ctx.filesDir, "container")
-        return run(ctx, listOf(exeFile.absolutePath), workDir = workDir, onLine = onLine, graphics = true)
+        launchOpts.set(opts)
+        try {
+            return run(ctx, listOf(exeFile.absolutePath) + (opts?.args ?: emptyList()), workDir = workDir, onLine = onLine, graphics = true)
+        } finally {
+            launchOpts.remove()
+        }
     }
 
     fun runExplorer(ctx: Context, onLine: (String) -> Unit = {}): Int {

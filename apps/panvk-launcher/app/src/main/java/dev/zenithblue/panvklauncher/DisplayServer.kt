@@ -7,15 +7,19 @@ import android.net.LocalSocketAddress
 import java.io.File
 
 /**
- * External Termux:X11 (com.termux.x11). This app does not embed an X server.
- * Surface and input live in that app. We publish DISPLAY and the TMPDIR of
- * the live socket Wine's libX11 will open, and start the server when that
- * directory is writable by us.
+ * Display backends, selected in settings (pref `display_mode`):
+ *  - BUILTIN (default): in-process Winlator Java X server, surface in [XServerActivity].
+ *  - TERMUX: external Termux:X11 (com.termux.x11). Surface and input live in that app.
+ *    We publish DISPLAY and the TMPDIR of the live socket Wine's libX11 will open,
+ *    and start the server when that directory is writable by us.
  */
 object DisplayServer {
     const val PACKAGE = "com.termux.x11"
+    private const val PREFS = "launcher"
     private val ownedLock = Any()
     private var ownedProc: Process? = null
+
+    enum class Mode { BUILTIN, TERMUX }
 
     data class Session(
         val display: String,
@@ -24,14 +28,55 @@ object DisplayServer {
         val owned: Boolean
     )
 
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun mode(ctx: Context): Mode =
+        if (prefs(ctx).getString("display_mode", "builtin") == "termux") Mode.TERMUX else Mode.BUILTIN
+
+    fun setMode(ctx: Context, mode: Mode) {
+        prefs(ctx).edit().putString("display_mode", if (mode == Mode.TERMUX) "termux" else "builtin").apply()
+    }
+
+    fun resolution(ctx: Context): String =
+        prefs(ctx).getString("display_res", BuiltinXServer.DEFAULT_RESOLUTION) ?: BuiltinXServer.DEFAULT_RESOLUTION
+
+    fun setResolution(ctx: Context, res: String) {
+        prefs(ctx).edit().putString("display_res", res).apply()
+    }
+
+    // MIT-SHM through the SysV broker. Off = plain PutImage over the socket.
+    fun useShm(ctx: Context): Boolean = prefs(ctx).getBoolean("display_shm", true)
+
+    fun setShm(ctx: Context, on: Boolean) {
+        prefs(ctx).edit().putBoolean("display_shm", on).apply()
+    }
+
     fun describe(ctx: Context): String {
+        if (mode(ctx) == Mode.BUILTIN) {
+            val state = if (BuiltinXServer.isRunning()) "running" else "idle"
+            return "Display: built-in X server ${resolution(ctx)} ($state)"
+        }
         if (!isInstalled(ctx)) return "Display: Termux:X11 not installed"
         val live = findLive(ctx)
         return if (live != null) "Display: ${live.first} @ ${live.second}"
         else "Display: Termux:X11 installed, no X socket"
     }
 
+    fun openBuiltin(ctx: Context): String? {
+        if (!BuiltinXServer.isRunning()) return "Built-in X server is not running. Start a graphical run first."
+        return try {
+            ctx.startActivity(
+                Intent(ctx, XServerActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            )
+            null
+        } catch (t: Throwable) {
+            "Could not open display: ${t.message}"
+        }
+    }
+
     fun open(ctx: Context): String? {
+        if (mode(ctx) == Mode.BUILTIN) return openBuiltin(ctx)
         if (!isInstalled(ctx)) {
             return "Termux:X11 ($PACKAGE) is not installed. Install the Termux:X11 app, then start it before a graphical launch."
         }
@@ -47,6 +92,12 @@ object DisplayServer {
     }
 
     fun prepare(ctx: Context, onLine: (String) -> Unit): Session? {
+        if (mode(ctx) == Mode.BUILTIN) {
+            val session = BuiltinXServer.start(ctx, resolution(ctx), useShm(ctx), onLine) ?: return null
+            val err = openBuiltin(ctx)
+            if (err != null) onLine(err) else onLine("Display activity opened (surface and input).")
+            return session
+        }
         if (!isInstalled(ctx)) {
             onLine("Display server missing: install Termux:X11 ($PACKAGE).")
             onLine("The framebuffer view is not an X server and cannot serve DISPLAY.")
@@ -83,6 +134,7 @@ object DisplayServer {
     }
 
     fun stopOwned() {
+        BuiltinXServer.stop()
         val proc = synchronized(ownedLock) {
             val p = ownedProc
             ownedProc = null

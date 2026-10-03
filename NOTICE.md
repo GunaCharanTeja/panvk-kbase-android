@@ -88,3 +88,21 @@ optional BC1-BC7 Vulkan-layer reference. It is MIT-licensed, copyright (c)
 No `bcn_layer` source or binary is vendored or packaged by this repository.
 If a later change copies or derives source, that file must retain this notice
 and identify the pinned commit.
+
+## 7. Winlator X server — VENDORED (LGPL-2.1)
+
+The launcher's built-in X server is copied and modified from
+`https://github.com/brunodev85/winlator` at commit
+`db6d7aa446b5607b48ac2ee36dc4333799ff3dc7` (brunodev85 and Winlator
+contributors). It is licensed **LGPL-2.1**; the license text is
+`apps/panvk-launcher/third_party/winlator/LICENSE`.
+
+Vendored locations:
+
+- `apps/panvk-launcher/app/src/main/java/com/winlator/`
+- `apps/panvk-launcher/app/src/main/cpp/winlator/`
+- `apps/panvk-launcher/third_party/winlator/` (license and README with the file
+  list and modifications; changes are marked `panvk-launcher` in the sources)
+
+These files stay LGPL-2.1 and are not relicensed. Full source is in this
+repository so recipients can modify the code and rebuild the launcher APK.

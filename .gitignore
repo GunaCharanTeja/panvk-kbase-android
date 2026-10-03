@@ -37,3 +37,10 @@ tests/dxvk/vulkan/vk_video
 *.jks
 local.properties
 tmp/
+# MS redistributable SDK binaries; keep docs only
+apps/panvk-launcher/tests/samples/*
+!apps/panvk-launcher/tests/samples/README.md
+!apps/panvk-launcher/tests/samples/INDEX.tsv
+# raw framebuffer dumps (8 MB each; keep the PNGs) and python bytecode
+*.ppm
+__pycache__/
