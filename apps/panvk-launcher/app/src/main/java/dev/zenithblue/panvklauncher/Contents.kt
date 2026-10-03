@@ -32,37 +32,120 @@ data class CatalogEntry(
     val type: String,
     val name: String,
     val url: String,
-    val sha256: String?
+    val sha256: String?,
+    /** Human label of the component kind, e.g. "Wine (Proton)". */
+    val title: String = type,
+    /** profile.json versionName the entry installs as; used to detect "already installed" from files. */
+    val versionName: String = "",
+    val note: String = ""
+)
+
+enum class ComponentStatus { NotInstalled, Installed, UpdateAvailable, Incomplete }
+
+/** Install state of one catalog slot, derived from files under filesDir/contents (not from prefs). */
+data class ComponentState(
+    val entry: CatalogEntry,
+    val status: ComponentStatus,
+    val installed: List<InstalledContent>,
+    val installedVersion: String?
 )
 
 object ContentManager {
 
     val CATALOG = listOf(
         CatalogEntry(
+            type = "imagefs",
+            name = "imagefs_bionic rootfs (GameNative-hosted, licence unclear)",
+            url = "https://downloads.gamenative.app/imagefs_bionic.txz",
+            sha256 = "368db62bfc58b72c97e5169bda9aa64d4246f07964c447e27c79a065e7e9c48b",
+            title = "Rootfs",
+            versionName = "bionic",
+            note = "Android bionic userland for Wine"
+        ),
+        CatalogEntry(
             type = "Proton",
             name = "proton-11.0-2-arm64ec (GameNative bionic)",
             url = "https://github.com/GameNative/proton-wine/releases/download/proton-11.0-2-20260928/proton-11.0-2-arm64ec.wcp",
-            sha256 = "fffa467241bdae3eacd6ceb7e8096bb7793d617ce53a198dae8bc63a3453f595"
+            sha256 = "fffa467241bdae3eacd6ceb7e8096bb7793d617ce53a198dae8bc63a3453f595",
+            title = "Wine (Proton)",
+            versionName = "11.0-2-arm64ec",
+            note = "Proton Wine, ARM64EC build"
         ),
         CatalogEntry(
             type = "FEXCore",
             name = "FEXCore-2609 (WCP Hub)",
             url = "https://github.com/Arihany/WinlatorWCPHub/releases/download/FEXCore/FEXCore-2609.wcp",
-            sha256 = "520c31b8ea601baf691da4577f53034e80f4b13bcbfe9d96167f2c402c1db9d1"
+            sha256 = "520c31b8ea601baf691da4577f53034e80f4b13bcbfe9d96167f2c402c1db9d1",
+            title = "FEX",
+            versionName = "2609",
+            note = "x86/x86_64 emulation"
         ),
         CatalogEntry(
             type = "DXVK",
             name = "dxvk-arm64ec-3.1.1 (WCP Hub)",
             url = "https://github.com/Arihany/WinlatorWCPHub/releases/download/DXVK-ARM64EC/dxvk-arm64ec-3.1.1.wcp",
-            sha256 = "f3765e3589a5b84888d52cc03f26e93c2d3db3565def47dc63cb75a183aaaaaa"
-        ),
-        CatalogEntry(
-            type = "imagefs",
-            name = "imagefs_bionic rootfs (GameNative-hosted, licence unclear)",
-            url = "https://downloads.gamenative.app/imagefs_bionic.txz",
-            sha256 = "368db62bfc58b72c97e5169bda9aa64d4246f07964c447e27c79a065e7e9c48b"
+            sha256 = "f3765e3589a5b84888d52cc03f26e93c2d3db3565def47dc63cb75a183aaaaaa",
+            title = "DXVK",
+            versionName = "3.1.1-arm64ec",
+            note = "Direct3D 8/9/10/11 to Vulkan"
         )
     )
+
+    /** Leading numeric part of a version ("11.0-2-arm64ec" -> [11,0,2]); empty if not numeric ("bionic"). */
+    private fun versionNumbers(v: String): List<Int> =
+        Regex("^\\d+(?:[.\\-]\\d+)*").find(v)?.value?.split('.', '-')?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+
+    /** True only if [candidate] is known to be newer than [installed]. */
+    fun isNewer(candidate: String, installed: String): Boolean {
+        val a = versionNumbers(candidate)
+        val b = versionNumbers(installed)
+        if (a.isEmpty() || b.isEmpty()) return false
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val x = a.getOrElse(i) { 0 }
+            val y = b.getOrElse(i) { 0 }
+            if (x != y) return x > y
+        }
+        return false
+    }
+
+    /** Payload files that must exist for an install to be usable (guards against half-deleted dirs). */
+    fun isComplete(c: InstalledContent): Boolean {
+        val base = when (c.type) {
+            "Proton" -> File(c.dir, "bin/wine").exists() && File(c.dir, "bin/wineserver").exists()
+            "imagefs" -> File(c.dir, "usr").isDirectory
+            else -> true
+        }
+        if (!base) return false
+        // Every file the profile maps (DXVK dlls, FEX dlls ...) must be present in the package.
+        return try {
+            val files = JSONObject(File(c.dir, "profile.json").readText()).optJSONArray("files")
+            (0 until (files?.length() ?: 0)).all { i ->
+                val src = files!!.optJSONObject(i)?.optString("source", "") ?: ""
+                src.isEmpty() || File(c.dir, src).exists()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun stateFor(entry: CatalogEntry, installedAll: List<InstalledContent>): ComponentState {
+        val ofType = installedAll.filter { it.type == entry.type }
+        val usable = ofType.filter { isComplete(it) }
+        // Exact catalog version if present, else the newest usable one.
+        val best = usable.firstOrNull { it.versionName == entry.versionName }
+            ?: usable.reduceOrNull { a, b -> if (isNewer(b.versionName, a.versionName)) b else a }
+        val status = when {
+            ofType.isEmpty() -> ComponentStatus.NotInstalled
+            best == null -> ComponentStatus.Incomplete
+            isNewer(entry.versionName, best.versionName) -> ComponentStatus.UpdateAvailable
+            else -> ComponentStatus.Installed
+        }
+        return ComponentState(entry, status, ofType, best?.versionName)
+    }
+
+    /** Installed content of [type] (first complete one), or null. Used by launch card / settings. */
+    fun current(context: Context, type: String): InstalledContent? =
+        list(context).firstOrNull { it.type == type && isComplete(it) }
 
     fun list(context: Context): List<InstalledContent> {
         val list = mutableListOf<InstalledContent>()
