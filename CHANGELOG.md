@@ -1,5 +1,35 @@
 # Changelog
 
+## g615-v11-csf-v0.1.0-beta.11 (prerelease)
+
+Mesa `5a07217f034b` + csf-v11 patches up to 098
+(`patchSeriesId sha256:da34f4ae23daf7b7285c395dd2f3eabb156c04d5ffb9bdc5240189e3037b9c29`).
+Poco X6 Pro, Mali-G615 MC6, mali_kbase CSF UAPI 1.21. Android minApi 35.
+
+### Fixed
+- `VK_ERROR_DEVICE_LOST` on tiler heap out-of-memory (new 098). The
+  VERTEX_TILER_COMPLETED and FRAGMENT_COMPLETED heap operations left the
+  kbase heap counters at `vt_start 1, vt_end 0, frag_end 16`. kbase rejects
+  that with EINVAL on tiler OOM and terminates the group. On kbase, panvk now
+  emits only VERTEX_TILER_STARTED; the queue's heap renewal (043) reclaims the
+  chunks. Need for Speed Most Wanted hit this on every launch.
+- Memory blow-up in long sessions (new 097). Each command pool allocated its
+  own TLS BO (84 MiB in NFS:MW, about 20 of them), and the GPU prerast arenas
+  committed 480 MB up front. TLS is now one device-wide BO that grows, and the
+  arenas are grow-on-fault kbase regions. NFS:MW RSS: idle 1.2 GB -> 0.75 GB;
+  gameplay 2.0 -> 4.1 GB+ (MemAvailable 0) -> flat 2.0-2.1 GB over 10 minutes.
+
+### Results
+- NFS:MW (i686 D3D9, PanPlay, FEX Extreme): intro 86 fps, race 40-44 fps,
+  results 55 fps. No DEVICE_LOST and no app kills in 10 minutes.
+- Regression: i686 D3D9 cube 46.7 fps, MiSide (x86_64 D3D11) 58 fps.
+- Details: `worklogs/driver-remaining/097-098-nfs-memory-and-heap-ops.md`.
+
+### Known issues
+- GPU load is low (GED reports 0-11% busy at 265 MHz). Submission on kbase is
+  synchronous, so the CPU and GPU do not overlap and DVFS stays at the lowest
+  clock. This is the next bottleneck after FEX.
+
 ## g615-v11-csf-v0.1.0-beta.10 (prerelease)
 
 Mesa `5a07217f034b` + csf-v11 patches up to 096

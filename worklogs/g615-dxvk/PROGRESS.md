@@ -65,7 +65,7 @@ Checks:
 - 089 (depth clamp/clip per GS-selected viewport) is in the series (`patches/csf-v11/089-*.patch`) and verified on the G615 (`worklogs/driver-remaining/089-device-verification.md`). No CTS run.
 - Review files: `tmp/review-085-088/`.
 
-Released: beta.6 (up to 077), beta.7 (up to 082), beta.8 (up to 084), beta.9 (up to 092, tag `g615-v11-csf-v0.1.0-beta.9`), beta.10 (up to 096 including the new 091 dma-heap placed maps, tag `g615-v11-csf-v0.1.0-beta.10`, bundled in PanPlay). See `CHANGELOG.md`.
+Released: beta.6 (up to 077), beta.7 (up to 082), beta.8 (up to 084), beta.9 (up to 092, tag `g615-v11-csf-v0.1.0-beta.9`), beta.10 (up to 096 including the new 091 dma-heap placed maps, tag `g615-v11-csf-v0.1.0-beta.10`), beta.11 (up to 098: device-wide TLS and grow-on-fault prerast arenas (097), only VERTEX_TILER_STARTED heap ops on kbase (098); fixes NFS:MW memory blow-up and DEVICE_LOST; tag `g615-v11-csf-v0.1.0-beta.11`, bundled in PanPlay 1.0.3). See `CHANGELOG.md`.
 Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELLATION.md`, `tmp/HANDOFF-devicelost.md`.
 
 ## What's left for DXVK (driver)

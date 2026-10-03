@@ -119,15 +119,20 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-`g615-v11-csf-v0.1.0-beta.10` is the latest published tag (prerelease, Mesa
-`5a07217f` plus the committed csf-v11 series up to 096). It makes 32-bit
+`g615-v11-csf-v0.1.0-beta.11` is the latest published tag (prerelease, Mesa
+`5a07217f` plus the committed csf-v11 series up to 098). It fixes the
+`VK_ERROR_DEVICE_LOST` on tiler heap OOM (098) and the memory blow-up from
+per-pool TLS and eagerly committed prerast arenas (097). Need for Speed Most
+Wanted stays at about 2.0 GB RSS and runs races at 40-44 fps with FEX Extreme.
+The bundled driver in PanPlay 1.0.3 is beta.11. See the
+[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.11).
+beta.10 (up to 096) made 32-bit
 WoW64 games fast and correct. Placed maps now map the BO's dma-buf again at
 the requested address (091) instead of a shadow copy. Need for Speed Most
 Wanted (DXVK D3D9) went from 0.5 fps to 39-66 fps, with clean HUD and text.
 It also adds GPU chunking of large and indirect prerast draws (094, 096),
 the tessellation conditional-state fix (093), and the sample count for
-attachment-less secondaries (095). The bundled driver in PanPlay is
-beta.10. Assets: Android and glibc drivers, `.adpkg` package, EMULATOR zip,
+attachment-less secondaries (095). Assets: Android and glibc drivers, `.adpkg` package, EMULATOR zip,
 the test APK and screenshots. See [`CHANGELOG.md`](CHANGELOG.md) and the
 [release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.10).
 beta.9 added `depthBounds` (092), `shaderOutputViewportIndex` from VS/TES
