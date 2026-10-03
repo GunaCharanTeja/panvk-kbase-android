@@ -1,0 +1,13 @@
+CUBE: d3d9 CreateDevice hr=0x00000000
+CUBE: d3d9 Present frame=0 hr=0x00000000
+CUBE: d3d9 Present frame=1 hr=0x00000000
+CUBE: d3d9 Present frame=2 hr=0x00000000
+CUBE: d3d9 Present frame=3 hr=0x00000000
+CUBE: d3d9 Present frame=4 hr=0x00000000
+CUBE: d3d9 Present frame=5 hr=0x00000000
+CUBE: d3d9 Present frame=6 hr=0x00000000
+CUBE: d3d9 Present frame=7 hr=0x00000000
+CUBE: d3d9 Present frame=8 hr=0x00000000
+CUBE: d3d9 Present frame=9 hr=0x00000000
+CUBE: PASS api=d3d9 frames=23 (check pixels)
+exit=0

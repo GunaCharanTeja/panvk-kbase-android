@@ -298,6 +298,8 @@ object ContainerManager {
 
         if (dxvk) {
             envMap["DXVK_LOG_LEVEL"] = "info"
+            // HUD on by default; a user-set DXVK_HUD (extra or app env) wins.
+            envMap["DXVK_HUD"] = extra?.get("DXVK_HUD") ?: System.getenv("DXVK_HUD") ?: "full"
         }
 
         val fexDll = File(containerDir, ".wine/drive_c/windows/system32/libwow64fex.dll")
