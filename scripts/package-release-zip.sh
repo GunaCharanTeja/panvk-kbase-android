@@ -69,10 +69,10 @@ ver = "$VERSION"
 
 if flavor == "adrenotools":
     name = "PanVK G615"
-    desc = "PanVK Mali-G615/Kbase-CSF driver with Phase 1-7 support (D3D12 FL 11_1, Geometry & Tessellation Shaders, Transform Feedback, EDS 1-3, Descriptor Buffer, DGC, 187 Extensions) for Winlator and AdrenoTools."
+    desc = "PanVK Mali-G615/Kbase-CSF driver 1.0-FC (Zenithblue stable base with full DXVK all versions and VKD3D-Proton / Direct3D 12 support) for Winlator and AdrenoTools."
 else:
     name = "PanVK G615 (X11)"
-    desc = "PanVK Mali-G615/Kbase-CSF driver with Phase 1-7 support (D3D12 FL 11_1, Geometry & Tessellation Shaders, Transform Feedback, EDS 1-3, Descriptor Buffer, DGC, 187 Extensions) for Termux X11."
+    desc = "PanVK Mali-G615/Kbase-CSF driver 1.0-FC (Zenithblue stable base with full DXVK all versions and VKD3D-Proton / Direct3D 12 support) for Termux X11."
 
 meta = {
     "schemaVersion": 1,
