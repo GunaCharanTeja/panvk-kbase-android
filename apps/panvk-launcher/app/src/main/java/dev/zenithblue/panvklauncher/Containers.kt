@@ -763,8 +763,9 @@ object ContainerManager {
                 sanitized = "import.exe"
             }
 
-            val winePrefix = File(ctx.filesDir, "container/.wine")
-            val importedRoot = File(winePrefix, "drive_c/imported")
+            // Outside container/: setup() wipes the container dir, which would delete imported games.
+            val winePrefix = File(ctx.filesDir, "games")
+            val importedRoot = File(winePrefix, "imported")
             var ancestorCheck: File? = importedRoot
             while (ancestorCheck != null && ancestorCheck != winePrefix && ancestorCheck.absolutePath.startsWith(winePrefix.absolutePath)) {
                 if (ancestorCheck.exists() && Files.isSymbolicLink(ancestorCheck.toPath())) {
@@ -774,7 +775,7 @@ object ContainerManager {
             }
 
             val timestamp = System.currentTimeMillis()
-            val destDir = File(winePrefix, "drive_c/imported/$timestamp")
+            val destDir = File(importedRoot, timestamp.toString())
 
             if (!destDir.mkdirs() && !destDir.isDirectory) {
                 return null
