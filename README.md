@@ -8,7 +8,7 @@ Standalone patch/build layer around pinned upstream Mesa that produces an
 open Mesa PanVK driver talking directly to Android's proprietary
 `mali_kbase` kernel interface (`/dev/mali0`).
 
-Target repository name: `JICA98/panvk-kbase-android`
+Repository: [`zenithblue-oss/panvk-kbase-android`](https://github.com/zenithblue-oss/panvk-kbase-android)
 
 Primary consumers:
 
