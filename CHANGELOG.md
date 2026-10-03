@@ -1,5 +1,50 @@
 # Changelog
 
+## g615-v11-csf-v0.1.0-beta.10 (prerelease)
+
+Mesa `5a07217f034b` + csf-v11 patches up to 096
+(`patchSeriesId sha256:4a6969c20c8152d751fb955fea54104ef4acacf4a56e546d32bbe94cbdd966a8`).
+Poco X6 Pro, Mali-G615 MC6, mali_kbase CSF UAPI 1.21. Android minApi 35.
+
+### Fixed
+- 32-bit (i686 WoW64) games are fast and draw correctly. Placed maps
+  (`VK_EXT_map_memory_placed`) now map the BO's dma-buf a second time at
+  the requested address (new 091). This replaces the beta.9 shadow copy,
+  which was merged word by word on every kick and wait. Need for Speed Most
+  Wanted (DXVK D3D9) went from 0.5 fps to 39-66 fps, with clean DXVK HUD and
+  game text. The i686 D3D10/D3D11 cubes now draw geometry instead of a grey
+  frame.
+- Tessellation state emission is no longer predicated on conditional
+  rendering (093).
+- Restart-strip chunk planning uses the whole workgroup, which fixes the
+  094 device-lost flake (096).
+
+### Added
+- Large and indirect `gpu_prerast` draws (XFB, GS, tessellation) are
+  chunked on the GPU, with no 65536-invocation cap (094).
+- Attachment-less secondaries get the sample count of their context (095).
+
+### Results
+- NFS Most Wanted: 39-46 fps in gameplay and 66 fps in the main menu.
+  i686 cubes D3D8/9/10/11 at 46-47 fps. x86_64 and ARM64EC cubes and
+  MiSide are unchanged.
+- CTS: `memory.mapping`, `memory.map_placed` and `synchronization{,2}.basic`
+  give 4520 pass / 0 fail / 13 NotSupported. `map_placed` passes 13/13.
+  For 093-096, the 36144-case list gives 17067 pass / 0 fail.
+- Details: `worklogs/driver-remaining/091-placed-dma-heap.md`.
+
+### Known issues
+- Placed maps need `/dev/dma_heap/system`. Without it they fail with
+  `VK_ERROR_MEMORY_MAP_FAILED`.
+- With `memoryMapPlaced` enabled, every host-visible allocation comes from
+  the dma-heap.
+
+## g615-v11-csf-v0.1.0-beta.9 (prerelease)
+
+Release notes are on the release page (patches up to 092: depthBounds,
+VS/TES viewport index, per-viewport depth clamp, CSF event memory, and
+placed maps through a shadow copy).
+
 ## g615-v11-csf-v0.1.0-beta.8 (prerelease)
 
 Mesa `5a07217f034b` + csf-v11 patches up to 084

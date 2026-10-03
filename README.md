@@ -119,15 +119,20 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-`g615-v11-csf-v0.1.0-beta.9` is the latest published tag (prerelease, Mesa
-`5a07217f` plus the committed csf-v11 series up to 092). It adds `depthBounds`
-(092, v10/v11), `shaderOutputViewportIndex` from VS/TES (090, v10/v11),
-per-viewport depth clamp/clip for GS-selected viewports (089), CSF event-memory
-sync words (085), tessellation conditional-rendering replay (087), TES patch
-IDs in geometry shaders (088), and placed `vkMapMemory` for 32-bit apps via a
-shadow copy. Assets: Android and glibc drivers, `.adpkg` package, EMULATOR zip,
+`g615-v11-csf-v0.1.0-beta.10` is the latest published tag (prerelease, Mesa
+`5a07217f` plus the committed csf-v11 series up to 096). It makes 32-bit
+WoW64 games fast and correct. Placed maps now map the BO's dma-buf again at
+the requested address (091) instead of a shadow copy. Need for Speed Most
+Wanted (DXVK D3D9) went from 0.5 fps to 39-66 fps, with clean HUD and text.
+It also adds GPU chunking of large and indirect prerast draws (094, 096),
+the tessellation conditional-state fix (093), and the sample count for
+attachment-less secondaries (095). The bundled driver in PanPlay is
+beta.10. Assets: Android and glibc drivers, `.adpkg` package, EMULATOR zip,
 the test APK and screenshots. See [`CHANGELOG.md`](CHANGELOG.md) and the
-[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.9).
+[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.10).
+beta.9 added `depthBounds` (092), `shaderOutputViewportIndex` from VS/TES
+(090), per-viewport depth clamp/clip (089) and CSF event-memory sync words
+(085).
 beta.8 added X11 surfaces (`VK_KHR_xlib_surface`, `VK_KHR_xcb_surface`) for
 Wine/Proton launchers that display through Termux:X11; the X11/XCB libraries
 are loaded at runtime from the launcher's library path and are not bundled.
