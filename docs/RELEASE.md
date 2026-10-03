@@ -21,3 +21,16 @@ Fault safety: hard timeouts, small allocations, tiny images, single queue,
 bounded frames, one change per run. Never spam CSF kicks after fault, fake
 DRM nodes/features, guess Kbase structs across DDKs, or mix JM/CSF ioctls.
 After severe fault: save logs + kernel evidence, stop, reboot if needed.
+
+## Release checklist
+
+- Every release attaches, and embeds at the very top of the release notes
+  (before any text section), the latest panvk-test screenshots and the latest
+  panvk-launcher 3D (DXVK cube, with HUD) screenshots. Give each launcher image
+  its arch and API.
+- Embed only committed files, via
+  `https://raw.githubusercontent.com/zenithblue-oss/panvk-kbase-android/<tag-or-sha>/<path>`,
+  and check each URL returns 200 (`curl -sI`) after publishing. Upload the same
+  images as release assets.
+- Build assets from a clean worktree of the release commit, not the dirty
+  working tree; confirm the patch series applies on the pinned Mesa base.

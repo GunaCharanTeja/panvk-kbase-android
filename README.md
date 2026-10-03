@@ -64,18 +64,19 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-`g615-v11-csf-v0.1.0-beta.8` is the latest published tag (prerelease, Mesa
-`5a07217f` plus csf-v11 patches up to 084). The Android driver now exposes
-X11 surfaces (`VK_KHR_xlib_surface`, `VK_KHR_xcb_surface`) for Wine/Proton
-launchers that display through Termux:X11. The X11/XCB libraries are loaded at
-runtime from the launcher's library path and are not bundled. Presentation is
-a software copy (X11 `PutImage`). This support is basic-tested only; the D3D
-matrix and full validation are pending. beta.7 added
-`vertexPipelineStoresAndAtomics` on v10-v12 and fixed an intermittent
-tessellation `DeviceLost`. Assets: Android and glibc drivers, `.adpkg`
-package, EMULATOR zip, and the test APK. See [`CHANGELOG.md`](CHANGELOG.md)
-and the
-[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.8).
+`g615-v11-csf-v0.1.0-beta.9` is the latest published tag (prerelease, Mesa
+`5a07217f` plus the committed csf-v11 series up to 092). It adds `depthBounds`
+(092, v10/v11), `shaderOutputViewportIndex` from VS/TES (090, v10/v11),
+per-viewport depth clamp/clip for GS-selected viewports (089), CSF event-memory
+sync words (085), tessellation conditional-rendering replay (087), TES patch
+IDs in geometry shaders (088), and placed `vkMapMemory` for 32-bit apps via a
+shadow copy. Assets: Android and glibc drivers, `.adpkg` package, EMULATOR zip,
+the test APK and screenshots. See [`CHANGELOG.md`](CHANGELOG.md) and the
+[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.9).
+beta.8 added X11 surfaces (`VK_KHR_xlib_surface`, `VK_KHR_xcb_surface`) for
+Wine/Proton launchers that display through Termux:X11; the X11/XCB libraries
+are loaded at runtime from the launcher's library path and are not bundled.
+Presentation is a software copy (X11 `PutImage`).
 
 `g615-v11-csf-v0.1.0-beta.3` (code commit
 `fc8a759e7d1b2b8de01c0e96f1fdc5e3950ba1a3`, published 2026-09-19) and its
@@ -132,7 +133,7 @@ features are listed in [`docs/RUNTIME-FEATURES.md`](docs/RUNTIME-FEATURES.md).
 
 ## DXVK / vkd3d-proton compliance (G615)
 
-### Current state (after csf-v11/082)
+### Current state (after csf-v11/092)
 
 DXVK Native v3.1.1 on the Poco X6 Pro creates a D3D11 device at
 **feature level 11_0** (`D3D11 HRESULT=0x00000000 feature_level=0xb000`);
@@ -157,14 +158,18 @@ with no CPU fallback or simulation, and is exposed only after device proof.
 | `variableMultisampleRate` | 074 | variable_rate 504 / 0 standalone (tmp/cts/p5-vmsr/summary.txt); combined regression run (geometry + tessellation + transform_feedback.simple + variable_rate: 15955 cases, 6210 pass, 9745 NotSupported, 0 fail; source tmp/cts/r6-geo/status.txt) |
 | `sync_fd` export | 075 (kbase KCPU queue) | sync_fd 1996 / 0 |
 | `vertexPipelineStoresAndAtomics` (v10-v12) | 078-082, vertex stage on the compute pre-raster path | atomic_operations `*_vertex*` 66 / 0; 12132-case tess/geometry/xfb/draw list 7940 / 0, 0 DeviceLost |
+| per-viewport depth clamp/clip (beta.9) | 089, GS-selected viewports drawn as ordered runs | panvk-test `gs_viewport_depth` exact (no CTS) |
+| `shaderOutputViewportIndex` from VS/TES (beta.9, v10/v11) | 090 | panvk-test `vs_viewport_index` 6/6 (no CTS) |
+| `depthBounds` (beta.9, v10/v11) | 092, fragment-shader emulation | 2059 depth-bounds CTS cases: 1774 pass / 0 fail / 285 NotSupported; panvk-test `depth_bounds` 6/6 |
 
-DXVK feature level 11_1 has not been re-checked on the beta.7 or beta.8
-builds yet. On beta.8 the Android driver has X11 surfaces, but under Proton 11
+DXVK feature level 11_1 has not been re-checked on the beta.7 to beta.9
+builds yet. The Android driver has X11 surfaces (beta.8), but under Proton 11
 (i686 through wow64) Wine fails to create the Vulkan surface before the
-driver is called, so DXVK presentation there is still blocked.
+driver is called, so DXVK presentation there is still blocked. `depthBounds`
+lowered pipelines lose FPK, and `EarlyFragmentTests` shaders with depth writes
+compare against the fragment's new depth (see the beta.9 release notes).
 Still missing: `robustImageAccess2` (the vkd3d-proton device-create
-blocker), `depthBounds`,
-`shaderOutputViewportIndex` (not exposed; no patch sets it), and
+blocker) and
 sparse (FL12_0, `NO-GO` on Kbase). The X11 present teardown hang was seen once
 under Xvfb only and is unverified on Android. Progress and TODOs:
 [`worklogs/g615-dxvk/PROGRESS.md`](worklogs/g615-dxvk/PROGRESS.md). Roadmap:
