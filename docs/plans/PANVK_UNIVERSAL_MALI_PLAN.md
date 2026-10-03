@@ -49,7 +49,7 @@ Status reflects the repo as of 2026-09-29. "Donor" means a public tree with repo
 
 | Wave | Family / arch | GPUs (examples) | Frontend | Kbase UAPI seen | Typical SoCs / vendor kbase | Our profile | Our status | Best donor evidence |
 |---|---|---|---|---|---|---|---|---|
-| A0 | Valhall 5th-gen v11 | G615 | CSF | 1.21 | MTK D8300 (duchamp) | `g615-v11-csf` | **Anchor**: M1 in progress, 41 patches | — |
+| A0 | Valhall 4th-gen v11 | G615 | CSF | 1.21 | MTK D8300 (duchamp) | `g615-v11-csf` | **Anchor**: M1 in progress, 41 patches | — |
 | A1 | 5th-gen v12 | G720, G625/G725 | CSF | 1.30 (r49p1, MT6899) | MTK D8400/D9300, D7400 | `g720-v12-csf` (stub) | NOT_INVESTIGATED; `patches/csf-v12` empty | wonderkast02 beta.2 `f1d7bed` (G720 MC8): graphics, compute, AHB, tess |
 | B | Valhall v9 | G57, G68, G77, G78, G78AE | JM | 11.x (r32p1–r54p1) | MTK G99/G100/D6080/D1080, Kompanio 1300T; Unisoc T6xx/T8xx; Exynos 1280/1380 | `g57-v9-jm` (stub) | NOT_INVESTIGATED; `jm-v9` empty | FristOneRR beta 1.1.0 (G57 MC2 widely reported working; G68/G77 partial; Exynos 1380 G68 fails to load); Noysz `0a4f0e2` (no WSI) |
 | C | Bifrost v7 | G52, G76, G51 | JM | 11.38 (Redmi 13C), r49.1 (A38) | MTK G85/G88/G95, Helio P-series; Unisoc T6xx; Exynos 9xx | `g52-v7-jm` (stub) | NOT_INVESTIGATED; `jm-v7` empty | LukeValen `dd2d0ee` + v0.0.1-alpha (Winlator VKCube, DXVK D3D9–11, but advertises unimplemented features, so not reusable as-is); FristOneRR (A38 G52 r1, 56-byte atom stride); G76 (G95) reportedly freezes |
