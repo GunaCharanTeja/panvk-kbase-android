@@ -19,3 +19,17 @@ index 27190b7e6fa..e1849612202 100644
     return VK_SUCCESS;
  }
  
+diff --git a/src/panfrost/lib/kmod/kbase_kmod.h b/src/panfrost/lib/kmod/kbase_kmod.h
+--- a/src/panfrost/lib/kmod/kbase_kmod.h
++++ b/src/panfrost/lib/kmod/kbase_kmod.h
+@@ -73,6 +73,10 @@
+                                       const uint64_t *targets_minus_one,
+                                       unsigned count);
+ 
++/* Pull GPU writes into placed-map shadow copies.  Call once GPU completion
++ * has been observed; idle = all submitted jobs have retired. */
++void kbase_kmod_csf_sync_shadows(struct pan_kmod_dev *dev, bool idle);
++
+ /* Report whether this kbase context has seen a queue-group error.  The error
+  * state is latched while completion waits consume the notification stream. */
+ bool kbase_kmod_csf_has_error(const struct pan_kmod_dev *dev);

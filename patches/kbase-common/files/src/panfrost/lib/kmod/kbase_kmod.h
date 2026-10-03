@@ -68,10 +68,6 @@ int kbase_kmod_csf_wait_cqs64(struct pan_kmod_dev *dev, uint64_t addr,
                               uint64_t target_minus_one,
                               int64_t timeout_ns);
 
-/* Pull GPU writes into placed-map shadow copies.  Call once GPU completion
- * has been observed; idle = all submitted jobs have retired. */
-void kbase_kmod_csf_sync_shadows(struct pan_kmod_dev *dev, bool idle);
-
 /* Report whether this kbase context has seen a queue-group error.  The error
  * state is latched while completion waits consume the notification stream. */
 bool kbase_kmod_csf_has_error(const struct pan_kmod_dev *dev);
