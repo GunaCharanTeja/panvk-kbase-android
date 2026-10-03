@@ -71,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -106,6 +107,10 @@ fun GamesScreen(
 
     fun refresh() { games = ShortcutStore.list(ctx) }
 
+    // Read-only own test programs bundled in the APK, extracted to files/games/builtin on first run.
+    var builtin by remember { mutableStateOf(emptyList<Shortcut>()) }
+    LaunchedEffect(Unit) { builtin = withContext(Dispatchers.IO) { BuiltinTests.extract(ctx); BuiltinTests.list(ctx) } }
+
     // Shortcuts written over adb have arch/icon = auto: resolve them here.
     LaunchedEffect(games) {
         if (games.any { it.arch == "auto" || it.icon == "auto" }) {
@@ -122,22 +127,7 @@ fun GamesScreen(
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             AnimatedVisibility(visible = busy) { RunningBanner(runningName, onStop) }
-            if (games.isEmpty()) {
-                Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
-                    EmptyState(
-                        icon = Icons.Rounded.SportsEsports,
-                        title = "No games yet",
-                        body = "Add a Windows .exe to build your library, then tap it to launch.",
-                        modifier = Modifier.widthIn(max = 420.dp),
-                        action = {
-                            Button(onClick = {
-                                editingIsNew = true
-                                editing = Shortcut(id = ShortcutStore.newId(), name = "", exe = "")
-                            }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Add game") }
-                        }
-                    )
-                }
-            } else {
+            run {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 400.dp),
                     modifier = Modifier.fillMaxSize(),
@@ -146,6 +136,13 @@ fun GamesScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    if (games.isEmpty()) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        Text(
+                            "No games yet. Tap Add game to pick a Windows .exe, or run a built-in test below.",
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
                     items(games, key = { it.id }) { g ->
                         GameCard(
                             g = g,
@@ -163,10 +160,24 @@ fun GamesScreen(
                             onDelete = { menuFor = null; deleting = g }
                         )
                     }
+                    if (builtin.isNotEmpty()) {
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            Text("Built-in tests", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp).semantics { heading() })
+                        }
+                        items(builtin, key = { it.id }) { g ->
+                            GameCard(
+                                g = g, busy = busy, defaultResolution = defaultResolution,
+                                menuOpen = false, onOpenMenu = {}, onCloseMenu = {},
+                                onPlay = { launching = g }, onEdit = {}, onDuplicate = {}, onDelete = {},
+                                readOnly = true
+                            )
+                        }
+                    }
                 }
             }
         }
-        if (games.isNotEmpty()) {
+        run {
             ExtendedFloatingActionButton(
                 onClick = {
                     editingIsNew = true
@@ -194,7 +205,7 @@ fun GamesScreen(
                 launching = null
                 // Resolution / driver picked on the card are saved on the game, then it starts.
                 scope.launch(Dispatchers.IO) {
-                    ShortcutStore.save(ctx, updated)
+                    if (!BuiltinTests.isBuiltin(updated)) ShortcutStore.save(ctx, updated)
                     withContext(Dispatchers.Main) { refresh(); onLaunch(updated) }
                 }
             }
@@ -262,7 +273,8 @@ private fun GameCard(
     onPlay: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    readOnly: Boolean = false
 ) {
     val played = if (g.lastPlayed > 0)
         "Played " + DateUtils.getRelativeTimeSpanString(
@@ -290,7 +302,7 @@ private fun GameCard(
                 )
                 Text(played, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Box {
+            if (!readOnly) Box {
                 IconButton(onClick = onOpenMenu, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = "Options for ${g.name}")
                 }
@@ -392,7 +404,7 @@ private fun ShortcutEditorSheet(
                     if (path != null) {
                         exe = path
                         if (name.isBlank()) name = File(path).nameWithoutExtension
-                    }
+                    } else android.widget.Toast.makeText(ctx, ContainerManager.IMPORT_FAIL_MSG, android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         }

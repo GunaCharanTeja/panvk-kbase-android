@@ -83,9 +83,9 @@ object ShortcutStore {
             .mapNotNull { f -> try { fromJson(JSONObject(f.readText())) } catch (_: Exception) { null } }
             .sortedBy { it.name.lowercase() }
 
-    /** Match by exact id, else case-insensitive name, else unique name prefix. */
+    /** Match by exact id, else case-insensitive name, else unique name prefix. Includes built-in tests. */
     fun find(ctx: Context, key: String): Shortcut? {
-        val all = list(ctx)
+        val all = list(ctx) + BuiltinTests.list(ctx)
         all.firstOrNull { it.id == key }?.let { return it }
         all.firstOrNull { it.name.equals(key, true) }?.let { return it }
         return all.filter { it.name.startsWith(key, true) }.singleOrNull()
@@ -299,5 +299,42 @@ object PeInfo {
         }
         val bmp = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
         return ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+    }
+}
+
+/** Own test programs (built from tests/dxcube.c) shipped in assets/builtin; read-only shortcuts, never stored in files/shortcuts. */
+object BuiltinTests {
+    private val ARCHES = listOf(Triple("i686", "i386", "x86"), Triple("x86_64", "x86_64", "x64"), Triple("arm64ec", "arm64ec", "ARM64EC"))
+    // (api, label, exe prefix, argument)
+    private val APIS = listOf(
+        listOf("d3d8", "D3D8", "dxcube8", ""), listOf("d3d9", "D3D9", "dxcube", "d3d9"),
+        listOf("d3d10", "D3D10", "dxcube", "d3d10"), listOf("d3d11", "D3D11", "dxcube", "d3d11")
+    )
+
+    fun isBuiltin(s: Shortcut) = s.id.startsWith("builtin-")
+    private fun dir(ctx: Context) = File(ctx.filesDir, "games/builtin")
+
+    /** Copy bundled exes out of the APK (first run, or when the APK ships a different size). */
+    fun extract(ctx: Context) {
+        val d = dir(ctx).apply { mkdirs() }
+        val updated = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).lastUpdateTime } catch (_: Exception) { Long.MAX_VALUE }
+        try {
+            for (n in ctx.assets.list("builtin") ?: return) {
+                val out = File(d, n)
+                // Re-extract after each app update (compressed assets have no cheap length).
+                if (out.isFile && out.lastModified() >= updated) continue
+                ctx.assets.open("builtin/$n").use { i -> out.outputStream().use { i.copyTo(it) } }
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun list(ctx: Context): List<Shortcut> = APIS.flatMap { (api, label, exe, arg) ->
+        ARCHES.mapNotNull { (file, arch, short) ->
+            val f = File(dir(ctx), "$exe-$file.exe")
+            if (!f.isFile) null else Shortcut(
+                id = "builtin-$api-$file", name = "Cube · $label · $short", exe = f.path, args = arg,
+                arch = arch, icon = "none", created = 0
+            )
+        }
     }
 }

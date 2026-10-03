@@ -74,6 +74,7 @@ fun LaunchSheet(
         info.missing.forEach { add("${it.label} is not installed. Install it in Components.") }
         if (!info.exeExists) add("Executable not found on this device.")
         if (busy) add("Wine is already running. Stop it first.")
+        if (info.arch == "i386") ContainerManager.wow64Problem(ctx)?.let { add(it) }
     }
 
     // Default M3 sheet caps at 640dp; landscape gets a wider two-column sheet so Launch stays on screen.

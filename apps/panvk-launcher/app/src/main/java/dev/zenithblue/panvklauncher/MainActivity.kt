@@ -223,7 +223,7 @@ fun LauncherApp(
                     // Shortcut: per-game resolution (global display pref), lastPlayed, args/env/driver via LaunchOptions.
                     // Game's own size applies to this run only; the saved default stays as it is.
                     DisplayServer.launchOverride = sc.resolution.takeIf { Resolution.parse(it) != null }
-                    ShortcutStore.save(context, sc.copy(lastPlayed = System.currentTimeMillis()))
+                    if (!BuiltinTests.isBuiltin(sc)) ShortcutStore.save(context, sc.copy(lastPlayed = System.currentTimeMillis()))
                     mainHandler.post { addLog("Launch shortcut '${sc.name}' (${sc.id})") }
                 }
                 launched = true
@@ -326,7 +326,7 @@ fun LauncherApp(
                         runWineExe(resolvedPath)
                     }
                 } else {
-                    mainHandler.post { addLog("Failed to import URI: $uri") }
+                    mainHandler.post { addLog("Failed to import URI: $uri. ${ContainerManager.IMPORT_FAIL_MSG}") }
                 }
             }
         }

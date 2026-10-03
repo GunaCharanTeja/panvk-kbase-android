@@ -159,6 +159,8 @@ object ContainerManager {
             }
 
             if (fex != null) applyFex(fex.dir, winePrefix)
+            File(wine.dir, "lib/wine/i386-windows").listFiles { f -> f.isFile && f.extension.lowercase() in WOW64_EXT }
+                ?.forEach { f -> File(syswow64, f.name).let { if (!it.exists()) f.copyTo(it) } }
 
             val containerJson = JSONObject().apply {
                 put("wine", wine.dir.absolutePath)
@@ -243,11 +245,50 @@ object ContainerManager {
         } catch (_: Exception) {}
     }
 
+    private val WOW64_EXT = setOf("dll", "exe", "sys", "drv", "ax", "ocx", "cpl", "acm", "tlb", "mui", "vxd", "msc", "tbc", "ds", "mfplat")
+
+    /** Why 32-bit (i386) games cannot run with the installed components, or null when WoW64 is usable. */
+    fun wow64Problem(ctx: Context): String? {
+        val wine = ContentManager.list(ctx).firstOrNull { it.type == "Proton" }
+            ?: return "32-bit games need Proton, which is not installed."
+        if (!File(wine.dir, "lib/wine/i386-windows/kernel32.dll").isFile)
+            return "This Proton build has no 32-bit (i386) support. Install a Proton with i386-windows."
+        val fex = ContentManager.list(ctx).firstOrNull { it.type == "FEXCore" }
+        val hasFex = File(ctx.filesDir, "container/.wine/drive_c/windows/system32/libwow64fex.dll").isFile ||
+            (fex != null && File(fex.dir, "wine/aarch64-windows/libwow64fex.dll").isFile)
+        if (!hasFex) return "32-bit games need FEXCore with libwow64fex.dll. Install FEXCore in Components."
+        return null
+    }
+
+    /** Self-heal: container made win64-only has an empty syswow64. Copy Wine's i386 PE dlls in (never overwrites). Returns true if copied. */
+    private fun ensureWow64(ctx: Context): Boolean {
+        val containerDir = File(ctx.filesDir, "container")
+        val prefix = File(containerDir, ".wine")
+        val syswow64 = File(prefix, "drive_c/windows/syswow64")
+        if (!prefix.isDirectory || File(syswow64, "kernel32.dll").isFile) return false
+        val wine = getContainerConfig(ctx)?.first?.takeIf { File(it, "lib/wine/i386-windows").isDirectory }
+            ?: ContentManager.list(ctx).firstOrNull { it.type == "Proton" }?.dir
+            ?: return false
+        val src = File(wine, "lib/wine/i386-windows")
+        val files = src.listFiles { f -> f.isFile && f.extension.lowercase() in WOW64_EXT } ?: return false
+        syswow64.mkdirs()
+        try {
+            for (f in files) {
+                val d = File(syswow64, f.name)
+                if (!d.exists()) f.copyTo(d)
+            }
+            // 32-bit exe needs libwow64fex.dll in system32 too (arm64 side hosts the emulator).
+            ContentManager.list(ctx).firstOrNull { it.type == "FEXCore" }?.let { applyFex(it.dir, prefix) }
+        } catch (_: Exception) { return false }
+        return true
+    }
+
     fun env(ctx: Context, extra: Map<String, String>? = null): Map<String, String> {
         val containerDir = File(ctx.filesDir, "container")
         containerDir.mkdirs()
         ensureFex(ctx)
-        ensureDxvk(ctx)
+        val wowCopied = ensureWow64(ctx)
+        ensureDxvk(ctx, force = wowCopied)
         val imagefs = File(ctx.filesDir, "contents/imagefs/bionic")
         val tmpDir = File(imagefs, "usr/tmp")
         tmpDir.mkdirs()
@@ -717,120 +758,41 @@ object ContainerManager {
         prefs.edit().putString(KEY_RECENTS, jsonArray.toString()).apply()
     }
 
+    /** Message for callers when a picked file has no real, readable path (a single-exe copy would lack its game data). */
+    const val IMPORT_FAIL_MSG = "Game must be on accessible storage. Grant All files access in Settings and pick the exe from its real folder."
+
+    /**
+     * Picked document -> real filesystem path (needs All files access to be readable). Never copies:
+     * a lone exe without its DLLs/data cannot run. Returns null when no readable path can be derived.
+     */
     fun resolveUriToPath(ctx: Context, uri: Uri): String? {
-        if (uri.authority == "com.android.externalstorage.documents") {
-            try {
-                val docId = DocumentsContract.getDocumentId(uri)
-                if (docId.startsWith("primary:")) {
-                    val rel = docId.removePrefix("primary:")
-                    val hasDotDot = rel.split('/', '\\').any { it == ".." }
-                    if (!hasDotDot && !rel.startsWith("/")) {
-                        val baseDir = File("/storage/emulated/0")
-                        val baseCanon = baseDir.canonicalPath.trimEnd(File.separatorChar) + File.separator
-                        val file = File(baseDir, rel)
-                        val fileCanon = file.canonicalPath
-                        if (fileCanon.startsWith(baseCanon) && file.isFile && file.canRead()) {
-                            return file.absolutePath
-                        }
-                    }
+        val cands = mutableListOf<String>()
+        try {
+            val docId = DocumentsContract.getDocumentId(uri)
+            when (uri.authority) {
+                "com.android.externalstorage.documents" -> {
+                    val vol = docId.substringBefore(':')
+                    val rel = docId.substringAfter(':', "")
+                    val root = if (vol == "primary") "/storage/emulated/0" else "/storage/$vol"
+                    cands.add("$root/$rel")
                 }
+                "com.android.providers.downloads.documents" ->
+                    if (docId.startsWith("raw:")) cands.add(docId.removePrefix("raw:"))
+            }
+        } catch (_: Exception) {}
+        try {
+            ctx.contentResolver.query(uri, arrayOf("_data"), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0)?.let { cands.add(it) }
+            }
+        } catch (_: Exception) {}
+        if (uri.scheme == "file") uri.path?.let { cands.add(it) }
+        for (c in cands) {
+            try {
+                val f = File(c)
+                if (c.split('/').none { it == ".." } && f.isFile && f.canRead()) return f.canonicalPath
             } catch (_: Exception) {}
         }
-
-        return try {
-            var displayName: String? = null
-            try {
-                ctx.contentResolver.query(
-                    uri,
-                    arrayOf(OpenableColumns.DISPLAY_NAME),
-                    null,
-                    null,
-                    null
-                )?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        if (idx >= 0) {
-                            displayName = cursor.getString(idx)
-                        }
-                    }
-                }
-            } catch (_: Exception) {}
-
-            if (displayName.isNullOrEmpty()) {
-                displayName = uri.lastPathSegment ?: "import.exe"
-            }
-
-            val baseName = File(displayName!!).name
-            var sanitized = baseName.filter { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '.' || it == '_' || it == '-' }
-            sanitized = sanitized.replace(Regex("\\.{2,}"), "_")
-            while (sanitized.startsWith(".")) {
-                sanitized = sanitized.removePrefix(".")
-            }
-            if (sanitized.isEmpty() || sanitized == "." || sanitized == "..") {
-                sanitized = "import.exe"
-            }
-
-            // Outside container/: setup() wipes the container dir, which would delete imported games.
-            val winePrefix = File(ctx.filesDir, "games")
-            val importedRoot = File(winePrefix, "imported")
-            var ancestorCheck: File? = importedRoot
-            while (ancestorCheck != null && ancestorCheck != winePrefix && ancestorCheck.absolutePath.startsWith(winePrefix.absolutePath)) {
-                if (ancestorCheck.exists() && Files.isSymbolicLink(ancestorCheck.toPath())) {
-                    return null
-                }
-                ancestorCheck = ancestorCheck.parentFile
-            }
-
-            val timestamp = System.currentTimeMillis()
-            val destDir = File(importedRoot, timestamp.toString())
-
-            if (!destDir.mkdirs() && !destDir.isDirectory) {
-                return null
-            }
-
-            var checkDir: File? = destDir
-            while (checkDir != null && checkDir != winePrefix && checkDir.absolutePath.startsWith(winePrefix.absolutePath)) {
-                if (Files.isSymbolicLink(checkDir.toPath())) {
-                    return null
-                }
-                checkDir = checkDir.parentFile
-            }
-
-            val partFile = File(destDir, "$sanitized.part")
-            val destFile = File(destDir, sanitized)
-
-            var writeSuccess = false
-            try {
-                ctx.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(partFile).use { output ->
-                        input.copyTo(output)
-                    }
-                    writeSuccess = true
-                }
-            } catch (_: Exception) {
-                writeSuccess = false
-            }
-
-            if (!writeSuccess) {
-                try { partFile.delete() } catch (_: Exception) {}
-                return null
-            }
-
-            val renamed = partFile.renameTo(destFile)
-            if (!renamed) {
-                try { partFile.delete() } catch (_: Exception) {}
-                return null
-            }
-
-            if (destFile.isFile) {
-                destFile.setExecutable(true, false)
-                destFile.absolutePath
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            null
-        }
+        return null
     }
 
     fun importUri(ctx: Context, uri: Uri): String? = resolveUriToPath(ctx, uri)
@@ -841,11 +803,15 @@ object ContainerManager {
     }
 
     /** DXVK defaults on (wined3d needs GL, which Android lacks); also restores DLLs wiped by a container rebuild. */
-    private fun ensureDxvk(ctx: Context) {
+    private fun ensureDxvk(ctx: Context, force: Boolean = false) {
         if (!isSetup(ctx)) return
         val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val missing = !File(ctx.filesDir, "container/.wine/drive_c/windows/system32/dxgi.dll").exists()
-        if (!prefs.contains("dxvk_enabled") || (isDxvkEnabled(ctx) && missing)) setDxvkEnabled(ctx, true)
+        val win = File(ctx.filesDir, "container/.wine/drive_c/windows")
+        val dxvk = ContentManager.list(ctx).firstOrNull { it.type == "DXVK" }
+        val srcWow = dxvk?.let { File(it.dir, "syswow64/dxgi.dll") }
+        val missing = !File(win, "system32/dxgi.dll").exists() ||
+            (srcWow?.isFile == true && File(win, "syswow64/dxgi.dll").length() != srcWow.length())
+        if (!prefs.contains("dxvk_enabled") || (isDxvkEnabled(ctx) && (missing || force))) setDxvkEnabled(ctx, true)
     }
 
     fun setDxvkEnabled(ctx: Context, on: Boolean): String? {
