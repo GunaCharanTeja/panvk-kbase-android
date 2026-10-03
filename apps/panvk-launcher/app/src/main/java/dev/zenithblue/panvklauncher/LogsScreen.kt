@@ -77,7 +77,7 @@ fun LogActions(logs: List<String>, onClear: () -> Unit) {
     Row(horizontalArrangement = Arrangement.End) {
         IconButton(onClick = {
             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("PanVK launcher log", logs.joinToString("\n")))
+            cm.setPrimaryClip(ClipData.newPlainText("PanPlay log", logs.joinToString("\n")))
         }, enabled = logs.isNotEmpty()) { Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy log") }
         IconButton(onClick = onClear, enabled = logs.isNotEmpty()) { Icon(Icons.Rounded.DeleteSweep, contentDescription = "Clear log") }
     }

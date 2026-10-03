@@ -1,6 +1,6 @@
 # Built-in display server and controller input
 
-Status 2026-10-03. Display: implemented, device results in `tests/results/builtin-xserver/`. Controller: implemented, see "Controller status".
+Applies to PanPlay (`apps/panvk-launcher`). Status 2026-10-03. Display: implemented, device results in `tests/results/builtin-xserver/`. Controller: implemented, see "Controller status".
 
 ## Display: choice
 

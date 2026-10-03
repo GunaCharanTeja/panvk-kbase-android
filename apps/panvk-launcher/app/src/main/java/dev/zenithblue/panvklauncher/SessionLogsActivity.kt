@@ -48,7 +48,7 @@ class SessionLogsActivity : ComponentActivity() {
             val send = Intent(Intent.ACTION_SEND).apply {
                 type = "application/zip"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "PanVK session logs ${dir.name}")
+                putExtra(Intent.EXTRA_SUBJECT, "PanPlay session logs${dir.name}")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             ctx.startActivity(Intent.createChooser(send, "Share session logs").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))

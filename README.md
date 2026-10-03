@@ -23,6 +23,15 @@ capable of loading an alternate Vulkan ICD.
 This is NOT a Samba-specific or Winlator-specific fork. One driver
 source/patch stack, adapter packages around it.
 
+## Apps
+
+| | App | What it is | Download |
+|---|---|---|---|
+| <img src="apps/panvk-launcher/docs/panplay-logo-512.png" width="48" alt="PanPlay logo"> | **PanPlay** (`apps/panvk-launcher`) | Windows game launcher (Wine + DXVK + built-in X server) with the PanVK driver bundled | [PanPlay releases](https://github.com/zenithblue-oss/panvk-kbase-android/releases?q=panplay&expanded=true) |
+| <img src="apps/panvk-test/docs/panprobe-logo-512.png" width="48" alt="PanProbe logo"> | **PanProbe** (`apps/panvk-test`) | Vulkan feature/extension info and on-device driver tests | [PanProbe releases](https://github.com/zenithblue-oss/panvk-kbase-android/releases?q=panprobe&expanded=true) |
+
+Both apps support Mali-G615 only. See [apps/panvk-launcher/docs](apps/panvk-launcher/docs) for launcher usage.
+
 ## Reference device
 
 - Phone: Poco X6 Pro (2311DRK48I, `duchamp`)

@@ -1,6 +1,6 @@
 # Game shortcuts
 
-Games tab in the launcher = library of Windows games. Each game is one JSON file
+Games tab in PanPlay (the launcher, `apps/panvk-launcher`) = library of Windows games. Each game is one JSON file
 `/data/data/dev.zenithblue.panvklauncher/files/shortcuts/<id>.json` (+ `<id>.png` icon).
 
 ## UI
