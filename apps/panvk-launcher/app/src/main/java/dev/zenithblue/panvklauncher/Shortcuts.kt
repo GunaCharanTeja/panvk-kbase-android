@@ -333,7 +333,7 @@ object BuiltinTests {
             val f = File(dir(ctx), "$exe-$file.exe")
             if (!f.isFile) null else Shortcut(
                 id = "builtin-$api-$file", name = "Cube · $label · $short", exe = f.path, args = arg,
-                arch = arch, icon = "none", created = 0
+                arch = arch, icon = "res:ic_directx_cube", created = 0
             )
         }
     }

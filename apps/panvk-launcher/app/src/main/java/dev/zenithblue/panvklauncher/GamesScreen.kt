@@ -325,7 +325,8 @@ fun GameIcon(g: Shortcut, size: Int = 56) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     val bmp = remember(g.id, g.icon) {
-        ShortcutStore.iconFile(ctx, g)?.let { BitmapFactory.decodeFile(it.path)?.asImageBitmap() }
+        if (g.icon == "res:ic_directx_cube") BitmapFactory.decodeResource(ctx.resources, R.drawable.ic_directx_cube)?.asImageBitmap()
+        else ShortcutStore.iconFile(ctx, g)?.let { BitmapFactory.decodeFile(it.path)?.asImageBitmap() }
     }
     // Restrained fallback palette: the three theme container colors, picked by name so a game keeps its color.
     val (bg, fg) = when (Math.floorMod(g.name.hashCode(), 3)) {
