@@ -380,6 +380,8 @@ object ContainerManager {
         extra?.get("ANDROID_SYSVSHM_SERVER")?.let { envMap["ANDROID_SYSVSHM_SERVER"] = it }
         // Gamepad: LD_PRELOAD shim -> SDL virtual Xbox pad -> winebus. Graphical runs only.
         if (extra?.containsKey("DISPLAY") == true) envMap.putAll(GamepadBridge.env(ctx))
+        // FEX preset (default Intermediate); per-game env below may override single FEX_* keys.
+        envMap.putAll(FexPresets.env(launchOpts.get()?.fexMode ?: ""))
         // Per-game shortcut env wins over defaults (but not DISPLAY / display plumbing above).
         launchOpts.get()?.env?.forEach { (k, v) -> if (k != "DISPLAY" && k != "DXVK_HUD") envMap[k] = v }
         return envMap

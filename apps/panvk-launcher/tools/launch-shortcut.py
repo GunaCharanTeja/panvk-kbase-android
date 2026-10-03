@@ -2,7 +2,7 @@
 """Host helper for the PanVK Launcher game shortcuts (see docs/GAME-SHORTCUTS.md).
 
   launch-shortcut.py --list
-  launch-shortcut.py --add /path/on/device/game.exe [--name N] [--args "-w"] [--env K=V]... [--res 1280x720] [--driver ID] [--arch i386|x86_64|arm64ec]
+  launch-shortcut.py --add /path/on/device/game.exe [--name N] [--args "-w"] [--env K=V]... [--res 1280x720] [--driver ID] [--fex MODE] [--arch i386|x86_64|arm64ec]
   launch-shortcut.py --launch NAME_OR_ID [--wait 20] [--screenshot out.png] [--logs [DIR]] [--force-stop]
   launch-shortcut.py --delete NAME_OR_ID
 
@@ -83,7 +83,7 @@ def cmd_add(a):
     old = [s for s in list_shortcuts() if s.get('name', '').lower() == name.lower()]
     sc = old[0] if old else {'id': 'g' + uuid.uuid4().hex[:8], 'created': int(time.time() * 1000), 'lastPlayed': 0}
     sc.update(name=name, exe=a.add, args=a.args or '', env=env, arch=a.arch or detect_arch(a.add),
-              resolution=a.res or '', driver=a.driver or '', icon='auto')  # icon filled in by the app
+              resolution=a.res or '', driver=a.driver or '', fex=a.fex or '', icon='auto')  # icon filled in by the app
     write_json(sc)
     print('%s %s  %s  arch=%s' % ('updated' if old else 'added', sc['id'], name, sc['arch']))
 
@@ -139,6 +139,7 @@ def main():
     g.add_argument('--delete', metavar='NAME|ID')
     p.add_argument('--name'); p.add_argument('--args'); p.add_argument('--env', action='append')
     p.add_argument('--res'); p.add_argument('--driver'); p.add_argument('--arch')
+    p.add_argument('--fex', help='FEX preset: Stability|Compatibility|Intermediate|Performance|Extreme|Denuvo')
     p.add_argument('--wait', type=int, default=0, help='seconds to wait after launch')
     p.add_argument('--screenshot', metavar='PNG')
     p.add_argument('--logs', nargs='?', const='logs-out', metavar='DIR', help='pull wine + DXVK logs after launch')

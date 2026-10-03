@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * "Launch" card shown before a game starts. Lists every runtime part with its real installed version
- * (read-only) and lets the user change only resolution and driver. Both choices are saved on the game.
+ * (read-only) and lets the user change only resolution, driver and FEX mode. Both choices are saved on the game.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +68,7 @@ fun LaunchSheet(
     var driverId by remember(game.id) {
         mutableStateOf(DriverManager.find(ctx, drivers, game.driver)?.id ?: "")
     }
+    var fexMode by remember(game.id) { mutableStateOf(FexPresets.resolve(game.fex)) }
     val chosenDriver = if (driverId.isEmpty()) activeDriver else drivers.firstOrNull { it.id == driverId } ?: activeDriver
 
     val problems = buildList {
@@ -108,6 +109,7 @@ fun LaunchSheet(
                             InfoRow(r.label, r.name, r.version, subIsError = r.missing)
                         }
                         InfoRow("PanVK driver", chosenDriver.label, chosenDriver.buildId.ifEmpty { chosenDriver.driverVersion })
+                        InfoRow("FEX mode", fexMode)
                         InfoRow("Executable", info.exePath, info.arch)
                         // Controller assignment is set in the game's Edit sheet; its mapping can be edited from here.
                         TextButton(onClick = { editCtl = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Edit controls…") }
@@ -124,6 +126,13 @@ fun LaunchSheet(
                         selected = driverId,
                         onSelect = { driverId = it }
                     )
+                    DropdownField(
+                        label = "FEX mode",
+                        options = FexPresets.modes.map { it to it },
+                        selected = fexMode,
+                        onSelect = { fexMode = it }
+                    )
+                    Text(FexPresets.hint(fexMode), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (problems.isNotEmpty()) {
                         Column(
                             modifier = Modifier.semantics(mergeDescendants = true) {},
@@ -135,7 +144,7 @@ fun LaunchSheet(
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 52.dp)) { Text("Cancel") }
                         Button(
-                            onClick = { onLaunch(game.copy(resolution = resolution, driver = driverId)) },
+                            onClick = { onLaunch(game.copy(resolution = resolution, driver = driverId, fex = fexMode)) },
                             enabled = problems.isEmpty(),
                             modifier = Modifier.weight(1f).heightIn(min = 52.dp)
                         ) {

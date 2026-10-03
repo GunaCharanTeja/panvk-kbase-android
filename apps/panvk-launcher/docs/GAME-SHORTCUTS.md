@@ -18,7 +18,7 @@ Games tab in PanPlay (the launcher, `apps/panvk-launcher`) = library of Windows 
 
 ```json
 {"id":"g1a2b3c4d","name":"dxcube","exe":"/data/user/0/dev.zenithblue.panvklauncher/files/games/dxcube.exe",
- "args":"","env":{"DXVK_HUD":"full"},"arch":"x86_64","resolution":"","driver":"",
+ "args":"","env":{"DXVK_HUD":"full"},"arch":"x86_64","resolution":"","driver":"","fex":"",
  "icon":"auto","created":0,"lastPlayed":0}
 ```
 
@@ -26,7 +26,7 @@ Games tab in PanPlay (the launcher, `apps/panvk-launcher`) = library of Windows 
 (informational, shown in UI; the runtime picks WOW64/FEX/ARM64EC from the PE itself).
 `icon`: `auto` = app extracts on next Games-tab open, `none` = no icon, else file name.
 `resolution`: `""` = leave the launcher display resolution alone, else sets the display
-resolution pref before launch (global pref, persists). `driver`: `""` = selected driver, else `Driver.id`.
+resolution pref before launch (global pref, persists). `driver`: `""` = selected driver, else `Driver.id`. `fex`: FEX preset (`""` = Intermediate; Stability, Compatibility, Intermediate, Performance, Extreme, Denuvo), applied as `FEX_*` env before the per-game `env`.
 Per-game `env` is applied last (wins over launcher defaults, except `DISPLAY`).
 
 ## Intent (debug builds only)
@@ -46,7 +46,7 @@ Serial: `-s SERIAL` or `$ADB_SERIAL` (default `192.168.1.34:40501`). Uses `run-a
 ```
 tools/launch-shortcut.py --list
 tools/launch-shortcut.py --add /data/user/0/dev.zenithblue.panvklauncher/files/games/dxcube.exe \
-        --name dxcube [--args "..."] [--env DXCUBE_SECS=30 --env DXVK_HUD=full] [--res 1280x720] [--driver ID]
+        --name dxcube [--args "..."] [--env DXCUBE_SECS=30 --env DXVK_HUD=full] [--res 1280x720] [--driver ID] [--fex Extreme]
 tools/launch-shortcut.py --launch dxcube --wait 25 --screenshot out.png --logs out-logs/
 tools/launch-shortcut.py --launch dxcube --force-stop   # kill a running game/app first
 tools/launch-shortcut.py --delete dxcube

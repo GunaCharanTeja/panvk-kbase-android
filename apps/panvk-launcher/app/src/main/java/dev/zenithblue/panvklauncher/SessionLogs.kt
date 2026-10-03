@@ -173,6 +173,8 @@ object SessionLogs {
     private fun configText(ctx: Context, sc: Shortcut?, exePath: String, run: ContainerManager.RunInfo?) = buildString {
         appendLine("== Shortcut ==")
         appendLine(sc?.let { File(ctx.filesDir, "shortcuts/${it.id}.json").takeIf { f -> f.isFile }?.readText() } ?: "(none, plain exe run: $exePath)")
+        appendLine("\n== FEX mode ==")
+        appendLine(FexPresets.resolve(sc?.fex ?: ""))
         appendLine("\n== Controller config ==")
         appendLine(ControllerInput.config.toJson().toString(2))
         appendLine("\n== Wine command ==")

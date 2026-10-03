@@ -24,6 +24,7 @@ data class Shortcut(
     val arch: String = "auto", // auto | i386 | x86_64 | arm64ec | arm64
     val resolution: String = "", // "" = launcher default, else e.g. 1280x720
     val driver: String = "", // "" = launcher default, else Driver.id
+    val fex: String = "", // "" = FexPresets.DEFAULT, else a FexPresets mode
     val icon: String = "auto",
     val created: Long = System.currentTimeMillis(),
     val lastPlayed: Long = 0
@@ -33,8 +34,40 @@ data class Shortcut(
 data class LaunchOptions(
     val args: List<String> = emptyList(),
     val env: Map<String, String> = emptyMap(),
-    val driverId: String = ""
+    val driverId: String = "",
+    val fexMode: String = ""
 )
+
+/** FEX emulation presets, applied as FEX_* env on the Wine process (FEX also reads them in libwow64fex.dll). */
+object FexPresets {
+    const val DEFAULT = "Intermediate"
+    val modes = listOf("Stability", "Compatibility", "Intermediate", "Performance", "Extreme", "Denuvo")
+    fun resolve(m: String) = if (m in modes) m else DEFAULT
+
+    fun hint(m: String) = when (resolve(m)) {
+        "Stability" -> "Full TSO, no multiblock. Slowest, safest."
+        "Compatibility" -> "Full TSO with multiblock."
+        "Intermediate" -> "Default. Partial TSO; good for most games."
+        "Performance" -> "TSO off. Fast; multithreaded games can crash."
+        "Extreme" -> "TSO off plus fast timing. Best for old single-threaded games; multithreaded games can crash."
+        else -> "Extreme plus full SMC checks and hidden hypervisor bit. For DRM titles; slower."
+    }
+
+    // TSO, VECTORTSO, MEMCPYSETTSO, HALFBARRIERTSO, X87REDUCEDPRECISION, MULTIBLOCK
+    private val keys = listOf("TSOENABLED", "VECTORTSOENABLED", "MEMCPYSETTSOENABLED", "HALFBARRIERTSOENABLED", "X87REDUCEDPRECISION", "MULTIBLOCK")
+    private val table = mapOf(
+        "Stability" to "111100", "Compatibility" to "111101", "Intermediate" to "100111",
+        "Performance" to "000011", "Extreme" to "000011", "Denuvo" to "000011"
+    )
+
+    fun env(m: String): Map<String, String> {
+        val mode = resolve(m)
+        val e = keys.zip(table.getValue(mode).toList()).associate { (k, v) -> "FEX_$k" to v.toString() }.toMutableMap()
+        if (mode == "Extreme" || mode == "Denuvo") { e["FEX_SMALLTSCSCALE"] = "1"; e["FEX_VOLATILEMETADATA"] = "1" }
+        if (mode == "Denuvo") { e["FEX_SMCCHECKS"] = "full"; e["FEX_HIDEHYPERVISORBIT"] = "1" }
+        return e
+    }
+}
 
 /** Intent extra consumed by MainActivity (debug builds only): shortcut id or name. */
 const val EXTRA_LAUNCH_SHORTCUT = "dev.zenithblue.panvklauncher.LAUNCH_SHORTCUT"
@@ -61,7 +94,7 @@ object ShortcutStore {
     private fun toJson(s: Shortcut) = JSONObject().apply {
         put("id", s.id); put("name", s.name); put("exe", s.exe); put("args", s.args)
         put("env", JSONObject(s.env)); put("arch", s.arch); put("resolution", s.resolution)
-        put("driver", s.driver); put("icon", s.icon); put("created", s.created)
+        put("driver", s.driver); put("fex", s.fex); put("icon", s.icon); put("created", s.created)
         put("lastPlayed", s.lastPlayed)
     }
 
@@ -73,7 +106,7 @@ object ShortcutStore {
             id = j.getString("id"), name = j.optString("name", j.getString("id")),
             exe = j.getString("exe"), args = j.optString("args", ""), env = env,
             arch = j.optString("arch", "auto"), resolution = j.optString("resolution", ""),
-            driver = j.optString("driver", ""), icon = j.optString("icon", "auto"),
+            driver = j.optString("driver", ""), fex = j.optString("fex", ""), icon = j.optString("icon", "auto"),
             created = j.optLong("created", 0), lastPlayed = j.optLong("lastPlayed", 0)
         )
     }
@@ -142,7 +175,7 @@ object ShortcutStore {
     }
 
     fun launchOptions(ctx: Context, s: Shortcut) = LaunchOptions(
-        args = splitArgs(s.args), env = s.env, driverId = s.driver
+        args = splitArgs(s.args), env = s.env, driverId = s.driver, fexMode = s.fex
     )
 
     /** Whitespace split honouring "double quotes". */
