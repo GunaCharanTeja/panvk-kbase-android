@@ -14,19 +14,18 @@ Validation test: CTS dEQP-VK.api.external.{semaphore,fence}.sync_fd.* + synchron
 diff --git a/src/panfrost/lib/kmod/kbase_kmod.c b/src/panfrost/lib/kmod/kbase_kmod.c
 --- a/src/panfrost/lib/kmod/kbase_kmod.c
 +++ b/src/panfrost/lib/kmod/kbase_kmod.c
-@@ -110,6 +110,12 @@
+@@ -110,5 +110,11 @@
        int fence_fd;
     } kcpu;
- 
++
 +   struct {
 +      simple_mtx_t lock;
 +      base_kcpu_queue_id id;
 +      bool valid;
 +   } kcpu_export;
-+
-    /* BOs with a placed shadow mapping (struct kbase_kmod_bo *). */
-    struct {
-       simple_mtx_t lock;
+ };
+
+ struct kbase_kmod_vm {
 @@ -1070,6 +1076,89 @@
     return ret;
  }
@@ -122,9 +121,9 @@ diff --git a/src/panfrost/lib/kmod/kbase_kmod.c b/src/panfrost/lib/kmod/kbase_km
     kbase_dev->kcpu.fence_fd = -1;
     simple_mtx_init(&kbase_dev->kcpu.lock, mtx_plain);
 +   simple_mtx_init(&kbase_dev->kcpu_export.lock, mtx_plain);
-    simple_mtx_init(&kbase_dev->shadows.lock, mtx_plain);
-    util_dynarray_init(&kbase_dev->shadows.list, NULL);
- 
+
+    if (is_csf && kbase_query_csif_info(fd, &kbase_dev->csif_info)) {
+       mesa_loge("kbase: failed to query the CSF global interface");
 @@ -1426,6 +1516,14 @@
     simple_mtx_unlock(&kbase_dev->kcpu.lock);
     simple_mtx_destroy(&kbase_dev->kcpu.lock);

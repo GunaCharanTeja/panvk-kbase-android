@@ -109,15 +109,6 @@ struct kbase_kmod_dev {
       uint64_t target_minus_one;
       int fence_fd;
    } kcpu;
-
-   /* BOs with a placed shadow mapping (struct kbase_kmod_bo *). */
-   struct {
-      simple_mtx_t lock;
-      struct util_dynarray list;
-      /* Queue kicks so far / kicks whose GPU writes were last pulled with
-       * the queue idle: GPU edits can only appear after a newer kick. */
-      uint64_t kick_epoch, pulled_epoch;
-   } shadows;
 };
 
 struct kbase_kmod_vm {
@@ -139,15 +130,6 @@ struct kbase_kmod_bo {
    /* CPU mapping established at allocation time, valid for the whole BO
     * lifetime.  bo_mmap returns it; bo_munmap is a no-op. */
    void *cpu_ptr;
-
-   /* Non-NULL while a caller-chosen-address CPU view exists
-    * (VK_EXT_map_memory_placed, e.g. 32-bit WOW64 needs < 4 GiB).  kbase
-    * cannot move or alias the SAME_VA VMA (mremap/MAP_FIXED are refused by
-    * its get_unmapped_area), so this is an anonymous shadow copy of
-    * cpu_ptr, kept coherent by kbase_shadow_merge().  snap is the content as
-    * of the last merge. */
-   void *placed;
-   void *snap;
 
    /* Mapping on the kbase fd which establishes the GPU VA.  This differs
     * from cpu_ptr for imported dma-bufs: Pixel kbase UMM mappings reserve the
@@ -775,97 +757,12 @@ kbase_kmod_csf_queue_term(struct pan_kmod_dev *dev, uint64_t ringbuf_va,
                 strerror(errno));
 }
 
-static void kbase_shadow_drop(struct kbase_kmod_bo *kbase_bo, bool merge);
-
-/* Placed-map shadows (see kbase_kmod_bo_mmap): merge CPU edits made in the
- * shadow into the BO and GPU edits made in the BO into the shadow, using the
- * snapshot taken at the previous merge to tell which side changed each word.
- * Kick/flush only push (cheap: cached compares).  GPU completion
- * (kbase_kmod_csf_sync_shadows), invalidate and unmap also pull, which reads
- * the BO: uncached on host-coherent types, 4 MiB cost ~60 ms with word loads
- * (merge on every kick/wait made i686 D3D9 run at 1 fps), ~2 ms bulk-copied.
- * ponytail: pull is O(placed bytes) per completion; add GPU-write tracking if
- * a game maps hundreds of MiB placed. */
-static void
-kbase_shadow_merge_bo(struct kbase_kmod_bo *b, bool pull)
-{
-   uint64_t *s = b->placed, *g = b->cpu_ptr, *o = b->snap;
-   size_t n = b->base.size / sizeof(uint64_t);
-   enum { CHUNK = 512 }; /* words, 4 KiB */
-   uint64_t tmp[CHUNK];
-
-   /* Push: shadow edits (compared against cached memory only) go to the BO. */
-   for (size_t c = 0; c < n; c += CHUNK) {
-      size_t m = MIN2(CHUNK, n - c);
-      if (!memcmp(s + c, o + c, m * sizeof(uint64_t)))
-         continue;
-      for (size_t i = c; i < c + m; i++) {
-         if (s[i] != o[i])
-            g[i] = o[i] = s[i];
-      }
-   }
-
-   /* Pull: GPU edits.  Reading the (usually uncached) BO is the expensive
-    * part, so it is bulk-copied per chunk and only done after GPU work. */
-   if (pull) {
-      for (size_t c = 0; c < n; c += CHUNK) {
-         size_t m = MIN2(CHUNK, n - c);
-         memcpy(tmp, g + c, m * sizeof(uint64_t));
-         if (!memcmp(tmp, o + c, m * sizeof(uint64_t)))
-            continue;
-         for (size_t i = 0; i < m; i++) {
-            if (tmp[i] != o[c + i])
-               s[c + i] = o[c + i] = tmp[i];
-         }
-      }
-   }
-}
-
-static void
-kbase_shadow_merge(struct pan_kmod_dev *dev, bool pull)
-{
-   struct kbase_kmod_dev *kbase_dev =
-      container_of(dev, struct kbase_kmod_dev, base);
-
-   simple_mtx_lock(&kbase_dev->shadows.lock);
-   if (!pull)
-      kbase_dev->shadows.kick_epoch++;
-   util_dynarray_foreach(&kbase_dev->shadows.list, struct kbase_kmod_bo *, b)
-      kbase_shadow_merge_bo(*b, pull);
-   simple_mtx_unlock(&kbase_dev->shadows.lock);
-}
-
-/* Called by the queue once it has observed GPU completion (the only point
- * where CPU code may legitimately read GPU-written memory): pull GPU edits of
- * every placed shadow.  Skipped when no kick happened since the last pull
- * done with the queue idle.  idle: every submitted job has retired. */
-void
-kbase_kmod_csf_sync_shadows(struct pan_kmod_dev *dev, bool idle)
-{
-   struct kbase_kmod_dev *kbase_dev =
-      container_of(dev, struct kbase_kmod_dev, base);
-
-   simple_mtx_lock(&kbase_dev->shadows.lock);
-   if (kbase_dev->shadows.kick_epoch != kbase_dev->shadows.pulled_epoch) {
-      uint64_t epoch = kbase_dev->shadows.kick_epoch;
-
-      util_dynarray_foreach(&kbase_dev->shadows.list, struct kbase_kmod_bo *,
-                            b)
-         kbase_shadow_merge_bo(*b, true);
-      if (idle)
-         kbase_dev->shadows.pulled_epoch = epoch;
-   }
-   simple_mtx_unlock(&kbase_dev->shadows.lock);
-}
-
 int
 kbase_kmod_csf_queue_kick(struct pan_kmod_dev *dev, uint64_t ringbuf_va)
 {
    struct kbase_ioctl_cs_queue_kick kick = {
       .buffer_gpu_addr = ringbuf_va,
    };
-
-   kbase_shadow_merge(dev, false);
 
    if (ioctl(dev->fd, KBASE_IOCTL_CS_QUEUE_KICK, &kick)) {
       mesa_loge("kbase: KBASE_IOCTL_CS_QUEUE_KICK failed: %s",
@@ -1352,8 +1249,6 @@ kbase_kmod_dev_create(int fd, uint32_t flags,
    kbase_dev->dma_heap_fd = -1;
    kbase_dev->kcpu.fence_fd = -1;
    simple_mtx_init(&kbase_dev->kcpu.lock, mtx_plain);
-   simple_mtx_init(&kbase_dev->shadows.lock, mtx_plain);
-   util_dynarray_init(&kbase_dev->shadows.list, NULL);
 
    if (is_csf && kbase_query_csif_info(fd, &kbase_dev->csif_info)) {
       mesa_loge("kbase: failed to query the CSF global interface");
@@ -1810,8 +1705,6 @@ kbase_kmod_bo_free(struct pan_kmod_bo *bo)
        kbase_bo->cpu_ptr != kbase_bo->gpu_mapping)
       munmap(kbase_bo->cpu_ptr, bo->size);
 
-   if (kbase_bo->placed)
-      kbase_shadow_drop(kbase_bo, false);
    if (kbase_bo->gpu_mapping)
       munmap(kbase_bo->gpu_mapping, bo->size);
 
@@ -1875,8 +1768,14 @@ kbase_kmod_bo_get_mmap_offset(struct pan_kmod_bo *bo)
 
 /* Return the CPU mapping established at allocation time.  A SAME_VA region
  * has exactly one CPU mapping and kbase's get_unmapped_area rejects both
- * MAP_FIXED and mremap(MREMAP_FIXED) (measured on G615: EINVAL), so a
- * caller-chosen address (placed map) gets a merged shadow copy. */
+ * MAP_FIXED and mremap(MREMAP_FIXED) (measured on G615: EINVAL).  A
+ * caller-chosen address (VK_EXT_map_memory_placed, 32-bit WoW64 needs
+ * < 4 GiB) therefore only works for dma-buf backed BOs: the dma-buf is mapped
+ * a second time at that address, sharing pages with the GPU (no copy, no
+ * sync).  panvk allocates host-visible memory from the dma-heap when the app
+ * enables memoryMapPlaced (patch 091).
+ * ponytail: without /dev/dma_heap placed maps fail (ENOTSUP); an anonymous
+ * shadow copy needs dirty tracking to be both correct and fast. */
 static void *
 kbase_kmod_bo_mmap(struct pan_kmod_bo *bo, UNUSED int prot, UNUSED int flags,
                    void *host_addr)
@@ -1889,82 +1788,37 @@ kbase_kmod_bo_mmap(struct pan_kmod_bo *bo, UNUSED int prot, UNUSED int flags,
       return MAP_FAILED;
    }
 
-   if (host_addr == NULL || host_addr == kbase_bo->cpu_ptr ||
-       host_addr == kbase_bo->placed)
-      return kbase_bo->placed ? kbase_bo->placed : kbase_bo->cpu_ptr;
+   if (host_addr == NULL || host_addr == kbase_bo->cpu_ptr)
+      return kbase_bo->cpu_ptr;
 
-   /* Placed mapping: kbase refuses to move or alias the SAME_VA VMA, so give
-    * the caller an anonymous shadow copy at its address (MAP_FIXED is the
-    * VK_EXT_map_memory_placed contract: the range is the caller's). */
-   if (kbase_bo->placed || !kbase_bo->same_va) {
+   if (kbase_bo->dmabuf_fd < 0) {
+      mesa_loge("kbase: placed map of a non-dma-buf BO is not supported");
       errno = ENOTSUP;
       return MAP_FAILED;
    }
 
-   struct kbase_kmod_dev *kbase_dev =
-      container_of(bo->dev, struct kbase_kmod_dev, base);
-   void *snap = malloc(bo->size);
-   if (!snap) {
-      errno = ENOMEM;
-      return MAP_FAILED;
-   }
-
+   /* MAP_FIXED is the VK_EXT_map_memory_placed contract: the range is the
+    * caller's (usually a PROT_NONE reservation). */
    void *p = mmap(host_addr, bo->size, PROT_READ | PROT_WRITE,
-                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-   if (p == MAP_FAILED) {
-      mesa_loge("kbase: shadow mmap at caller-chosen address %p failed: %s",
-                host_addr, strerror(errno));
-      free(snap);
-      return MAP_FAILED;
-   }
-
-   memcpy(p, kbase_bo->cpu_ptr, bo->size);
-   memcpy(snap, p, bo->size);
-   kbase_bo->placed = p;
-   kbase_bo->snap = snap;
-
-   simple_mtx_lock(&kbase_dev->shadows.lock);
-   util_dynarray_append(&kbase_dev->shadows.list, kbase_bo);
-   simple_mtx_unlock(&kbase_dev->shadows.lock);
+                  MAP_SHARED | MAP_FIXED, kbase_bo->dmabuf_fd, 0);
+   if (p == MAP_FAILED)
+      mesa_loge("kbase: placed dma-buf mmap at %p failed: %s", host_addr,
+                strerror(errno));
    return p;
 }
 
-static void
-kbase_shadow_drop(struct kbase_kmod_bo *kbase_bo, bool merge)
-{
-   struct kbase_kmod_dev *kbase_dev =
-      container_of(kbase_bo->base.dev, struct kbase_kmod_dev, base);
-
-   simple_mtx_lock(&kbase_dev->shadows.lock);
-   if (merge)
-      kbase_shadow_merge_bo(kbase_bo, true);
-   util_dynarray_foreach(&kbase_dev->shadows.list, struct kbase_kmod_bo *, b) {
-      if (*b == kbase_bo) {
-         *b = util_dynarray_pop(&kbase_dev->shadows.list,
-                                struct kbase_kmod_bo *);
-         break;
-      }
-   }
-   simple_mtx_unlock(&kbase_dev->shadows.lock);
-
-   munmap(kbase_bo->placed, kbase_bo->base.size);
-   free(kbase_bo->snap);
-   kbase_bo->placed = NULL;
-   kbase_bo->snap = NULL;
-}
-
 /* Normally the mapping belongs to the BO and lives until bo_free: unmapping
- * a SAME_VA region would free its GPU mapping too.  A placed shadow is
- * merged into the BO and dropped. */
+ * a SAME_VA region would free its GPU mapping too.  Only a placed dma-buf
+ * alias (any other address) is unmapped. */
 static int
-kbase_kmod_bo_munmap(struct pan_kmod_bo *bo, void *host_addr,
-                     UNUSED size_t size)
+kbase_kmod_bo_munmap(struct pan_kmod_bo *bo, void *host_addr, size_t size)
 {
    struct kbase_kmod_bo *kbase_bo =
       container_of(bo, struct kbase_kmod_bo, base);
 
-   if (kbase_bo->placed && host_addr == kbase_bo->placed)
-      kbase_shadow_drop(kbase_bo, true);
+   if (host_addr && host_addr != kbase_bo->cpu_ptr &&
+       host_addr != kbase_bo->gpu_mapping)
+      return munmap(host_addr, size);
    return 0;
 }
 
@@ -1995,15 +1849,6 @@ kbase_kmod_flush_bo_map_syncs(struct pan_kmod_dev *dev)
 
       const bool flush = sync->type == PAN_KMOD_BO_SYNC_CPU_CACHE_FLUSH;
 
-      /* Placed shadow: push CPU edits into the BO before a flush. */
-      if (kbase_bo->placed && flush) {
-         struct kbase_kmod_dev *kd =
-            container_of(dev, struct kbase_kmod_dev, base);
-         simple_mtx_lock(&kd->shadows.lock);
-         kbase_shadow_merge_bo(kbase_bo, false);
-         simple_mtx_unlock(&kd->shadows.lock);
-      }
-
       /* System-coherent regions (dma-heap imports on DDKs that report
        * BASE_MEM_COHERENT_SYSTEM) need no MEM_SYNC; the ioctl rejects
        * them with EINVAL. */
@@ -2018,15 +1863,6 @@ kbase_kmod_flush_bo_map_syncs(struct pan_kmod_dev *dev)
       };
 
       int ret = pan_kmod_ioctl(dev->fd, KBASE_IOCTL_MEM_SYNC, &req);
-
-      /* Placed shadow: pull GPU edits after an invalidate. */
-      if (!ret && kbase_bo->placed && !flush) {
-         struct kbase_kmod_dev *kd =
-            container_of(dev, struct kbase_kmod_dev, base);
-         simple_mtx_lock(&kd->shadows.lock);
-         kbase_shadow_merge_bo(kbase_bo, true);
-         simple_mtx_unlock(&kd->shadows.lock);
-      }
       if (ret) {
          mesa_loge("kbase: KBASE_IOCTL_MEM_SYNC failed: %s", strerror(errno));
          return -1;
