@@ -1,0 +1,86 @@
+# 092 device run log (Mali-G615 MC6, adb 192.168.1.34:40501)
+
+Device was shared with a launcher test session during parts of the work (not during the final runs below).
+
+## baseline: 090 driver + new test (tmp/apk-092-base.apk), from tmp/dev-092.log
+run 1: RESULT depth_bounds FAIL mismatch=0 fps=0 ms=55
+FEATURE depthBounds=0
+FAIL depthBounds not reported
+RESULT FAIL
+
+## first 092 build, per-lane sample loop (tmp/dev-092.log): case F failed
+FAIL case F_msaa4_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=64 skipped=0 badColor=3 badDepth=0
+FAIL case F_msaa4_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=64 skipped=0 badColor=3 badDepth=0
+BAD F_msaa4_static x=19 y=12 rgba=0,0,0,0 want_g=63
+BAD F_msaa4_static x=9 y=22 rgba=0,191,0,191 want_g=127
+
+## final 092 build: depth_bounds x6, then autorun all (tmp/dev-092c.log)
+== tmp/apk-092.apk depth_bounds x6
+run 1: RESULT depth_bounds PASS mismatch=0 fps=0 ms=80 
+FEATURE depthBounds=1
+PASS case A_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case B_dynamic bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case C_dynamic_low bounds=[0.10,0.20] checkedIn=64 checkedOut=896 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case D_dyn_enable_off bounds=[0.30,0.60] checkedIn=1024 checkedOut=0 partial=0 skipped=0 badColor=0 badDepth=0
+PASS case E_dyn_enable_on bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case G_no_fs_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case F_msaa4_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=64 skipped=0 badColor=0 badDepth=0
+RESULT PASS
+run 2: RESULT depth_bounds PASS mismatch=0 fps=0 ms=80 
+FEATURE depthBounds=1
+PASS case A_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case B_dynamic bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case C_dynamic_low bounds=[0.10,0.20] checkedIn=64 checkedOut=896 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case D_dyn_enable_off bounds=[0.30,0.60] checkedIn=1024 checkedOut=0 partial=0 skipped=0 badColor=0 badDepth=0
+PASS case E_dyn_enable_on bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case G_no_fs_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case F_msaa4_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=64 skipped=0 badColor=0 badDepth=0
+RESULT PASS
+run 3: RESULT depth_bounds PASS mismatch=0 fps=0 ms=70 
+FEATURE depthBounds=1
+PASS case A_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case B_dynamic bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case C_dynamic_low bounds=[0.10,0.20] checkedIn=64 checkedOut=896 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case D_dyn_enable_off bounds=[0.30,0.60] checkedIn=1024 checkedOut=0 partial=0 skipped=0 badColor=0 badDepth=0
+PASS case E_dyn_enable_on bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case G_no_fs_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case F_msaa4_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=64 skipped=0 badColor=0 badDepth=0
+RESULT PASS
+run 4: RESULT depth_bounds PASS mismatch=0 fps=0 ms=91 
+FEATURE depthBounds=1
+PASS case A_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case B_dynamic bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case C_dynamic_low bounds=[0.10,0.20] checkedIn=64 checkedOut=896 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case D_dyn_enable_off bounds=[0.30,0.60] checkedIn=1024 checkedOut=0 partial=0 skipped=0 badColor=0 badDepth=0
+PASS case E_dyn_enable_on bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case G_no_fs_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case F_msaa4_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=64 skipped=0 badColor=0 badDepth=0
+RESULT PASS
+run 5: RESULT depth_bounds PASS mismatch=0 fps=0 ms=89 
+FEATURE depthBounds=1
+PASS case A_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case B_dynamic bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case C_dynamic_low bounds=[0.10,0.20] checkedIn=64 checkedOut=896 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case D_dyn_enable_off bounds=[0.30,0.60] checkedIn=1024 checkedOut=0 partial=0 skipped=0 badColor=0 badDepth=0
+PASS case E_dyn_enable_on bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case G_no_fs_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case F_msaa4_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=64 skipped=0 badColor=0 badDepth=0
+RESULT PASS
+run 6: RESULT depth_bounds PASS mismatch=0 fps=0 ms=59 
+FEATURE depthBounds=1
+PASS case A_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case B_dynamic bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case C_dynamic_low bounds=[0.10,0.20] checkedIn=64 checkedOut=896 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case D_dyn_enable_off bounds=[0.30,0.60] checkedIn=1024 checkedOut=0 partial=0 skipped=0 badColor=0 badDepth=0
+PASS case E_dyn_enable_on bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case G_no_fs_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=0 skipped=64 badColor=0 badDepth=0
+PASS case F_msaa4_static bounds=[0.30,0.60] checkedIn=288 checkedOut=672 partial=64 skipped=0 badColor=0 badDepth=0
+RESULT PASS
+== tmp/apk-092.apk all x1
+run 1: RESULT gpu_prerast_slice PASS mismatch=0 fps=0 ms=70 RESULT clip_cull PASS mismatch=0 fps=4800.8 ms=1182 RESULT multi_viewport PASS mismatch=0 fps=4812.2 ms=1116 RESULT fill_mode PASS mismatch=0 fps=4629.5 ms=1746 RESULT bc_decode PASS mismatch=0 fps=0 ms=419 RESULT geometry PASS mismatch=0 fps=4749.7 ms=1672 RESULT tessellation PASS mismatch=0 fps=4683.6 ms=1929 RESULT xfb PASS mismatch=0 fps=0 ms=360 RESULT pipeline_stats PASS mismatch=0 fps=4623.3 ms=1201 RESULT vertex_stores PASS mismatch=0 fps=0 ms=124 RESULT gs_viewport_depth PASS mismatch=0 fps=0 ms=139 RESULT vs_viewport_index PASS mismatch=0 fps=0 ms=172 RESULT depth_bounds PASS mismatch=0 fps=0 ms=88 RESULT swapchain_lifecycle PASS mismatch=0 fps=63.4 ms=8457 extra=resized FPS 60.3 | present_main 4732ms, resize 4ms, present_resized 1988ms, destroy 0ms, cycle 1660ms, teardown 7ms 
+
+## earlier swapchain_lifecycle runs on the 092 build (tmp/dev-092.log)
+run 1: RESULT swapchain_lifecycle PASS mismatch=0 fps=120.7 ms=5407 extra=resize
+run 2: RESULT swapchain_lifecycle PASS mismatch=0 fps=121.0 ms=5397 extra=resize
+RESULT swapchain_lifecycle FAIL mismatch=0 fps=117.6 ms=2696 extra=resized FPS  
+RESULT swapchain_lifecycle FAIL mismatch=0 fps=0 ms=5013 

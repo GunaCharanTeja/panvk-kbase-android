@@ -37,6 +37,7 @@ add_vk_test(pipeline_stats tests/dxvk/vulkan/pipeline_stats/pipeline_stats.c)
 add_vk_test(vertex_stores tests/dxvk/vulkan/vertex-stores/vertex_stores.c)
 add_vk_test(gs_viewport_depth device/gs-viewport-depth.c)
 add_vk_test(vs_viewport_index device/vs-viewport-index.c)
+add_vk_test(depth_bounds device/depth-bounds.c)
 
 # SHARED lib t_vkinfo from vkinfo.c
 add_library(t_vkinfo SHARED "${CMAKE_CURRENT_SOURCE_DIR}/vkinfo.c")

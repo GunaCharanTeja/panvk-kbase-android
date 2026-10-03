@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
         TestCase("vertex_stores", isDraw = false),
         TestCase("gs_viewport_depth", isDraw = false),
         TestCase("vs_viewport_index", isDraw = false),
+        TestCase("depth_bounds", isDraw = false),
         TestCase("swapchain_lifecycle", isDraw = true)
     )
 
