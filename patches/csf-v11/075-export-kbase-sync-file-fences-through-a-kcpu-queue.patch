@@ -12,23 +12,22 @@ Dependencies: csf-v11/074
 Validation test: CTS dEQP-VK.api.external.{semaphore,fence}.sync_fd.* + synchronization{,2}.cross_instance.* 62640 cases 1996 Pass 0 Fail 0 ResourceError (was 113 ResourceError)
 
 diff --git a/src/panfrost/lib/kmod/kbase_kmod.c b/src/panfrost/lib/kmod/kbase_kmod.c
-index 7bbc48e6046..fd56f145478 100644
 --- a/src/panfrost/lib/kmod/kbase_kmod.c
 +++ b/src/panfrost/lib/kmod/kbase_kmod.c
-@@ -109,6 +109,12 @@ struct kbase_kmod_dev {
-       uint64_t target_minus_one;
+@@ -110,6 +110,12 @@
        int fence_fd;
     } kcpu;
-+
+ 
 +   struct {
 +      simple_mtx_t lock;
 +      base_kcpu_queue_id id;
 +      bool valid;
 +   } kcpu_export;
- };
- 
- struct kbase_kmod_vm {
-@@ -991,6 +997,89 @@ out:
++
+    /* BOs with a placed shadow mapping (struct kbase_kmod_bo *). */
+    struct {
+       simple_mtx_t lock;
+@@ -1070,6 +1076,89 @@
     return ret;
  }
  
@@ -118,15 +117,15 @@ index 7bbc48e6046..fd56f145478 100644
  bool
  kbase_kmod_csf_has_error(const struct pan_kmod_dev *dev)
  {
-@@ -1251,6 +1340,7 @@ kbase_kmod_dev_create(int fd, uint32_t flags,
+@@ -1330,6 +1419,7 @@
     kbase_dev->dma_heap_fd = -1;
     kbase_dev->kcpu.fence_fd = -1;
     simple_mtx_init(&kbase_dev->kcpu.lock, mtx_plain);
 +   simple_mtx_init(&kbase_dev->kcpu_export.lock, mtx_plain);
+    simple_mtx_init(&kbase_dev->shadows.lock, mtx_plain);
+    util_dynarray_init(&kbase_dev->shadows.list, NULL);
  
-    if (is_csf && kbase_query_csif_info(fd, &kbase_dev->csif_info)) {
-       mesa_loge("kbase: failed to query the CSF global interface");
-@@ -1345,6 +1435,14 @@ kbase_kmod_dev_destroy(struct pan_kmod_dev *dev)
+@@ -1426,6 +1516,14 @@
     simple_mtx_unlock(&kbase_dev->kcpu.lock);
     simple_mtx_destroy(&kbase_dev->kcpu.lock);
  
