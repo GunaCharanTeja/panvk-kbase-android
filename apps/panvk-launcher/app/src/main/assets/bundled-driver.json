@@ -1,19 +1,19 @@
 {
-  "id": "panvk-kbase-g615-0.1.0-beta.9",
-  "name": "PanVK Kbase G615",
-  "packageVersion": "0.1.0-beta.9",
-  "displayVersion": "beta.9 (Mesa 5a07217f, csf-v11 ≤092)",
+  "id": "panvk-kbase-g615-0.1.0-beta.10",
+  "name": "PanVK Kbase G615 — beta.10",
+  "packageVersion": "0.1.0-beta.10",
+  "displayVersion": "beta.10 (Mesa 5a07217f, csf-v11 ≤096, dma-heap placed maps)",
   "driverVersion": "Mesa 26.3.0-devel",
   "author": "panvk-kbase-android",
-  "description": "Experimental PanVK driver for Mali-G615 (CSF, mali_kbase). Bundled in this APK.",
+  "description": "Experimental PanVK driver for Mali-G615 (CSF, mali_kbase). Bundled in this APK. Fast 32-bit (WoW64) games via dma-heap placed maps.",
   "profile": "g615-v11-csf",
   "sourceCommit": "5a07217f034b3e50d8c7c7794f97a2df1742613b",
-  "patchSeriesId": "sha256:8116114da4f7c2059e3368ee613a67d3c6b3bc8ed3fd4228ab35aae4b8d0de82",
+  "patchSeriesId": "sha256:4a6969c20c8152d751fb955fea54104ef4acacf4a56e546d32bbe94cbdd966a8",
   "release": {
     "repo": "zenithblue-oss/panvk-kbase-android",
-    "tag": "g615-v11-csf-v0.1.0-beta.9",
+    "tag": "g615-v11-csf-v0.1.0-beta.10",
     "asset": "libvulkan_panfrost-android-aarch64.so",
-    "sha256": "5196385512663b7e91cfb3e75b9667b20f766e00fb09c587bb38d3ec1647dadd",
-    "size": 30681408
+    "sha256": "f1d686994bc4de34acfca759e20fa30216d1ca11c97151349c9ae0b9e916eab2",
+    "size": 30779984
   }
 }
