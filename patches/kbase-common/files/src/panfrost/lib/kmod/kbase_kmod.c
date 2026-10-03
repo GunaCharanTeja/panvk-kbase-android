@@ -114,6 +114,9 @@ struct kbase_kmod_dev {
    struct {
       simple_mtx_t lock;
       struct util_dynarray list;
+      /* Queue kicks so far / kicks whose GPU writes were last pulled with
+       * the queue idle: GPU edits can only appear after a newer kick. */
+      uint64_t kick_epoch, pulled_epoch;
    } shadows;
 };
 
@@ -777,33 +780,81 @@ static void kbase_shadow_drop(struct kbase_kmod_bo *kbase_bo, bool merge);
 /* Placed-map shadows (see kbase_kmod_bo_mmap): merge CPU edits made in the
  * shadow into the BO and GPU edits made in the BO into the shadow, using the
  * snapshot taken at the previous merge to tell which side changed each word.
- * Called before every queue kick and after every wait.
- * ponytail: O(total placed bytes) per kick/wait; replace with dirty tracking
- * if a game maps hundreds of MiB placed. */
+ * Kick/flush only push (cheap: cached compares).  GPU completion
+ * (kbase_kmod_csf_sync_shadows), invalidate and unmap also pull, which reads
+ * the BO: uncached on host-coherent types, 4 MiB cost ~60 ms with word loads
+ * (merge on every kick/wait made i686 D3D9 run at 1 fps), ~2 ms bulk-copied.
+ * ponytail: pull is O(placed bytes) per completion; add GPU-write tracking if
+ * a game maps hundreds of MiB placed. */
 static void
-kbase_shadow_merge_bo(struct kbase_kmod_bo *b)
+kbase_shadow_merge_bo(struct kbase_kmod_bo *b, bool pull)
 {
    uint64_t *s = b->placed, *g = b->cpu_ptr, *o = b->snap;
    size_t n = b->base.size / sizeof(uint64_t);
+   enum { CHUNK = 512 }; /* words, 4 KiB */
+   uint64_t tmp[CHUNK];
 
-   for (size_t i = 0; i < n; i++) {
-      if (s[i] != o[i]) {
-         g[i] = o[i] = s[i];
-      } else if (g[i] != o[i]) {
-         s[i] = o[i] = g[i];
+   /* Push: shadow edits (compared against cached memory only) go to the BO. */
+   for (size_t c = 0; c < n; c += CHUNK) {
+      size_t m = MIN2(CHUNK, n - c);
+      if (!memcmp(s + c, o + c, m * sizeof(uint64_t)))
+         continue;
+      for (size_t i = c; i < c + m; i++) {
+         if (s[i] != o[i])
+            g[i] = o[i] = s[i];
+      }
+   }
+
+   /* Pull: GPU edits.  Reading the (usually uncached) BO is the expensive
+    * part, so it is bulk-copied per chunk and only done after GPU work. */
+   if (pull) {
+      for (size_t c = 0; c < n; c += CHUNK) {
+         size_t m = MIN2(CHUNK, n - c);
+         memcpy(tmp, g + c, m * sizeof(uint64_t));
+         if (!memcmp(tmp, o + c, m * sizeof(uint64_t)))
+            continue;
+         for (size_t i = 0; i < m; i++) {
+            if (tmp[i] != o[c + i])
+               s[c + i] = o[c + i] = tmp[i];
+         }
       }
    }
 }
 
 static void
-kbase_shadow_merge(struct pan_kmod_dev *dev)
+kbase_shadow_merge(struct pan_kmod_dev *dev, bool pull)
 {
    struct kbase_kmod_dev *kbase_dev =
       container_of(dev, struct kbase_kmod_dev, base);
 
    simple_mtx_lock(&kbase_dev->shadows.lock);
+   if (!pull)
+      kbase_dev->shadows.kick_epoch++;
    util_dynarray_foreach(&kbase_dev->shadows.list, struct kbase_kmod_bo *, b)
-      kbase_shadow_merge_bo(*b);
+      kbase_shadow_merge_bo(*b, pull);
+   simple_mtx_unlock(&kbase_dev->shadows.lock);
+}
+
+/* Called by the queue once it has observed GPU completion (the only point
+ * where CPU code may legitimately read GPU-written memory): pull GPU edits of
+ * every placed shadow.  Skipped when no kick happened since the last pull
+ * done with the queue idle.  idle: every submitted job has retired. */
+void
+kbase_kmod_csf_sync_shadows(struct pan_kmod_dev *dev, bool idle)
+{
+   struct kbase_kmod_dev *kbase_dev =
+      container_of(dev, struct kbase_kmod_dev, base);
+
+   simple_mtx_lock(&kbase_dev->shadows.lock);
+   if (kbase_dev->shadows.kick_epoch != kbase_dev->shadows.pulled_epoch) {
+      uint64_t epoch = kbase_dev->shadows.kick_epoch;
+
+      util_dynarray_foreach(&kbase_dev->shadows.list, struct kbase_kmod_bo *,
+                            b)
+         kbase_shadow_merge_bo(*b, true);
+      if (idle)
+         kbase_dev->shadows.pulled_epoch = epoch;
+   }
    simple_mtx_unlock(&kbase_dev->shadows.lock);
 }
 
@@ -814,7 +865,7 @@ kbase_kmod_csf_queue_kick(struct pan_kmod_dev *dev, uint64_t ringbuf_va)
       .buffer_gpu_addr = ringbuf_va,
    };
 
-   kbase_shadow_merge(dev);
+   kbase_shadow_merge(dev, false);
 
    if (ioctl(dev->fd, KBASE_IOCTL_CS_QUEUE_KICK, &kick)) {
       mesa_loge("kbase: KBASE_IOCTL_CS_QUEUE_KICK failed: %s",
@@ -825,20 +876,8 @@ kbase_kmod_csf_queue_kick(struct pan_kmod_dev *dev, uint64_t ringbuf_va)
    return 0;
 }
 
-static int kbase_csf_wait_event_inner(struct pan_kmod_dev *dev,
-                                      int64_t timeout_ns);
-
 int
 kbase_kmod_csf_wait_event(struct pan_kmod_dev *dev, int64_t timeout_ns)
-{
-   int ret = kbase_csf_wait_event_inner(dev, timeout_ns);
-
-   kbase_shadow_merge(dev);
-   return ret;
-}
-
-static int
-kbase_csf_wait_event_inner(struct pan_kmod_dev *dev, int64_t timeout_ns)
 {
    /* Block until the kernel has a CSF notification pending, then consume one
     * notification with read().  This is what drives kernel-side
@@ -910,24 +949,9 @@ kbase_kcpu_poll_fence(int fd, int64_t timeout_ns)
    return pfd.revents & (POLLIN | POLLERR | POLLHUP) ? 1 : -1;
 }
 
-static int kbase_csf_wait_cqs64_inner(struct pan_kmod_dev *dev, uint64_t addr,
-                                      uint64_t target_minus_one,
-                                      int64_t timeout_ns);
-
 int
 kbase_kmod_csf_wait_cqs64(struct pan_kmod_dev *dev, uint64_t addr,
-                           uint64_t target_minus_one, int64_t timeout_ns)
-{
-   int ret = kbase_csf_wait_cqs64_inner(dev, addr, target_minus_one,
-                                        timeout_ns);
-
-   kbase_shadow_merge(dev);
-   return ret;
-}
-
-static int
-kbase_csf_wait_cqs64_inner(struct pan_kmod_dev *dev, uint64_t addr,
-                           uint64_t target_minus_one, int64_t timeout_ns)
+                          uint64_t target_minus_one, int64_t timeout_ns)
 {
    struct kbase_kmod_dev *kbase_dev =
       container_of(dev, struct kbase_kmod_dev, base);
@@ -1913,7 +1937,7 @@ kbase_shadow_drop(struct kbase_kmod_bo *kbase_bo, bool merge)
 
    simple_mtx_lock(&kbase_dev->shadows.lock);
    if (merge)
-      kbase_shadow_merge_bo(kbase_bo);
+      kbase_shadow_merge_bo(kbase_bo, true);
    util_dynarray_foreach(&kbase_dev->shadows.list, struct kbase_kmod_bo *, b) {
       if (*b == kbase_bo) {
          *b = util_dynarray_pop(&kbase_dev->shadows.list,
@@ -1976,7 +2000,7 @@ kbase_kmod_flush_bo_map_syncs(struct pan_kmod_dev *dev)
          struct kbase_kmod_dev *kd =
             container_of(dev, struct kbase_kmod_dev, base);
          simple_mtx_lock(&kd->shadows.lock);
-         kbase_shadow_merge_bo(kbase_bo);
+         kbase_shadow_merge_bo(kbase_bo, false);
          simple_mtx_unlock(&kd->shadows.lock);
       }
 
@@ -2000,7 +2024,7 @@ kbase_kmod_flush_bo_map_syncs(struct pan_kmod_dev *dev)
          struct kbase_kmod_dev *kd =
             container_of(dev, struct kbase_kmod_dev, base);
          simple_mtx_lock(&kd->shadows.lock);
-         kbase_shadow_merge_bo(kbase_bo);
+         kbase_shadow_merge_bo(kbase_bo, true);
          simple_mtx_unlock(&kd->shadows.lock);
       }
       if (ret) {

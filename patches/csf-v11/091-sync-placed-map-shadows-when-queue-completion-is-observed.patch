@@ -1,0 +1,21 @@
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+index 27190b7e6fa..e1849612202 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+@@ -981,6 +981,16 @@ kbase_subqueue_wait_seqno(struct panvk_gpu_queue *queue, uint32_t subqueue,
+ 
+    // print_stack_trace();
+ 
++   /* Completion is observed here: make GPU writes visible to placed host
++    * maps (kbase shadow copies) before the app reads them. */
++   bool idle = true;
++   for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++      if (queue->subqueues[i].kbase.emitted_jobs >
++          kbase_subqueue_seqno_cell(queue, i)->seqno)
++         idle = false;
++   }
++   kbase_kmod_csf_sync_shadows(dev->kmod.dev, idle);
++
+    return VK_SUCCESS;
+ }
+ 

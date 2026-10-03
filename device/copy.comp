@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x = 1) in;
+layout(set = 0, binding = 0) buffer Inp { uint v; } inp;
+layout(set = 0, binding = 1) buffer Out { uint v; } outp;
+void main() { outp.v = inp.v; }
