@@ -17,34 +17,96 @@ data class Driver(
     val author: String,
     val version: String,
     val libPath: String,
-    val bundled: Boolean
-)
+    val bundled: Boolean,
+    val buildId: String = "",
+    val sha256: String = "",
+    val driverVersion: String = ""
+) {
+    /** "PanVK Kbase G615 - beta.9 (...)" style one-liner for dropdowns and the launch card. */
+    val label: String get() = if (version.isEmpty()) name else "$name — $version"
+}
 
 object DriverManager {
 
+    /** Id used before the pinned beta.9 driver was bundled; mapped to the current bundled id. */
+    const val LEGACY_BUNDLED_ID = "bundled"
+
+    private fun bundledMeta(context: Context): JSONObject? = try {
+        JSONObject(context.assets.open("bundled-driver.json").bufferedReader().use { it.readText() })
+    } catch (_: Exception) {
+        null
+    }
+
+    fun bundledId(context: Context): String = bundledMeta(context)?.optString("id", "") ?: ""
+
+    fun bundledDriver(context: Context): Driver {
+        val m = bundledMeta(context)
+        val lib = context.applicationInfo.nativeLibraryDir + "/libvulkan_panfrost.so"
+        if (m == null) {
+            return Driver(LEGACY_BUNDLED_ID, "PanVK (bundled)", "Bundled Panfrost Vulkan driver", "Mesa / PanVK", "unknown", lib, true)
+        }
+        val commit = m.optString("sourceCommit", "")
+        val series = m.optString("patchSeriesId", "").removePrefix("sha256:")
+        val rel = m.optJSONObject("release")
+        val build = buildString {
+            if (commit.isNotEmpty()) append("Mesa ").append(commit.take(8))
+            if (series.isNotEmpty()) append(" · series ").append(series.take(8))
+        }
+        return Driver(
+            id = m.optString("id", LEGACY_BUNDLED_ID),
+            name = m.optString("name", "PanVK"),
+            description = m.optString("description", ""),
+            author = m.optString("author", "panvk-kbase-android"),
+            version = m.optString("displayVersion", m.optString("packageVersion", "")),
+            libPath = lib,
+            bundled = true,
+            buildId = build,
+            sha256 = rel?.optString("sha256", "") ?: "",
+            driverVersion = m.optString("driverVersion", "")
+        )
+    }
+
+    /** One-time: old unnamed "bundled" selection and shortcut references move to the beta.9 bundled driver. */
+    private fun migrateLegacy(context: Context) {
+        val newId = bundledId(context)
+        if (newId.isEmpty()) return
+        val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
+        if (prefs.getString("driver_migrated", "") == newId) return
+        if (prefs.getString("driver", LEGACY_BUNDLED_ID) == LEGACY_BUNDLED_ID) {
+            prefs.edit().putString("driver", newId).apply()
+        }
+        File(context.filesDir, "shortcuts").listFiles { f -> f.extension == "json" }?.forEach { f ->
+            try {
+                val j = JSONObject(f.readText())
+                if (j.optString("driver", "") == LEGACY_BUNDLED_ID) {
+                    j.put("driver", newId)
+                    f.writeText(j.toString())
+                }
+            } catch (_: Exception) {
+            }
+        }
+        prefs.edit().putString("driver_migrated", newId).apply()
+    }
+
+    /** Resolve a possibly legacy id ("bundled") to a driver in [drivers]. */
+    fun find(context: Context, drivers: List<Driver>, id: String): Driver? {
+        val want = if (id == LEGACY_BUNDLED_ID) bundledId(context).ifEmpty { id } else id
+        return drivers.firstOrNull { it.id == want }
+    }
+
     fun getDrivers(context: Context): List<Driver> {
+        migrateLegacy(context)
         val list = mutableListOf<Driver>()
 
-        // 1. Bundled PanVK driver
-        val bundledLibPath = context.applicationInfo.nativeLibraryDir + "/libvulkan_panfrost.so"
-        list.add(
-            Driver(
-                id = "bundled",
-                name = "PanVK (bundled)",
-                description = "Bundled Panfrost Vulkan driver",
-                author = "Mesa / PanVK",
-                version = "git",
-                libPath = bundledLibPath,
-                bundled = true
-            )
-        )
+        // 1. Bundled PanVK driver (pinned release, see assets/bundled-driver.json)
+        list.add(bundledDriver(context))
 
         // 2. Imported drivers from filesDir/drivers/<dirname>/
         val driversDir = File(context.filesDir, "drivers")
         if (driversDir.exists() && driversDir.isDirectory) {
             val subDirs = driversDir.listFiles()?.filter { it.isDirectory } ?: emptyList()
             for (dir in subDirs) {
-                if (dir.name == "bundled" || dir.name.startsWith(".")) continue
+                if (dir.name == "bundled" || dir.name == bundledId(context) || dir.name.startsWith(".")) continue
                 val metaFile = File(dir, "meta.json")
                 if (!metaFile.isFile) continue
                 if (metaFile.length() > 64 * 1024L) continue
@@ -72,7 +134,9 @@ object DriverManager {
                             author = author,
                             version = version,
                             libPath = libFile.absolutePath,
-                            bundled = false
+                            bundled = false,
+                            buildId = buildIdOf(json),
+                            driverVersion = drvVer
                         )
                     )
                 } catch (_: Exception) {
@@ -82,6 +146,11 @@ object DriverManager {
         }
 
         return list
+    }
+
+    private fun buildIdOf(meta: JSONObject): String {
+        val commit = meta.optString("sourceCommit", "")
+        return if (commit.isEmpty()) "" else "Mesa " + commit.take(8)
     }
 
     suspend fun importDriver(context: Context, uri: Uri): Result<Driver> = withContext(Dispatchers.IO) {
@@ -165,7 +234,7 @@ object DriverManager {
 
             val rawName = metaJson.optString("name", "driver")
             var sanitized = rawName.replace(Regex("[^A-Za-z0-9._-]"), "_").ifEmpty { "driver" }
-            if (sanitized == "bundled" || sanitized == "." || sanitized == ".." || sanitized.startsWith(".")) {
+            if (sanitized == "bundled" || sanitized == bundledId(context) || sanitized == "."|| sanitized == ".." || sanitized.startsWith(".")) {
                 sanitized = "drv_$sanitized"
             }
 
@@ -205,7 +274,9 @@ object DriverManager {
                 author = author,
                 version = version,
                 libPath = finalLibFile.absolutePath,
-                bundled = false
+                bundled = false,
+                buildId = buildIdOf(metaJson),
+                driverVersion = drvVer
             )
             Result.success(driver)
         } catch (t: Throwable) {
@@ -233,32 +304,24 @@ object DriverManager {
 
     fun getSelectedDriverId(context: Context): String {
         val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
-        return prefs.getString("driver", "bundled") ?: "bundled"
+        val id = prefs.getString("driver", LEGACY_BUNDLED_ID) ?: LEGACY_BUNDLED_ID
+        return if (id == LEGACY_BUNDLED_ID) bundledId(context).ifEmpty { id } else id
     }
 
     fun setSelectedDriverId(context: Context, id: String) {
         val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
-        prefs.edit().putString("driver", id).apply()
+        val resolved = if (id == LEGACY_BUNDLED_ID) bundledId(context).ifEmpty { id } else id
+        prefs.edit().putString("driver", resolved).apply()
     }
 
     fun getSelectedDriver(context: Context, drivers: List<Driver>): Driver {
-        val selectedId = getSelectedDriverId(context)
-        val match = drivers.firstOrNull { it.id == selectedId }
+        val match = find(context, drivers, getSelectedDriverId(context))
         if (match != null) {
             return match
         }
         // Fall back to bundled
-        setSelectedDriverId(context, "bundled")
-        return drivers.firstOrNull { it.id == "bundled" }
-            ?: drivers.firstOrNull()
-            ?: Driver(
-                id = "bundled",
-                name = "PanVK (bundled)",
-                description = "Bundled Panfrost Vulkan driver",
-                author = "Mesa / PanVK",
-                version = "git",
-                libPath = context.applicationInfo.nativeLibraryDir + "/libvulkan_panfrost.so",
-                bundled = true
-            )
+        val bundled = drivers.firstOrNull { it.bundled } ?: bundledDriver(context)
+        setSelectedDriverId(context, bundled.id)
+        return bundled
     }
 }

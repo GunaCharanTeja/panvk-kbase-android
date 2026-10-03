@@ -252,7 +252,7 @@ object ContainerManager {
         }
 
         val drivers = DriverManager.getDrivers(ctx)
-        val selectedDriver = launchOpts.get()?.driverId?.let { id -> drivers.firstOrNull { it.id == id } }
+        val selectedDriver = launchOpts.get()?.driverId?.let { id -> DriverManager.find(ctx, drivers, id) }
             ?: DriverManager.getSelectedDriver(ctx, drivers)
         val icdJson = JSONObject().apply {
             put("file_format_version", "1.0.0")
