@@ -1,6 +1,6 @@
 # G615 DXVK / vkd3d progress
 
-Snapshot: 2026-10-02, after beta.8 (Mesa 5a07217f + csf-v11 up to 084). Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a31030).
+Snapshot: 2026-10-03, after beta.9 (Mesa 5a07217f + csf-v11 up to 092; 093-096 pushed to `main`, not yet released). Device: Mali G615 (PAN_ARCH 11, gpu_id 0xb8a31030).
 
 Launcher scope correction (2026-10-02): ARM64EC DX8/9/10/11 clear + source
 readback + X11 Present passes, including actual app path-only launches. Evidence:
@@ -44,14 +44,14 @@ i686 WOW64 staging/SAME_VA failure remains unresolved; ARM64EC pass is not its f
 | IDVS flags from the bound VS variant (081) | Fixed. |
 | Tessellation DeviceLost (082) | Root cause: on kbase each subqueue is its own CSG; an evicted waiting group is only re-checked if its sync word is in CSF event memory. Prerast arena and tess sync words moved to CSF event memory. Regression 12,132 cases: 7940 pass / 0 fail / 0 DeviceLost (beta.6: 7619 / 5 / 1). 5,613-case atomics/memory model/signal_order list: 3775/0. |
 | X11 WSI in the Android ICD (083, 084) | `VK_KHR_xlib_surface` + `VK_KHR_xcb_surface`; X11/XCB libs dlopened from the caller's path. Software present (`PutImage`, no DRI3/MIT-SHM). 084: present id advances; `vkWaitForPresentKHR` timeout returns `VK_TIMEOUT`, not DeviceLost. Termux:X11: 1500 frames at ~343 fps, Xlib + XCB resize pass. |
-| APK | 11/11 tests pass (incl. `vertex_stores`, `swapchain_lifecycle`). |
+| APK | 17/17 tests pass after 096 (`autorun all` x2 and UI Run all), incl. `gs_viewport_depth`, `vs_viewport_index`, `depth_bounds`, `large_draw`, `vmr_secondary`, `tess_cond_state`. |
 
-### After beta.8 (local `main`, not pushed or released; independently reviewed 2026-10-03)
+### After beta.8 (085-092 released in beta.9; 093-096 pushed to `main`, unreleased; reviewed 2026-10-03)
 
 | Patch | Change | Device proof | Review |
 |---|---|---|---|
 | 085 | Descriptor-ring and `VkEvent` sync words in CSF event memory, plus host notification | Host/GPU event replay passes; image readbacks are correct. The descriptor-ring wrap is claimed but not visible in the logs. | OK, minor issues: no v10-v12 gate (also reaches v13/v14), and `SetEvent`/`ResetEvent` can return `VK_ERROR_DEVICE_LOST`, which the spec doesn't allow there. Recovery of an evicted CSG via notification is unproven. |
-| 087 | Conditional rendering honoured in the tessellation compute loop; replay-safe scratch | Predicates 0,1,0 give counters 3,9,3, and inverted 9,3,9 (direct, indirect and inherited); confirmed in `run.log` | Was BLOCKING, fixed by 093. The whole prerast draw (including state emission) is inside a GPU `cs_if`, but the dirty flags are cleared when the command buffer is recorded. When the predicate is false, the next draw runs with stale FS/depth/query state (`panvk_vX_cmd_draw.c:~4900`). Fix: make only the draw conditional, or mark all state dirty after the loop. Then add a device test with a skipped conditional tess draw followed by a normal draw. |
+| 087 | Conditional rendering honoured in the tessellation compute loop; replay-safe scratch | Predicates 0,1,0 give counters 3,9,3, and inverted 9,3,9 (direct, indirect and inherited); confirmed in `run.log` | Was BLOCKING (state emission inside the GPU `cs_if` while dirty flags were cleared at record time, so a false predicate left the next draw with stale FS/depth/query state). Fixed by 093; proven by APK `tess_cond_state`. |
 | 093 | Tessellation state emission no longer inside the conditional-rendering `cs_if` (fixes the 087 blocker) | CTS full list 17067 pass / 0 fail. APK `tess_cond_state` fails on 092 (chroot 3/3, APK 2/2) and passes with 093 (chroot 3/3, APK 2/2). Worklog `worklogs/driver-remaining/093-tess-state-emission.md` | Fixed. Lowering jobs and primitives-generated of a skipped conditional tess/chunked draw still run (pre-existing). |
 | 094 | prerast draws chunked on the GPU, direct and indirect (no 65536-invocation cap) | APK `large_draw` 14 cases (XFB, GS, tess, restart strips, indirect, count, multi-indirect), CTS 17067 / 0. Worklog `worklogs/driver-remaining/094-prerast-chunking.md` | Restart-strip flake fixed by 096. |
 | 095 | Attachment-less secondaries carry their sample count (VMR) | APK `vmr_secondary` 8/8, CTS 17067 / 0. Worklog `worklogs/driver-remaining/095-secondary-vmr.md` | Mixed counts in one secondary, cross-cmdbuf resume. |
@@ -59,18 +59,18 @@ i686 WOW64 staging/SAME_VA failure remains unresolved; ARM64EC pass is not its f
 | 088 | TES patch IDs passed to GS `PrimitiveIdIn`; loads from invalid invocations guarded | Seven readback `.bin` files decode to IDs 0-599. The 600-patch arena crossing fits the data but isn't logged. | OK, minor issue: the `PAN_ARCH >= 10` guard also covers v13/v14. |
 
 Checks:
-- Series: all 88 patches apply cleanly on a fresh pin (086 was removed as unsafe; the gap doesn't matter). The result is identical to `tmp/worktrees/mesa-val`.
+- Series: all 95 committed patches (001-096, no 086 or 091) apply cleanly on a fresh pin with no fuzz (CI run 37112739575 green). 086 was removed as unsafe. 091 (`sync-placed-map-shadows`) is another session's untracked work and not in the series. 075 was regenerated against the shadow `kbase_kmod.c` (commit 848ca8c).
 - Device ICD: SHA256 `0457150b...34b98dc4` and BuildID `2afe54d4...0f7d` match the claims.
 - CTS with that ICD: 438 cases (tessellation primitive_discard, sync basic events, conditional_rendering draw): 433 pass / 0 fail / 5 NotSupported. These cases don't exercise the 087 bug.
 - 089 (depth clamp/clip per GS-selected viewport) is in the series (`patches/csf-v11/089-*.patch`) and verified on the G615 (`worklogs/driver-remaining/089-device-verification.md`). No CTS run.
 - Review files: `tmp/review-085-088/`.
 
-Released: beta.6 (up to 077), beta.7 (up to 082), beta.8 (up to 084). See `CHANGELOG.md`.
+Released: beta.6 (up to 077), beta.7 (up to 082), beta.8 (up to 084), beta.9 (up to 092, tag `g615-v11-csf-v0.1.0-beta.9`). See `CHANGELOG.md`.
 Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELLATION.md`, `tmp/HANDOFF-devicelost.md`.
 
 ## What's left for DXVK (driver)
 
-1. 087 stale-state bug: FIXED by patch 093 (state emission is outside the conditional). Push 085/087/088/093 when ready.
+1. 087 stale-state bug: FIXED by patch 093 (state emission is outside the conditional). Pushed.
 1a. **32-bit (i686/WOW64) `vkMapMemory` at a caller-chosen address**. STATUS 2026-10-03: DEVICE-PROVEN for the draw test. mremap of the SAME_VA VMA is refused by kbase (`mremap ... failed: Invalid argument`, get_unmapped_area rejects fixed), so `kbase_kmod.c` `bo_mmap` now maps an anonymous MAP_FIXED shadow at the requested address, merged word-wise with the BO (snapshot) before every queue kick, after CSF waits, on flush/invalidate and on unmap. i686 D3D9 and D3D11 `dxdraw` now render triangle + textured quad (XGetImage, pixels identical to ARM64EC/x86_64; no MESA errors); 64-bit regression unchanged. Not proven: a real 32-bit game, large placed maps (merge is O(bytes) per kick/wait), CTS memory_map. Evidence: `apps/panvk-launcher/tests/results/samevaresults/README.md`.
 2. 089: DONE, device-verified (GS-selected viewport depth clamp/clip as ordered runs). Follow-up: in `panvk_vX_cmd_draw.c`, the `cs_if(pred)` tessellation conditional skips prepare_draw's GPU state writes on a false predicate but still clears their dirty flags (from 087; same bug as item 1). Fixed by 093; APK `tess_cond_state` proves it (fails on 092, passes on 093+).
 3. Re-check DXVK FL11_1 (VPSA is in since 078).
@@ -84,12 +84,13 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
 
 ## Open problems
 
-- 2 intermittent DeviceLost in `transform_feedback query_copy_*`: not rerun since 077/082; may be the same CSF event-memory issue.
+- 2 intermittent DeviceLost in `transform_feedback query_copy_*`: not seen in the 096 CTS run (36144-case list, 0 DeviceLost); keep watching.
+- kbase/firmware: a long compute job while the vertex/tiler CSG waits on another CSG can get that group killed (096 root cause). 096 shortens the planner; other long single-workgroup jobs in that position could still hit it. Likely also behind the 2048-instance chunk cap.
 - `draw.*depth_bias_patch_list_tri_line` fails (pre-existing, root cause unknown).
 - 077 system-scope signals raise an interrupt per cross-subqueue signal; game perf cost unmeasured.
 - 075 sync_file export uses one device-wide KCPU queue: head-of-line blocking; possible deadlock with wait-before-signal timelines (not seen in CTS).
 - 076: fixed by 089 (depth clip/clamp used the union of all viewports' depth ranges).
-- 089: one unreproduced intermittent on the first run after a fresh install (case B drew nothing; swapchain_lifecycle failed once in the same run). Not seen in 11 later gs runs and 6 swapchain runs.
+- 089: one unreproduced intermittent on the first run after a fresh install (case B drew nothing; swapchain_lifecycle failed once in the same run). Not seen in 11 later gs runs and 6 swapchain runs. `swapchain_lifecycle` also failed once each during 090 and 092 run-alls, then passed on rerun.
 - 085: recovery of an evicted CSG via host notification is unproven.
 - Proton 11 (i686 via wow64): winex11 fails to create the Vulkan surface before the driver is called (HWND `0xc0000005`; ARM64EC window crash since fixed via `ANDROID_SYSVSHM_SERVER=/dev/null`, i686 SAME_VA mapping still open); DXVK reports "Presenter: Failed to create Vulkan surface". Instance and device creation work.
 - **32-bit apps draw nothing (driver side, PanVK launcher report 2026-10-03).** On i686 under WOW64, `vkMapMemory` returns `VK_ERROR_MEMORY_MAP_FAILED`. Log: `MESA: error: kbase: mapping a BO at a caller-chosen address is not supported (SAME_VA)`. Source: `patches/kbase-common/files/src/panfrost/lib/kmod/kbase_kmod.c:1780`. Wine WOW64 needs mappings below 4 GiB (placed via `VK_EXT_map_memory_placed` / a fixed address), but kbase SAME_VA ties the CPU VA to the GPU VA. UPDATE 2026-10-03: fixed in `kbase_kmod.c` via shadow mapping (mremap refused by kernel); see item 1a.
