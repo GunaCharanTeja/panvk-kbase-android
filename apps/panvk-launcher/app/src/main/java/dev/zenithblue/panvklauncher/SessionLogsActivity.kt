@@ -59,7 +59,9 @@ class SessionLogsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val want = intent?.getStringExtra(EXTRA_DIR)
         setContent {
-            MaterialTheme { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { Screen(want) { finish() } } }
+            PanvkTheme(mode = UiPrefs.theme(this), dynamic = UiPrefs.dynamic(this)) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { Screen(want) { finish() } }
+            }
         }
     }
 

@@ -46,12 +46,21 @@ class MainActivity : ComponentActivity() {
         val autoRunExe = intent?.getStringExtra("run_exe")
         ShortcutRequests.fromIntent(this, intent) // --es dev.zenithblue.panvklauncher.LAUNCH_SHORTCUT <id|name>
         setContent {
-            MaterialTheme {
+            var themeMode by remember { mutableStateOf(UiPrefs.theme(this@MainActivity)) }
+            var dynamicColor by remember { mutableStateOf(UiPrefs.dynamic(this@MainActivity)) }
+            PanvkTheme(mode = themeMode, dynamic = dynamicColor) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    LauncherApp(autoprobe = autoprobe, autoRunExe = autoRunExe)
+                    LauncherApp(
+                        autoprobe = autoprobe,
+                        autoRunExe = autoRunExe,
+                        themeMode = themeMode,
+                        onThemeMode = { themeMode = it; UiPrefs.setTheme(this@MainActivity, it) },
+                        dynamicColor = dynamicColor,
+                        onDynamicColor = { dynamicColor = it; UiPrefs.setDynamic(this@MainActivity, it) }
+                    )
                 }
             }
         }
@@ -64,21 +73,21 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class LauncherTab(val title: String, val iconSymbol: String) {
-    Drivers("Drivers", "⚙"),
-    Components("Components", "🧩"),
-    Wine("Wine", "🍷"),
-    Games("Games", "🎮"),
-    Logs("Logs", "📋")
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
+fun LauncherApp(
+    autoprobe: Boolean,
+    autoRunExe: String? = null,
+    themeMode: String = "dark",
+    onThemeMode: (String) -> Unit = {},
+    dynamicColor: Boolean = false,
+    onDynamicColor: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var selectedTab by remember { mutableStateOf(LauncherTab.Drivers) }
+    var selectedTab by remember { mutableStateOf(AppTab.Games) }
+    var showLogs by remember { mutableStateOf(false) }
     var drivers by remember { mutableStateOf(DriverManager.getDrivers(context)) }
     var selectedDriverId by remember { mutableStateOf(DriverManager.getSelectedDriverId(context)) }
 
@@ -93,10 +102,13 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
     var isComponentBusy by remember { mutableStateOf(false) }
     var componentProgressText by remember { mutableStateOf<String?>(null) }
     var lastComputedSha256 by remember { mutableStateOf<String?>(null) }
+    var busyEntryUrl by remember { mutableStateOf<String?>(null) }
+    var componentError by remember { mutableStateOf<String?>(null) }
     val logs = remember { mutableStateListOf<String>() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
     var isWineRunning by remember { mutableStateOf(ContainerManager.isRunning()) }
+    var runningName by remember { mutableStateOf<String?>(null) }
     var isSettingUp by remember { mutableStateOf(false) }
     var isContainerSetup by remember { mutableStateOf(ContainerManager.isSetup(context)) }
     var recentExes by remember { mutableStateOf(ContainerManager.recentExes(context)) }
@@ -151,6 +163,7 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
     fun runWineArgs(args: List<String>) {
         if (isWineRunning || isSettingUp) return
         isWineRunning = true
+        runningName = "wine " + args.joinToString(" ")
         scope.launch(Dispatchers.IO) {
             try {
                 ContainerManager.run(context, args) { line ->
@@ -170,6 +183,7 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
     fun runWineExe(exePath: String, sc: Shortcut? = null) {
         if (isWineRunning || isSettingUp) return
         isWineRunning = true
+        runningName = sc?.name ?: File(exePath).nameWithoutExtension
         scope.launch(Dispatchers.IO) {
             val startMs = System.currentTimeMillis()
             val launcherLog = StringBuffer()
@@ -183,7 +197,8 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
                 }
                 if (sc != null) {
                     // Shortcut: per-game resolution (global display pref), lastPlayed, args/env/driver via LaunchOptions.
-                    if (sc.resolution in BuiltinXServer.RESOLUTIONS) DisplayServer.setResolution(context, sc.resolution)
+                    // Game's own size applies to this run only; the saved default stays as it is.
+                    DisplayServer.launchOverride = sc.resolution.takeIf { Resolution.parse(it) != null }
                     ShortcutStore.save(context, sc.copy(lastPlayed = System.currentTimeMillis()))
                     mainHandler.post { addLog("Launch shortcut '${sc.name}' (${sc.id})") }
                 }
@@ -196,6 +211,7 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
                 launcherLog.append("Run error: ${t.message}\n")
                 mainHandler.post { addLog("Run error: ${t.message}") }
             } finally {
+                DisplayServer.launchOverride = null
                 mainHandler.post {
                     isWineRunning = ContainerManager.isRunning()
                     isContainerSetup = ContainerManager.isSetup(context)
@@ -214,6 +230,7 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
     fun runExplorer() {
         if (isWineRunning || isSettingUp) return
         isWineRunning = true
+        runningName = "Wine Explorer"
         scope.launch(Dispatchers.IO) {
             try {
                 ContainerManager.runExplorer(context) { line ->
@@ -470,12 +487,19 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
         }
     }
 
-    fun downloadComponent(entry: CatalogEntry) {
+    fun downloadComponent(st: ComponentState) {
+        val entry = st.entry
         if (isComponentBusy) return
         isComponentBusy = true
+        busyEntryUrl = entry.url
+        componentError = null
         componentProgressText = "Downloading 0.0 MB..."
         scope.launch {
             try {
+                // Broken install of the same version must be removed first (install refuses an existing dir).
+                if (st.status == ComponentStatus.Incomplete) {
+                    withContext(Dispatchers.IO) { st.installed.forEach { ContentManager.delete(context, it) } }
+                }
                 addLog("Downloading ${entry.name}...")
                 val dlResult = ContentManager.download(
                     context = context,
@@ -499,21 +523,28 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
                         val installResult = ContentManager.install(context, file, rootfs = (entry.type == "imagefs"))
                         installResult.onSuccess { installed ->
                             val updatedList = withContext(Dispatchers.IO) {
+                                // Update: new version is in place, drop the superseded one(s).
+                                if (st.status == ComponentStatus.UpdateAvailable) {
+                                    st.installed.filter { it.dir != installed.dir }.forEach { ContentManager.delete(context, it) }
+                                }
                                 ContentManager.list(context)
                             }
                             installedComponents = updatedList
                             addLog("Installed component: ${installed.type}/${installed.versionName}")
                         }.onFailure { err ->
+                            componentError = "Install failed: ${err.message}"
                             addLog("Installation failed: ${err.message}")
                         }
                     } finally {
                         file.delete()
                     }
                 }.onFailure { err ->
+                    componentError = "Download failed: ${err.message}"
                     addLog("Download failed: ${err.message}")
                 }
             } finally {
                 isComponentBusy = false
+                busyEntryUrl = null
                 componentProgressText = null
             }
         }
@@ -543,851 +574,103 @@ fun LauncherApp(autoprobe: Boolean, autoRunExe: String? = null) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("PanVK Launcher") }
+    val wineBusy = isWineRunning || isSettingUp
+    AppShell(
+        tab = selectedTab,
+        onTab = { selectedTab = it },
+        showLogs = showLogs,
+        onShowLogs = { showLogs = it },
+        running = wineBusy,
+        logs = logs,
+        onClearLogs = { logs.clear() },
+        onOpenSessionLogs = { SessionLogsActivity.open(context) }
+    ) { shown ->
+        when (shown) {
+            null -> LogsScreen(logs)
+            AppTab.Games -> GamesScreen(
+                drivers = drivers,
+                activeDriver = selectedDriver,
+                defaultResolution = displayRes,
+                busy = wineBusy,
+                runningName = if (isSettingUp) "Setting up container" else runningName,
+                onStop = { stopWine() },
+                onLaunch = { runShortcut(it) }
             )
-        },
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == LauncherTab.Drivers,
-                    onClick = { selectedTab = LauncherTab.Drivers },
-                    label = { Text("Drivers") },
-                    icon = { Text(LauncherTab.Drivers.iconSymbol, fontSize = 18.sp) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == LauncherTab.Components,
-                    onClick = { selectedTab = LauncherTab.Components },
-                    label = { Text("Components") },
-                    icon = { Text(LauncherTab.Components.iconSymbol, fontSize = 18.sp) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == LauncherTab.Wine,
-                    onClick = { selectedTab = LauncherTab.Wine },
-                    label = { Text("Wine") },
-                    icon = { Text(LauncherTab.Wine.iconSymbol, fontSize = 18.sp) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == LauncherTab.Games,
-                    onClick = { selectedTab = LauncherTab.Games },
-                    label = { Text("Games") },
-                    icon = { Text(LauncherTab.Games.iconSymbol, fontSize = 18.sp) }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == LauncherTab.Logs,
-                    onClick = { selectedTab = LauncherTab.Logs },
-                    label = { Text("Logs") },
-                    icon = { Text(LauncherTab.Logs.iconSymbol, fontSize = 18.sp) }
-                )
-            }
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            when (selectedTab) {
-                LauncherTab.Drivers -> {
-                    DriversTabContent(
-                        drivers = drivers,
-                        selectedDriver = selectedDriver,
-                        probeResult = probeResult,
-                        isProbing = isProbing,
-                        importing = importing,
-                        onSelectDriver = { driver ->
-                            selectedDriverId = driver.id
-                            DriverManager.setSelectedDriverId(context, driver.id)
-                        },
-                        onImportClick = {
-                            importLauncher.launch(arrayOf("application/zip", "*/*"))
-                        },
-                        onProbeClick = {
-                            runProbe(selectedDriver)
-                        },
-                        onDeleteDriver = { driver ->
-                            val driverName = driver.name
-                            if (DriverManager.deleteDriver(context, driver)) {
-                                drivers = DriverManager.getDrivers(context)
-                                if (selectedDriverId == driver.id) {
-                                    selectedDriverId = "bundled"
-                                    DriverManager.setSelectedDriverId(context, "bundled")
-                                }
-                                addLog("Deleted driver: $driverName")
-                            }
-                        }
-                    )
-                }
-                LauncherTab.Components -> {
-                    ComponentsTabContent(
-                        catalog = ContentManager.CATALOG,
-                        installedList = installedComponents,
-                        busy = isComponentBusy,
-                        progressText = componentProgressText,
-                        lastHash = lastComputedSha256,
-                        onInstallLocalClick = {
-                            componentImportLauncher.launch(arrayOf("*/*"))
-                        },
-                        onDownloadClick = { entry ->
-                            downloadComponent(entry)
-                        },
-                        onDeleteClick = { component ->
-                            deleteComponent(component)
-                        }
-                    )
-                }
-                LauncherTab.Wine -> {
-                    WineTabContent(
-                        isSetup = isContainerSetup,
-                        isSettingUp = isSettingUp,
-                        isRunning = isWineRunning,
-                        installedComponents = installedComponents,
-                        recentExes = recentExes,
-                        selectedDriver = selectedDriver,
-                        isDxvkEnabled = isDxvkEnabled,
-                        onToggleDxvk = { toggleDxvk(it) },
-                        displayStatus = displayRev.let { DisplayServer.describe(context) },
-                        builtinDisplay = builtinDisplay,
-                        onToggleBuiltin = {
-                            DisplayServer.setMode(
-                                context,
-                                if (it) DisplayServer.Mode.BUILTIN else DisplayServer.Mode.TERMUX
-                            )
-                            displayRev++
-                        },
-                        displayRes = displayRes,
-                        onCycleRes = {
-                            val all = BuiltinXServer.RESOLUTIONS
-                            DisplayServer.setResolution(context, all[(all.indexOf(displayRes) + 1) % all.size])
-                            displayRev++
-                        },
-                        displayShm = displayShm,
-                        onToggleShm = {
-                            DisplayServer.setShm(context, it)
-                            displayRev++
-                        },
-                        onOpenDisplay = {
-                            val err = DisplayServer.open(context)
-                            if (err != null) addLog(err) else addLog("Opened display")
-                        },
-                        onOpenScreen = { openScreen() },
-                        onLaunchExplorer = { runExplorer() },
-                        onRunCmdVer = { runWineArgs(listOf("cmd", "/c", "ver")) },
-                        onPickExe = { launchExePickerWithPermission() },
-                        onRunManualExe = { path -> runExeWithPermission(path) },
-                        onRunRecentExe = { path -> runExeWithPermission(path) },
-                        onStop = { stopWine() }
-                    )
-                }
-                LauncherTab.Games -> {
-                    GamesTabContent(
-                        drivers = drivers,
-                        busy = isWineRunning || isSettingUp,
-                        onLaunch = { runShortcut(it) }
-                    )
-                }
-                LauncherTab.Logs -> {
-                    LogsTabContent(logs = logs)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun DriversTabContent(
-    drivers: List<Driver>,
-    selectedDriver: Driver,
-    probeResult: String?,
-    isProbing: Boolean,
-    importing: Boolean = false,
-    onSelectDriver: (Driver) -> Unit,
-    onImportClick: () -> Unit,
-    onProbeClick: () -> Unit,
-    onDeleteDriver: (Driver) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = onImportClick,
-                    enabled = !importing,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Import .adpkg.zip")
-                }
-                Button(
-                    onClick = onProbeClick,
-                    enabled = !isProbing,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(if (isProbing) "Probing..." else "Probe")
-                }
-            }
-        }
-
-        if (probeResult != null) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "Probe Result:",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        SelectionContainer {
-                            Text(
-                                text = probeResult,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Text(
-                text = "Available Drivers",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 4.dp)
+            AppTab.Controls -> ControlsScreen(onLog = { addLog(it) })
+            AppTab.Components -> ComponentsScreen(
+                catalog = ContentManager.CATALOG,
+                installedList = installedComponents,
+                busy = isComponentBusy,
+                busyEntryUrl = busyEntryUrl,
+                progressText = componentProgressText,
+                errorText = componentError,
+                onDismissError = { componentError = null },
+                onInstallLocalClick = { componentImportLauncher.launch(arrayOf("*/*")) },
+                onDownload = { st -> downloadComponent(st) },
+                onDelete = { component -> deleteComponent(component) }
             )
-        }
-
-        items(drivers, key = { it.id }) { driver ->
-            val isSelected = driver.id == selectedDriver.id
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSelectDriver(driver) },
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surface
-                    }
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = isSelected,
-                        onClick = { onSelectDriver(driver) }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = driver.name,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            text = "Version: ${driver.version} | Author: ${driver.author}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        if (driver.description.isNotEmpty()) {
-                            Text(
-                                text = driver.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+            AppTab.Drivers -> DriversScreen(
+                drivers = drivers,
+                selectedDriver = selectedDriver,
+                probeResult = probeResult,
+                isProbing = isProbing,
+                importing = importing,
+                onSelectDriver = { driver ->
+                    selectedDriverId = driver.id
+                    DriverManager.setSelectedDriverId(context, driver.id)
+                },
+                onImportClick = { importLauncher.launch(arrayOf("application/zip", "*/*")) },
+                onProbeClick = { runProbe(selectedDriver) },
+                onDeleteDriver = { driver ->
+                    val driverName = driver.name
+                    if (DriverManager.deleteDriver(context, driver)) {
+                        drivers = DriverManager.getDrivers(context)
+                        if (selectedDriverId == driver.id) {
+                            selectedDriverId = DriverManager.bundledId(context)
+                            DriverManager.setSelectedDriverId(context, DriverManager.bundledId(context))
                         }
-                        Text(
-                            text = driver.libPath,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (!driver.bundled) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        OutlinedButton(
-                            onClick = { onDeleteDriver(driver) },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text("Delete")
-                        }
+                        addLog("Deleted driver: $driverName")
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun LogsTabContent(logs: List<String>) {
-    val scrollState = rememberScrollState()
-    SelectionContainer {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(16.dp)
-        ) {
-            if (logs.isEmpty()) {
-                Text(
-                    text = "No logs yet.",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                logs.forEach { entry ->
-                    Text(
-                        text = entry,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ComponentsTabContent(
-    catalog: List<CatalogEntry>,
-    installedList: List<InstalledContent>,
-    busy: Boolean,
-    progressText: String?,
-    lastHash: String?,
-    onInstallLocalClick: () -> Unit,
-    onDownloadClick: (CatalogEntry) -> Unit,
-    onDeleteClick: (InstalledContent) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Button(
-                onClick = onInstallLocalClick,
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Install local .wcp")
-            }
-        }
-
-        if (progressText != null || lastHash != null) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        if (progressText != null) {
-                            Text(
-                                text = progressText,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                        if (lastHash != null) {
-                            if (progressText != null) Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "SHA-256: $lastHash",
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Text(
-                text = "Catalog",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 4.dp)
             )
-        }
-
-        items(catalog, key = { it.url }) { entry ->
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = entry.name,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            text = "Type: ${entry.type}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        val hashLabel = if (entry.sha256 != null) {
-                            "sha256 pinned"
-                        } else {
-                            "UNVERIFIED (hash shown after download)"
-                        }
-                        Text(
-                            text = hashLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (entry.sha256 != null) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.error
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { onDownloadClick(entry) },
-                        enabled = !busy
-                    ) {
-                        Text("Download")
-                    }
-                }
-            }
-        }
-
-        item {
-            Text(
-                text = "Installed Components",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 4.dp)
+            AppTab.Settings -> SettingsScreen(
+                themeMode = themeMode,
+                onThemeMode = onThemeMode,
+                dynamicColor = dynamicColor,
+                onDynamicColor = onDynamicColor,
+                isSetup = isContainerSetup,
+                isSettingUp = isSettingUp,
+                isRunning = isWineRunning,
+                installedComponents = installedComponents,
+                recentExes = recentExes,
+                selectedDriver = selectedDriver,
+                isDxvkEnabled = isDxvkEnabled,
+                onToggleDxvk = { toggleDxvk(it) },
+                displayStatus = displayRev.let { DisplayServer.describe(context) },
+                builtinDisplay = builtinDisplay,
+                onToggleBuiltin = {
+                    DisplayServer.setMode(context, if (it) DisplayServer.Mode.BUILTIN else DisplayServer.Mode.TERMUX)
+                    displayRev++
+                },
+                displayRes = displayRes,
+                onSetRes = { DisplayServer.setResolution(context, it); displayRev++ },
+                displayShm = displayShm,
+                onToggleShm = { DisplayServer.setShm(context, it); displayRev++ },
+                onOpenDisplay = {
+                    val err = DisplayServer.open(context)
+                    if (err != null) addLog(err) else addLog("Opened display")
+                },
+                onOpenScreen = { openScreen() },
+                onLaunchExplorer = { runExplorer() },
+                onRunCmdVer = { runWineArgs(listOf("cmd", "/c", "ver")) },
+                onPickExe = { launchExePickerWithPermission() },
+                onRunManualExe = { path -> runExeWithPermission(path) },
+                onRunRecentExe = { path -> runExeWithPermission(path) },
+                onStop = { stopWine() },
+                onOpenAppLog = { showLogs = true },
+                onOpenSessionLogs = { SessionLogsActivity.open(context) },
+                onOpenControls = { selectedTab = AppTab.Controls }
             )
-        }
-
-        if (installedList.isEmpty()) {
-            item {
-                Text(
-                    text = "No components installed.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            items(installedList, key = { it.dir.absolutePath }) { c ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "${c.type} — ${c.versionName}",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            if (c.description.isNotEmpty()) {
-                                Text(
-                                    text = c.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Text(
-                                text = c.dir.absolutePath,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        OutlinedButton(
-                            onClick = { onDeleteClick(c) },
-                            enabled = !busy,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text("Delete")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun WineTabContent(
-    isSetup: Boolean,
-    isSettingUp: Boolean,
-    isRunning: Boolean,
-    installedComponents: List<InstalledContent>,
-    recentExes: List<String>,
-    selectedDriver: Driver,
-    isDxvkEnabled: Boolean,
-    onToggleDxvk: (Boolean) -> Unit,
-    displayStatus: String,
-    builtinDisplay: Boolean,
-    onToggleBuiltin: (Boolean) -> Unit,
-    displayRes: String,
-    onCycleRes: () -> Unit,
-    displayShm: Boolean,
-    onToggleShm: (Boolean) -> Unit,
-    onOpenDisplay: () -> Unit,
-    onOpenScreen: () -> Unit,
-    onLaunchExplorer: () -> Unit,
-    onRunCmdVer: () -> Unit,
-    onPickExe: () -> Unit,
-    onRunManualExe: (String) -> Unit,
-    onRunRecentExe: (String) -> Unit,
-    onStop: () -> Unit
-) {
-    var manualPath by remember { mutableStateOf("") }
-
-    val protonVer = installedComponents.firstOrNull { it.type == "Proton" }?.versionName ?: "Not installed"
-    val fexVer = installedComponents.firstOrNull { it.type == "FEXCore" }?.versionName ?: "None"
-    val imagefsVer = installedComponents.firstOrNull { it.type == "imagefs" && it.versionName == "bionic" }?.versionName ?: "Not installed"
-
-    val actionEnabled = !isRunning && !isSettingUp && isSetup
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Wine Environment",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        if (isRunning) {
-                            Text(
-                                text = "Running",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    if (isSettingUp) {
-                        Text(
-                            text = "Setting up container...",
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    } else {
-                        val statusText = if (isSetup) "Container: Ready" else "Container: Not set up"
-                        val statusColor = if (isSetup) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                        Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = statusColor,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Text(
-                        text = "Proton: $protonVer | FEX: $fexVer | imagefs: $imagefsVer",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = "Vulkan driver: ${selectedDriver.name} (${File(selectedDriver.libPath).name})",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = displayStatus,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Built-in X server (off = Termux:X11)",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Switch(
-                            checked = builtinDisplay,
-                            onCheckedChange = onToggleBuiltin,
-                            enabled = !isRunning
-                        )
-                    }
-                    if (builtinDisplay) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "MIT-SHM present",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Switch(
-                                checked = displayShm,
-                                onCheckedChange = onToggleShm,
-                                enabled = !isRunning
-                            )
-                        }
-                        Button(onClick = onCycleRes, enabled = !isRunning) {
-                            Text("Resolution: $displayRes (tap to cycle)")
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "DXVK (d3d8/9/10/11 -> Vulkan)",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Switch(
-                            checked = isDxvkEnabled,
-                            onCheckedChange = onToggleDxvk
-                        )
-                    }
-                    Text(
-                        text = "DXVK enabled is not a game compatibility result. ARM64EC smoke tests do not validate x86/i686 WOW64 games; 32-bit staging can fail on Mali kbase SAME_VA.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Actions",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = onLaunchExplorer,
-                            enabled = actionEnabled,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Launch explorer")
-                        }
-                        Button(
-                            onClick = onRunCmdVer,
-                            enabled = actionEnabled,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("wine cmd /c ver")
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = onPickExe,
-                            enabled = actionEnabled,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Pick .exe")
-                        }
-                        Button(
-                            onClick = onStop,
-                            enabled = isRunning,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
-                            ),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Stop")
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = onOpenDisplay,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Termux:X11")
-                        }
-                        OutlinedButton(
-                            onClick = onOpenScreen,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Framebuffer")
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Run Executable by Path",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    OutlinedTextField(
-                        value = manualPath,
-                        onValueChange = { manualPath = it },
-                        label = { Text("Executable Path") },
-                        placeholder = { Text("/storage/emulated/0/Download/app.exe") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Button(
-                        onClick = { onRunManualExe(manualPath.trim()) },
-                        enabled = actionEnabled && manualPath.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Run")
-                    }
-                }
-            }
-        }
-
-        item {
-            Text(
-                text = "Recent Executables",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
-
-        if (recentExes.isEmpty()) {
-            item {
-                Text(
-                    text = "No recent executables.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            items(recentExes) { exePath ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = actionEnabled) {
-                            onRunRecentExe(exePath)
-                        },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = File(exePath).name,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                text = exePath,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = { onRunRecentExe(exePath) },
-                            enabled = actionEnabled
-                        ) {
-                            Text("Run")
-                        }
-                    }
-                }
-            }
         }
     }
 }
