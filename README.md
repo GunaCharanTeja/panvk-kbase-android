@@ -1,5 +1,9 @@
 # PanVK Kbase Android Driver
 
+<p align="center">
+  <img src="apps/panvk-launcher/tests/results/samevaresults/cube/x86_64-d3d11-cube-hud.png" alt="Direct3D 11 cube demo running through DXVK on PanVK (Mali-G615)" width="100%">
+</p>
+
 Standalone patch/build layer around pinned upstream Mesa that produces an
 open Mesa PanVK driver talking directly to Android's proprietary
 `mali_kbase` kernel interface (`/dev/mali0`).
