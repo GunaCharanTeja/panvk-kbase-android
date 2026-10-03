@@ -58,7 +58,7 @@ Checks:
 - Series: all 88 patches apply cleanly on a fresh pin (086 was removed as unsafe; the gap doesn't matter). The result is identical to `tmp/worktrees/mesa-val`.
 - Device ICD: SHA256 `0457150b...34b98dc4` and BuildID `2afe54d4...0f7d` match the claims.
 - CTS with that ICD: 438 cases (tessellation primitive_discard, sync basic events, conditional_rendering draw): 433 pass / 0 fail / 5 NotSupported. These cases don't exercise the 087 bug.
-- 089 (depth clamp for a GS-selected viewport) is not in the series. The research tree is `work/mesa-viewport-runs-fixed`; notes in `worklogs/driver-remaining/089-viewport-clamp.md`. The latest helper changes are unreviewed and not compiled for the GPU.
+- 089 (depth clamp/clip per GS-selected viewport) is in the series (`patches/csf-v11/089-*.patch`) and verified on the G615 (`worklogs/driver-remaining/089-device-verification.md`). No CTS run.
 - Review files: `tmp/review-085-088/`.
 
 Released: beta.6 (up to 077), beta.7 (up to 082), beta.8 (up to 084). See `CHANGELOG.md`.
@@ -68,7 +68,7 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
 
 1. **Fix the 087 stale-state bug** (blocking), then push 085/087/088.
 1a. **32-bit (i686/WOW64) `vkMapMemory` at a caller-chosen address**. STATUS 2026-10-03: DEVICE-PROVEN for the draw test. mremap of the SAME_VA VMA is refused by kbase (`mremap ... failed: Invalid argument`, get_unmapped_area rejects fixed), so `kbase_kmod.c` `bo_mmap` now maps an anonymous MAP_FIXED shadow at the requested address, merged word-wise with the BO (snapshot) before every queue kick, after CSF waits, on flush/invalidate and on unmap. i686 D3D9 and D3D11 `dxdraw` now render triangle + textured quad (XGetImage, pixels identical to ARM64EC/x86_64; no MESA errors); 64-bit regression unchanged. Not proven: a real 32-bit game, large placed maps (merge is O(bytes) per kick/wait), CTS memory_map. Evidence: `apps/panvk-launcher/tests/results/samevaresults/README.md`.
-2. 089: depth clamp/clip for a GS-selected viewport, using GPU-generated viewport runs (in progress, unreviewed).
+2. 089: DONE, device-verified (GS-selected viewport depth clamp/clip as ordered runs). Follow-up: in `panvk_vX_cmd_draw.c`, the `cs_if(pred)` tessellation conditional skips prepare_draw's GPU state writes on a false predicate but still clears their dirty flags (from 087; same bug as item 1).
 3. Re-check DXVK FL11_1 (VPSA is in since 078).
 4. `shaderOutputViewportIndex` from VS/TES (`shaderOutputLayer` is already on; the GS part is done in 076).
 5. `depthBounds`: exact check via tile-buffer stored depth.
@@ -84,7 +84,8 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
 - `draw.*depth_bias_patch_list_tri_line` fails (pre-existing, root cause unknown).
 - 077 system-scope signals raise an interrupt per cross-subqueue signal; game perf cost unmeasured.
 - 075 sync_file export uses one device-wide KCPU queue: head-of-line blocking; possible deadlock with wait-before-signal timelines (not seen in CTS).
-- 076: with a GS-selected viewport, depth clip/clamp uses the union of all viewports' depth ranges (fix in progress as 089).
+- 076: fixed by 089 (depth clip/clamp used the union of all viewports' depth ranges).
+- 089: one unreproduced intermittent on the first run after a fresh install (case B drew nothing; swapchain_lifecycle failed once in the same run). Not seen in 11 later gs runs and 6 swapchain runs.
 - 085: recovery of an evicted CSG via host notification is unproven.
 - Proton 11 (i686 via wow64): winex11 fails to create the Vulkan surface before the driver is called (HWND `0xc0000005`; ARM64EC window crash since fixed via `ANDROID_SYSVSHM_SERVER=/dev/null`, i686 SAME_VA mapping still open); DXVK reports "Presenter: Failed to create Vulkan surface". Instance and device creation work.
 - **32-bit apps draw nothing (driver side, PanVK launcher report 2026-10-03).** On i686 under WOW64, `vkMapMemory` returns `VK_ERROR_MEMORY_MAP_FAILED`. Log: `MESA: error: kbase: mapping a BO at a caller-chosen address is not supported (SAME_VA)`. Source: `patches/kbase-common/files/src/panfrost/lib/kmod/kbase_kmod.c:1780`. Wine WOW64 needs mappings below 4 GiB (placed via `VK_EXT_map_memory_placed` / a fixed address), but kbase SAME_VA ties the CPU VA to the GPU VA. UPDATE 2026-10-03: fixed in `kbase_kmod.c` via shadow mapping (mremap refused by kernel); see item 1a.
