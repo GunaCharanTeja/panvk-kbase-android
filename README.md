@@ -51,15 +51,16 @@ Status key:
 
 | Arm family / generation | Mesa arch | Frontend | GPUs | Status here |
 |---|---|---|---|---|
-| Utgard | (Lima) | n/a | Mali-55, 200, 300, 400, 450, 470 | ❌ Not possible: GLES 2 only (Lima), no Vulkan |
-| Midgard 1st/2nd gen | v4 | JM | T600, T620, T720 | ❌ Not possible: no PanVK backend |
-| Midgard 3rd/4th gen | v5 | JM | T760, T820, T830, T860, T880 | ❌ Not possible: no PanVK backend |
-| Bifrost 1st gen | v6 | JM | G71 | ❌ Not possible: Mesa marks G71 unsupported |
+| Pre-Utgard (fixed function) | n/a | n/a | Mali-55, Mali-110 | ❌ Not possible: no programmable shaders |
+| Utgard | n/a (Lima) | n/a | Mali-200, Mali-300, Mali-400 MP, Mali-450 MP, Mali-470 MP | ❌ Not possible: GLES 2 only (Lima), no Vulkan |
+| Midgard 1st/2nd/3rd gen | v4 | JM | Mali-T604, T658, T622, T624, T628, T678, T720 | ❌ Not possible: no PanVK backend |
+| Midgard 3rd/4th gen | v5 | JM | Mali-T760, T820, T830, T860, T880 | ❌ Not possible: no PanVK backend |
+| Bifrost 1st gen | v6 | JM | Mali-G71 | ❌ Not possible: Mesa marks G71 unsupported |
 | Bifrost 1st gen | v6 | JM | G72 | ❔ Possible, not tried: upstream PanVK experimental |
 | Bifrost 2nd/3rd gen | v7 | JM | G52 | 📋 TODO: profile `g52-v7-jm` (P25) |
 | Bifrost 2nd/3rd gen | v7 | JM | G31, G51, G76 | ❔ Possible, not tried |
 | Valhall 1st/2nd gen | v9 | JM | G57 | 📋 TODO: profile `g57-v9-jm` (P26); needs a v9 backend port |
-| Valhall 1st/2nd gen | v9 | JM | G68, G77, G78 | ❔ Possible, not tried (same v9 backend port) |
+| Valhall 1st/2nd gen | v9 | JM | G77, G68, G78, G78AE | ❔ Possible, not tried (same v9 backend port) |
 | Valhall 3rd gen | v10 | CSF | G610 | 📋 TODO: profile `g610-v10-csf` (P24) |
 | Valhall 3rd gen | v10 | CSF | G310, G510, G710 | ❔ Possible, not tried |
 | **Valhall 4th gen** | **v11** | **CSF** | **G615** | ✅ **Supported** (Poco X6 Pro, Dimensity 8300) |
@@ -67,8 +68,8 @@ Status key:
 | 5th Gen | v12 | CSF | G720 | 📋 TODO: profile `g720-v12-csf` (P24) |
 | 5th Gen | v12 | CSF | G620, Immortalis-G720 | ❔ Possible, not tried |
 | 5th Gen | v13 | CSF | G625, G725, Immortalis-G925 | ❔ Possible, not tried |
-| Arm GPU G1 | v14 | CSF | G1-Pro, G1-Premium, G1-Ultra | ❔ Possible, not tried: upstream PanVK experimental |
-| Arm GPU G2 | v15 (unconfirmed) | CSF | G2-Ultra NX | ❌ Not possible yet: not in Mesa |
+| 5th Gen, G1 series | v14 | CSF | G1-Pro, G1-Premium, G1-Ultra | ❔ Possible, not tried: upstream PanVK experimental |
+| G2 series | v15 (unconfirmed) | CSF | G2-Ultra NX, G2-Premium NX (rumoured), G2-Pro NX (rumoured) | ❌ Not possible yet: not in Mesa |
 
 "Possible" means Mesa has code for the arch. It does not mean the arch works
 here: each one still needs a kbase profile, its kbase frontend path (JM or
