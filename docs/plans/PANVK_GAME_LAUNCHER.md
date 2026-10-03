@@ -18,6 +18,40 @@ Driver unchanged. ARM64EC+i686 runtime built; i686 mapping/game support still
 unverified. Evidence/provenance: `apps/panvk-launcher/tests/results/final-discrimination/runtime-fix/README.md`.
 Earlier failure investigation below is historical, not the current smoke result.
 
+**Status (2026-10-03).** Device Poco X6 Pro (`duchamp`), Mali-G615 MC6; app `dev.zenithblue.panvklauncher`; Proton 11.0-2-arm64ec + bionic imagefs; DXVK 3.1.1 + local deferred-clear fix; PanVK 0.1.0-beta.8 (driver untouched); Termux:X11 `DISPLAY=:0`; software X11 copy transport.
+
+Commits: `9fc0c9e` (avoid unset SHM broker crash, record black-frame evidence), `e738515` (materialize DXVK clears before X11 presentation).
+
+Completed:
+- Termux:X11 integration (DISPLAY, matching TMPDIR socket dir, Wine `Graphics=x11`), app-private .exe permission fix, Stop cancellation and setup/run race fixes.
+- Wine window crash fixed: imagefs `libandroid-sysvshm.so` `strncpy(NULL)` on unset `ANDROID_SYSVSHM_SERVER` -> 0xC0000005; mitigated by env `ANDROID_SYSVSHM_SERVER=/dev/null` (`Containers.kt`), Wine falls back to non-SHM X11.
+- DXVK fix: `DxvkContext::beginExternalRendering()` calls `endCurrentPass(false)` before external blitter, then `endCurrentCommands()`. Patch `apps/panvk-launcher/runtimes/dxvk/clear-before-external-rendering.patch`, source pinned `b1a1c99ab52b687cf950d62c88bc2fa316b41663` (in `build.sh`). Pristine runtime backups kept; automatic fbread layer injection removed.
+
+Retracted: earlier HRESULT-only passes and the `m4-matrix.md` i686 "orange frame" claims. Screenshots were black; the orange pixels were the Android battery overlay. HRESULT alone is never acceptance.
+
+Acceptance (normal executables, ARM64EC, actual client pixels 320x240, 76800/76800 orange):
+
+| API | CLI | Launcher UI | Proof |
+|---|---|---|---|
+| DX8 | PASS | PASS | `runtime-fix/ui-d3d8/screenshot.png` |
+| DX9 | PASS | PASS | `runtime-fix/ui-d3d9/screenshot.png` |
+| DX10 | PASS | PASS | `runtime-fix/ui-d3d10/screenshot.png` |
+| DX11 | PASS | PASS | `runtime-fix/ui-d3d11/screenshot.png` |
+
+Root: `apps/panvk-launcher/tests/results/final-discrimination/runtime-fix/`. Verifiers: `check.py` and `fresh-verification/check.py` (both pass; unpatched control stays black). Smoke executables only; general game compatibility unverified.
+
+**The DX8-11 smoke tests above prove CLEAR + Present only, not draws.** Draw probe (2026-10-03): `tests/dxdraw.c` (dark-blue clear, RGB triangle, point-sampled textured quad; d3d11 runtime-HLSL, d3d9 fixed-function; env knobs DXDRAW_BUFS/FLIP/DEPTH/MSAA/FRAMES/STAGING), driver `tests/results/draw-test/run.py` + `analyze.py`. Real XGetImage client pixels on the patched DXVK:
+- ARM64EC d3d11 (1 buf discard, 2 bufs, FLIP_DISCARD, FLIP_SEQUENTIAL x3, depth, 4xMSAA+depth+resolve, 60 frames unpaced) and d3d9: triangle + texture render correctly; GPU staging readback equals X11 pixels. Launcher-UI Run of d3d9 also renders (`draw-test/ui-d3d9/`). x86_64 (FEX 64-bit) d3d9/d3d11 render too. So the DXVK clear patch, presenter and X11 copy path do not drop draws.
+- i686 (32-bit WOW64): d3d11 `CreateBuffer` fails (E_INVALIDARG), d3d9 process dies, because `vkMapMemory` returns VK_ERROR_MEMORY_MAP_FAILED (`MESA: error: kbase: mapping a BO at a caller-chosen address is not supported (SAME_VA)`, `patches/kbase-common/files/src/panfrost/lib/kmod/kbase_kmod.c:1780`). Clears need no mapped memory, so 32-bit smoke "passes" while any real 32-bit app (vertex/index/constant buffers, textures) shows nothing. Driver-side (PanVK kbase); not fixable in DXVK/launcher. A real 32-bit game is the likely cause of "only orange/blank". Evidence: `draw-test/i686-d3d11/`, `draw-test/i686-d3d9/`.
+
+Remaining:
+- i686/WOW64: mapping fails when Wine requests caller-chosen addresses incompatible with kbase SAME_VA. Patched i686 DLLs built; normal rendering not established.
+- Real games (x86/x64): draw workloads, assets, input, audio, resize, long Stop/relaunch.
+- DXVK component distribution: only local `/var/tmp/panvk/dxvk-clear-package/dxvk-3.1.1-clearfix.wcp`; no reproducible published artifact.
+- Performance: software X11 copy only. No zero-copy, vsync pacing or perf claim.
+
+Next-agent rules: fresh subagent per task; Sol worker -> independent tester -> fix/retest -> scoped commit. Require logs plus actual client pixels. Keep source-readback diagnostics separate from normal-presentation acceptance. No driver edits; hand off only if a driver issue is conclusively shown. Preserve unrelated working-tree changes. CLI via ctx_execute.
+
 ### Goals
 1. **Zero-CPU-copy presentation in normal operation:** Directly present GPU-rendered `AHardwareBuffer` (AHB) swapchains via `SurfaceControl` (`ASurfaceTransaction_setBuffer`) to SurfaceFlinger / Hardware Composer (HWC) without intermediate CPU readbacks, format conversions, or `memcpy` stalls (`DISPLAY-ALTERNATIVES.md:10, 33-35`).
 2. **GPU-only execution path:** Production graphics execution executes strictly on the GPU hardware and compute engines; no CPU texture decoding, no CPU shader fallback, no software rasterization, and no CPU readback-and-rebuild loops (`README.md:126-127`, `docs/plans/PANVK_MASTER_ROADMAP.md:26-28`). Specifically:

@@ -31,6 +31,18 @@ source/patch stack, adapter packages around it.
 - Kernel interface: `/dev/mali0` (`mali_kbase`)
 - Observed GPU ID string: `Mali-G615 6 cores r1p3 0xB8A3`
 
+## Supported GPUs
+
+Only the **Mali-G615** (Mesa `PAN_ARCH` v11, CSF frontend; Arm's 4th
+generation Valhall, announced 2022) is supported and validated, on the
+reference device above. Other Mali GPUs (including G610/v10, G720/v12 and the
+Bifrost/Valhall v7/v9 JM parts) have planned profiles or patch scaffolding but
+are untested and unsupported. Arm's marketing generations (Utgard, Midgard,
+Bifrost, Valhall 1st to 4th gen, 5th Gen, G1) and Mesa `PAN_ARCH` numbers are
+different schemes; the full chronological GPU list, mappings, frontends and
+upstream driver status are in
+[`docs/MALI-GPU-ARCHITECTURES.md`](docs/MALI-GPU-ARCHITECTURES.md).
+
 ## Layout
 
 ```text
@@ -42,7 +54,8 @@ scripts/              fetch / patch / build / package / validate / release
 tests/                kbase-probe, vulkan-smoke, compute, offscreen, ahb,
                       android-surface, sync, android-loader-app, dxvk-vkd3d
 docs/                 architecture, build, portability, matrix, profiles,
-                      app-compat, release, Kbase sparse feasibility
+                      app-compat, release, Kbase sparse feasibility,
+                      Mali GPU architectures (MALI-GPU-ARCHITECTURES.md)
 validation/           G615 capability dumps, DXVK/vkd3d profiles and matrix
 .github/workflows/   build / release / source-drift
 ```

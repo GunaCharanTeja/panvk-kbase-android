@@ -1,9 +1,9 @@
 # PanVK Kbase Android — Master Roadmap
 
-**Roadmap revision:** 2026-09-20  
+**Roadmap revision:** 2026-10-02  
 **Repository:** `abhay-byte/panvk-kbase-android`  
-**Owner-directed sequence:** DXVK → vkd3d-proton → Wine/consumer testing → universal Mali loading/support → beta-to-RC qualification → stable  
-**Active implementation phase:** M1 — DXVK on the G615 reference target  
+**Owner-directed sequence:** DXVK → vkd3d-proton (deferred) → Wine/consumer testing → universal Mali loading/support → beta-to-RC qualification → stable  
+**Active implementation phase:** M1 — DXVK on the G615 reference target (D3D11 FL11_0 reached; finishing FL11_1)  
 **Execution constraint:** GPU-only graphics implementation; no CPU graphics fallback.
 
 ## 1. Project mission and document hierarchy
@@ -37,12 +37,50 @@ A safety test proving an unsupported feature remains disabled is valuable, but i
 
 **Focus:** the existing G615 reference target and the revised GPU-only DXVK worker.
 
-Retain the already selected DXVK 3.1.1 baseline ladder from the source plan [S1]:
+### DXVK 3.1.1 baseline ladder status (2026-10-02)
 
-1. D3D9.
-2. D3D10 / D3D11 feature-level 10.1 operation.
-3. D3D11 feature level 11.0.
-4. D3D11 feature level 11.1.
+- [x] **D3D9** — PASS (geometryShader, fillModeNonSolid, clip/cull distance, BC GPU decode, multiViewport device-proven)
+- [x] **D3D10 / D3D11 feature-level 10.1 operation** — PASS (transform feedback, geometryStreams, multiViewport device-proven)
+- [x] **D3D11 feature level 11.0** — PASS (tessellationShader device-proven; DXVK Native v3.1.1 FL 11_0 `0xb000` reached)
+- [ ] **D3D11 feature level 11.1** — IN PROGRESS (`vertexPipelineStoresAndAtomics` landed in beta.7, patch 078; FL11_1 not yet re-checked with DXVK)
+
+### Implementation status (done vs left matching PROGRESS.md)
+
+#### Done and device-proven:
+- [x] DX0-DX4 base, contracts (host + device tests)
+- [x] DX5 GPU vertex shader (`gpu_prerast`: 13/13 IDVS and prerast paths)
+- [x] BC1-7 GPU decode (default on; CTS BC subset 1863 pass / 0 fail; copy_and_blit 9620 / 0)
+- [x] Clip/cull distance, multiViewport, fillModeNonSolid (device matrices 0 fail)
+- [x] Zero-initialized memory (408 pass / 0 fail)
+- [x] Tiler heap fix (patch 043; 380k render passes, 150k submits)
+- [x] Pipeline statistics queries (patches 049-054; CTS 14,098 pass / 0 fail)
+- [x] Upstream backports (`incremental_present`, `swapchain_colorspace`, `image_compression_control`; device probes 0 fail)
+- [x] Tessellation + transform feedback integrated (patches 065-068; matrices 0 fail: tess 24/24, xfb 17/17 incl. tes_capture; CTS tessellation 526/0, transform_feedback 15793/0, geometry 189/0, conditional_rendering 922/0, statistics_query 15374/0, draw subset 3446/0; DXVK Native v3.1.1 FL 11_0 `0xb000`)
+- [x] `VK_EXT_memory_priority` + `VK_EXT_pageable_device_local_memory` (patch 069, released in beta.5; CTS 224/0, 202/0; api.info 7799/0)
+- [x] `alphaToOne` (patch 070, released in beta.5; CTS 123/0)
+- [x] `maxGeometryShaderInvocations` 64 (patch 071, released in beta.5; geometry 193/0, instanced 20/0)
+- [x] `VK_EXT_multi_draw` (patch 072, released in beta.5; CTS 12704/0)
+- [x] `VK_EXT_primitives_generated_query` (patch 073, released in beta.5; CTS 75206/0)
+- [x] `variableMultisampleRate` on v10+ (patch 074, in tree on dx-p5, pending beta.6; CTS variable_rate + mixed_attachment_samples 504/0; no-attachment / dynamic_rendering subset 1756/0)
+- [x] `SYNC_FD` export via kbase KCPU queue (patch 075, in tree on dx-p5, pending beta.6; CQS wait then fence signal; api.external sync_fd + synchronization.cross_instance: 113 ResourceError -> 1996 pass / 0 fail)
+- [x] Honour geometry shader viewport index on v10+ (patch 076, in tree on dx-p5, pending beta.6; draw scissor tests 18 fail -> 88/88)
+- [x] System scope for subqueue sync signals on kbase (patch 077, in tree on dx-p5, pending beta.6; synchronization.signal_order 11-16 timeouts per run -> 1316 pass / 0 aborted)
+- [x] GS draw drop (patch 046; geometry 193/0)
+- [x] JICA98 0005 GPU semaphore waits (stays off by default; sync CTS off: 1881/0)
+- [x] APK `apps/panvk-test` (Vulkan 1.3/1.4 core required features met; swapchain_lifecycle on Android surface: 300 frames at 64-86 FPS, recreate + 120 frames at 60 FPS, 10x create/destroy in 1.66 s, no hang)
+- [x] Repo cleanup (`.gitignore` junk removed, stale worktrees removed, `patchSeriesId` refreshed, `VALIDATION.json` points to DXVK evidence, `build-android.sh` picks matching host tools, `tests/dxvk-vkd3d` read `PANVK_MESA`, all 15 tests pass)
+
+#### What's left for DXVK:
+- [ ] Commit 074-077 + APK + cleanup to main, push, beta.6 release
+- [x] `vertexPipelineStoresAndAtomics` (patch 078, beta.7; CTS `atomic_operations *_vertex*` 66/0)
+- [ ] Re-check DXVK FL11_1 on the beta.8 build
+- [ ] `shaderOutputViewportIndex` from VS/TES (GS part fixed in 076; feature bit still off), 2-3 h
+- [ ] `depthBounds`: exact check via tile-buffer stored depth, 3-5 h
+- [ ] XFB DeviceLost in `transform_feedback query_copy_*`: rerun on dx-p5 (check if resolved by 077 subqueue timeout fix)
+- [ ] XFB 65536-record cap: GPU chunking
+- [ ] `variableMultisampleRate` in secondary command buffers
+- [ ] APK feature tests (tess, GS, XFB, BC, stats, conditional rendering) with FPS; swapchain true resize (change SurfaceView size)
+- [ ] Wine + DXVK game test on Android (box64/FEX)
 
 The current worker remains responsible for the evaluator correction, GPU BC path, shared pre-raster implementation, clip/cull, non-solid modes, geometry, multiple viewports, transform feedback, tessellation, vertex-stage memory semantics, and their required tests.
 
@@ -52,7 +90,9 @@ Set up the actual DXVK Native build and presentation environment early. Each tie
 
 Do not let optional extension accumulation delay the agreed baseline. Conversely, do not remove a mandatory requirement merely to advance the milestone. Native validation establishes driver/translation-layer evidence, not universal Windows-game compatibility.
 
-## 4. Milestone M2 — vkd3d-proton / D3D12
+## 4. Milestone M2 — vkd3d-proton / D3D12 (Deferred)
+
+**Status (2026-10-02):** Deferred (vkd3d/D3D12 and FL12 out of scope for now; sparse binding/residency is NO-GO on kbase). Host chroot build exists (`scripts/vkd3d/build-vkd3d-proton.sh`), but device execution is blocked by `robustImageAccess2=false` (hard requirement for vkd3d-proton device creation; WIP in `work/mesa-ria2` branch `dx-ria2`, unproven).
 
 **Entry:** M1 has completed its agreed baseline with evidence. Freeze that evidence and keep DXVK regressions mandatory.
 

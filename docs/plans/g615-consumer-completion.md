@@ -10,8 +10,8 @@ Priority:
 1. Samba S3 / RPCSX.
 2. NativeCode AI.
 3. Bachata S4 / shadps4-arm64.
-4. DXVK 2.7.1 and 3.1.1.
-5. vkd3d-proton 2.14.1 and 3.0.1.
+4. DXVK 2.7.1 and 3.1.1 (Status 2026-10-02: D3D11 FL11_0 reached; vertexPipelineStoresAndAtomics landed in beta.7; FL11_1 not yet re-checked).
+5. vkd3d-proton 2.14.1 and 3.0.1 (Status 2026-10-02: Deferred).
 6. Wine 10.0, 10.20, and 11.0.
 7. Box64 0.4.4.
 8. FEX-2609.
@@ -72,16 +72,14 @@ deliberately unexposed `VK_KHR_robustness2`.
 Current false G615/PanVK features remain false until implementation plus
 workload proof:
 
+*(Status 2026-10-02: geometryShader, tessellationShader, multiViewport,
+shaderClipDistance, shaderCullDistance, fillModeNonSolid, and
+textureCompressionBC [GPU decode default on] now have implementation plus device
+workload proof. depthBounds and shaderFloat64 remain false).*
+
 ```text
-geometryShader
-tessellationShader
-multiViewport
-shaderClipDistance
-shaderCullDistance
 shaderFloat64
 depthBounds
-fillModeNonSolid
-textureCompressionBC
 ```
 
 Native BC evidence is conclusive: BC1-BC7 hardware mask `0`, all 16 Vulkan BC
@@ -467,6 +465,9 @@ Exit: fill mode and geometry are independently proven or independently marked.
 
 ### Phase 11: DXVK D3D9 Milestone
 
+**Status (2026-10-02):** PASS (device-proven: geometryShader, fillModeNonSolid,
+clip/cull distance, multiViewport, BC GPU decode).
+
 Run the Phase 2 evaluator first for DXVK 2.7.1 and 3.1.1 D3D9. D3D9 requires
 geometry, BC, clip/cull, and fill mode; it does not require transform feedback.
 If each exact profile passes, run its D3D9 Vulkan workload. Native Wine host
@@ -483,6 +484,8 @@ Exit: exact profile and workload status for each version; no broader DXVK
 claim.
 
 ### Phase 12: MultiViewport And Transform Feedback
+
+**Status (2026-10-02):** PASS (device-proven: multiViewport, transform feedback via patches 065-068, 15,793 XFB CTS pass).
 
 For `multiViewport`, test multiple `VkViewport`s/scissors, different depth
 ranges, dynamic state, and viewport-index shader behavior if exposed.
@@ -507,6 +510,9 @@ with exact feature/property reporting.
 
 ### Phase 13: DXVK D3D10 / FL10.x
 
+**Status (2026-10-02):** PASS (device-proven: transformFeedback, geometryStreams,
+multiViewport).
+
 Re-evaluate exact DXVK 2.7.1 and 3.1.1 D3D10 Level 10.1 baselines. This uses
 the D3D11 baseline capability set but not FL11 tessellation. For each passing
 profile run a D3D10 minimal workload and, if practical, a D3D11 application
@@ -516,6 +522,8 @@ Exit: profile checker and workload status reported independently per DXVK
 version.
 
 ### Phase 14: Tessellation
+
+**Status (2026-10-02):** PASS (device-proven: tessellationShader via patches 065-068, 526 CTS pass).
 
 Research PanVK compiler TCS/TES support, Valhall hardware path, proprietary
 G615 evidence, relevant PanVK forks, NIR tessellation lowering, and CSF draw
@@ -530,6 +538,10 @@ and affected Bachata titles.
 
 ### Phase 15: DXVK D3D11 FL11_0
 
+**Status (2026-10-02):** PASS (device-proven: tessellationShader; DXVK Native
+v3.1.1 FL 11_0 `0xb000` reached). FL11_1 remains in progress pending
+`vertexPipelineStoresAndAtomics`.
+
 Run exact DXVK 2.7.1 and 3.1.1 D3D11 Level 11.0 profiles independently. Do not
 call DXVK fully compatible from D3D9/D3D10 results. For each passing profile,
 test D3D11 triangle, geometry shader, tessellation, stream output, BC texture,
@@ -541,6 +553,8 @@ level unless its exact profile passes.
 Exit: exact profile and real workload status for each version and FL11_0.
 
 ### Phase 16: vkd3d-proton Hard Requirements
+
+**Status (2026-10-02):** DEFERRED (vkd3d-proton deferred; robustImageAccess2=false and sparse impossible on kbase).
 
 Evaluate 2.14.1 and 3.0.1 separately. Official README hard requirements
 include Vulkan 1.3, descriptor indexing, at least 1,000,000 UpdateAfterBind
@@ -564,6 +578,8 @@ D3D_FEATURE_LEVEL
 Exit: hard requirements and profile failures are exact and machine-generated.
 
 ### Phase 17: vkd3d D3D12 Smoke
+
+**Status (2026-10-02):** DEFERRED (vkd3d-proton deferred).
 
 Only if the corresponding hard gate passes, create D3D12 device, queue, fence,
 command list, upload resource, root signature, pipeline, triangle, and
@@ -877,6 +893,7 @@ consumer code into this repository.
 
 ### Work Packet 5: Reach DXVK D3D9
 
+- **Status (2026-10-02):** PASS (device-proven: geometryShader, fillModeNonSolid, clip/cull distance, multiViewport, BC GPU decode).
 - **Phases:** 9, then 10, then 11.
 - **Files/ownership:** qualified new patches under `patches/panvk-graphics/`,
   focused tests under `tests/consumer-compat/panvk-graphics/`,
@@ -905,6 +922,7 @@ consumer code into this repository.
 
 ### Work Packet 6: Reach DXVK D3D10 / FL10.x
 
+- **Status (2026-10-02):** PASS (device-proven: transformFeedback, geometryStreams, multiViewport).
 - **Phases:** 12, then 13.
 - **Files/ownership:** additional qualified patches under
   `patches/panvk-graphics/`, tests under
@@ -933,6 +951,7 @@ consumer code into this repository.
 
 ### Work Packet 7: Reach DXVK D3D11 FL11_0
 
+- **Status (2026-10-02):** PASS for FL11_0 (device-proven: tessellationShader; DXVK Native v3.1.1 FL 11_0 reached; vertexPipelineStoresAndAtomics landed in beta.7; FL11_1 not yet re-checked).
 - **Phases:** 14, then 15.
 - **Files/ownership:** qualified tessellation patches under
   `patches/panvk-graphics/`, tests under
@@ -960,6 +979,7 @@ consumer code into this repository.
 
 ### Work Packet 8: Measure vkd3d And Run Permitted D3D12 Smoke
 
+- **Status (2026-10-02):** DEFERRED (vkd3d-proton deferred; robustImageAccess2=false and sparse impossible on kbase).
 - **Phases:** 16, then 17.
 - **Files/ownership:** `tests/consumer-compat/vkd3d/`,
   `scripts/validate-vkd3d-tier.py`, and

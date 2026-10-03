@@ -1,5 +1,39 @@
 # G615 DXVK/vkd3d Gap Report
 
+## Status 2026-10-02
+
+**Summary:** DXVK D3D11 FL11_0 reached (`0xb000`); `vertexPipelineStoresAndAtomics` landed in beta.7 (078); FL11_1 not yet re-checked with DXVK. Current release: beta.8 (patches up to 084).
+
+### Gaps closed and device-proven:
+- **`geometryShader`**: exposed and device-proven (patch 046, GS invocations 64 in patch 071 released in beta.5; geometry 189/0, instanced 20/0).
+- **`tessellationShader`**: exposed and device-proven (patches 065-068; matrices 24/24, CTS tessellation 526/0).
+- **Transform feedback** (`VK_EXT_transform_feedback`, `transformFeedback`, `geometryStreams`): exposed and device-proven (patches 065-068; matrices 17/17 incl. tes_capture, CTS transform_feedback 15793/0).
+- **`pipelineStatisticsQuery`**: exposed and device-proven (patches 049-054; CTS 14,098 pass / 0 fail, statistics_query 15374/0).
+- **`multiViewport`**: exposed and device-proven (device matrices 0 fail).
+- **`fillModeNonSolid`**: exposed and device-proven (device matrices 0 fail).
+- **Clip/cull distance** (`shaderClipDistance`, `shaderCullDistance`): exposed and device-proven (device matrices 0 fail).
+- **BC (GPU decode)**: default on; CTS BC subset 1863 pass / 0 fail, copy_and_blit 9620 / 0.
+- **`VK_EXT_memory_priority` + `VK_EXT_pageable_device_local_memory`**: exposed and device-proven (patch 069, released in beta.5; CTS 224/0, 202/0, api.info 7799/0).
+- **`alphaToOne`**: exposed and device-proven (patch 070, released in beta.5; CTS 123/0).
+- **`maxGeometryShaderInvocations` 64**: exposed and device-proven (patch 071, released in beta.5; geometry 193/0, instanced 20/0).
+- **`VK_EXT_multi_draw`**: exposed and device-proven (patch 072, released in beta.5; CTS 12704/0).
+- **`VK_EXT_primitives_generated_query`**: exposed and device-proven (patch 073, released in beta.5; CTS 75206/0).
+- **`variableMultisampleRate` on v10+**: exposed and device-proven (patch 074, in tree on dx-p5, pending beta.6; splits render context on sample count change in no-attachment passes; CTS variable_rate + mixed_attachment_samples 504/0, no-attachment / dynamic_rendering subset 1756/0).
+- **Correctness fixes**:
+  - `SYNC_FD` export via kbase KCPU queue (patch 075, in tree on dx-p5, pending beta.6; CQS wait then fence signal; api.external sync_fd + synchronization.cross_instance 113 ResourceError -> 1996 pass / 0 fail).
+  - Honour geometry shader viewport index on v10+ (patch 076, in tree on dx-p5, pending beta.6; draw scissor tests 18 fail -> 88/88).
+  - System scope for subqueue sync signals on kbase (patch 077, in tree on dx-p5, pending beta.6; synchronization.signal_order 11-16 timeouts -> 1316 pass / 0 aborted).
+
+### Remaining gaps:
+- **`vertexPipelineStoresAndAtomics`**: CLOSED in beta.7 (patch 078; CTS `atomic_operations *_vertex*` 66/0).
+- **`shaderOutputViewportIndex` from VS/TES**: GS viewport index fixed in patch 076; feature bit remains off pending VS/TES (2-3 h).
+- **`depthBounds`**: exact check via tile-buffer stored depth pending (3-5 h).
+- **XFB 65536 cap**: GPU chunking needed.
+- **XFB `query_copy` DeviceLost**: 2 intermittent DeviceLost in CTS `transform_feedback query_copy_*` (pending rerun on dx-p5; may be resolved by patch 077 subqueue timeout fix).
+- **`robustImageAccess2`**: vkd3d hard requirement, deferred (vkd3d out of scope for now; WIP in `work/mesa-ria2`, not proven).
+- **Sparse / ROV** (`sparseBinding`, `sparseResidency*`, `VK_EXT_fragment_shader_interlock`): FL12 requirements, impossible/blocked on kbase (sparse is NO-GO on kbase).
+- **`shaderFloat64` (fp64)**: unsupported on hardware / PanVK.
+
 Generated from the direct-ICD capture and exact tagged official profiles. `UNKNOWN` is not failure proof or support proof.
 
 ## Provenance
@@ -12,64 +46,54 @@ Generated from the direct-ICD capture and exact tagged official profiles. `UNKNO
 
 ## dxvk-1.10.3 source-derived
 
-### D3D9: FAIL
+### D3D9: PASS
 
 Source: `v1.10.3` `src/d3d9/d3d9_device.cpp:3887-3950`
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
+| `geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
 
-### D3D10_10_1: FAIL
+### D3D10_10_1: PASS
 
 Source: `v1.10.3` `src/d3d11/d3d11_device.cpp:1927-1992`
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `VK_EXT_transform_feedback` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
+| `geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `VK_EXT_transform_feedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
 
-### D3D11_FL11_0: FAIL
+### D3D11_FL11_0: PASS
 
 Source: `v1.10.3` `src/d3d11/d3d11_device.cpp:1994-2004`
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
+| `geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
 
 ## vkd3d-proton-2.0 source-derived
+
+*(Status 2026-10-02: Deferred — vkd3d/D3D12 and FL12 out of scope for now. Blocked by `robustImageAccess2=false`; sparse is NO-GO on kbase).*
 
 Source: `v2.0` `README.md:17-24`
 
@@ -87,102 +111,102 @@ Hard requirements: **PASS (reported values only; P5 workload proof pending)**
 
 Source: `v2.7.1` `https://raw.githubusercontent.com/doitsujin/dxvk/v2.7.1/VP_DXVK_requirements.json` (`1e219227adeba497e387fbad72847fef4d064667ede946f720d8e8a67bea6edf`)
 
-### VP_DXVK_d3d9_baseline: FAIL
+### VP_DXVK_d3d9_baseline: PASS
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
 
-### VP_DXVK_d3d9_optimal: FAIL
-
-| Requirement | Current | Required | Upstream PanVK | Implementation | Action |
-|---|---:|---:|---|---|---|
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-
-### VP_DXVK_d3d10_level_10_1_baseline: FAIL
+### VP_DXVK_d3d9_optimal: PASS
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
 
-### VP_DXVK_d3d11_level_11_0_baseline: FAIL
+### VP_DXVK_d3d10_level_10_1_baseline: PASS
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+
+### VP_DXVK_d3d11_level_11_0_baseline: PASS
+
+| Requirement | Current | Required | Upstream PanVK | Implementation | Action |
+|---|---:|---:|---|---|---|
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
 
 ### VP_DXVK_d3d11_level_11_1_baseline: FAIL
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
+| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `True` (beta.7) | `True` | Patch 078, CTS 66/0 | CLOSED | Re-check FL11_1 with DXVK |
 
 ### VP_DXVK_d3d11_level_11_1_optimal: FAIL
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
+| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `True` (beta.7) | `True` | Patch 078, CTS 66/0 | CLOSED | Re-check FL11_1 with DXVK |
 
 ### VP_DXVK_d3d11_level_12_0_optimal: FAIL
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
+| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `True` (beta.7) | `True` | Patch 078, CTS 66/0 | CLOSED | Re-check FL11_1 with DXVK |
 | `features.VkPhysicalDeviceFeatures.shaderResourceResidency` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
 | `features.VkPhysicalDeviceFeatures.shaderResourceMinLod` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
 | `features.VkPhysicalDeviceFeatures.sparseBinding` | `False` | `True` | Generic PanVK exists; custom Kbase equivalence unproven | BLOCKED_KBASE | Defer sparse; assess Kbase VM semantics only when required |
@@ -197,102 +221,102 @@ Source: `v2.7.1` `https://raw.githubusercontent.com/doitsujin/dxvk/v2.7.1/VP_DXV
 
 Source: `v3.1.1` `https://raw.githubusercontent.com/doitsujin/dxvk/v3.1.1/VP_DXVK_requirements.json` (`d490930920a24fb9ac4a0585c68042929acd7e700e04d0a032c79d9fddf1c462`)
 
-### VP_DXVK_d3d9_baseline: FAIL
+### VP_DXVK_d3d9_baseline: PASS
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
 
-### VP_DXVK_d3d9_optimal: FAIL
-
-| Requirement | Current | Required | Upstream PanVK | Implementation | Action |
-|---|---:|---:|---|---|---|
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-
-### VP_DXVK_d3d10_level_10_1_baseline: FAIL
+### VP_DXVK_d3d9_optimal: PASS
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
 
-### VP_DXVK_d3d11_level_11_0_baseline: FAIL
+### VP_DXVK_d3d10_level_10_1_baseline: PASS
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+
+### VP_DXVK_d3d11_level_11_0_baseline: PASS
+
+| Requirement | Current | Required | Upstream PanVK | Implementation | Action |
+|---|---:|---:|---|---|---|
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
 
 ### VP_DXVK_d3d11_level_11_1_baseline: FAIL
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
+| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `True` (beta.7) | `True` | Patch 078, CTS 66/0 | CLOSED | Re-check FL11_1 with DXVK |
 
 ### VP_DXVK_d3d11_level_11_1_optimal: FAIL
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
+| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `True` (beta.7) | `True` | Patch 078, CTS 66/0 | CLOSED | Re-check FL11_1 with DXVK |
 
 ### VP_DXVK_d3d11_level_12_0_optimal: FAIL
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
+| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `True` (beta.7) | `True` | Patch 078, CTS 66/0 | CLOSED | Re-check FL11_1 with DXVK |
 | `features.VkPhysicalDeviceFeatures.shaderResourceResidency` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
 | `features.VkPhysicalDeviceFeatures.shaderResourceMinLod` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
 | `features.VkPhysicalDeviceFeatures.sparseBinding` | `False` | `True` | Generic PanVK exists; custom Kbase equivalence unproven | BLOCKED_KBASE | Defer sparse; assess Kbase VM semantics only when required |
@@ -307,17 +331,17 @@ Source: `v3.1.1` `https://raw.githubusercontent.com/doitsujin/dxvk/v3.1.1/VP_DXV
 
 | Requirement | Current | Required | Upstream PanVK | Implementation | Action |
 |---|---:|---:|---|---|---|
-| `extensions.VK_EXT_transform_feedback` | `None` | `1` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
-| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.geometryShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.multiViewport` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `False` | `True` | Hardware-dependent; G615 mask is zero | UNSUPPORTED_NATIVE | Keep false unless transparent BC emulation is complete |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.tessellationShader` | `False` | `True` | ABSENT at pinned and origin/main | NOT_IMPLEMENTED | Design/implement after P5 gates; never expose early |
-| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
+| `extensions.VK_EXT_transform_feedback` | `1` | `1` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven) |
+| `features.VkPhysicalDeviceFeatures.fillModeNonSolid` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.geometryShader` | `True` | `True` | Exposed (046, 071) | HARDWARE_NATIVE | CLOSED (device-proven; CTS geometry 189/0, instanced 20/0) |
+| `features.VkPhysicalDeviceFeatures.multiViewport` | `True` | `True` | Exposed | HARDWARE_NATIVE | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderClipDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.shaderCullDistance` | `True` | `True` | Exposed | GPU_LOWERED | CLOSED (device-proven; device matrices 0 fail) |
+| `features.VkPhysicalDeviceFeatures.textureCompressionBC` | `True` | `True` | GPU decode default on | GPU_LOWERED | CLOSED (device-proven; CTS BC 1863/0, copy_and_blit 9620/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.transformFeedback` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS transform_feedback 15793/0) |
+| `features.VkPhysicalDeviceTransformFeedbackFeaturesEXT.geometryStreams` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; matrices 17/17) |
+| `features.VkPhysicalDeviceFeatures.tessellationShader` | `True` | `True` | Exposed (065-068) | GPU_LOWERED | CLOSED (device-proven; CTS tessellation 526/0) |
+| `features.VkPhysicalDeviceFeatures.vertexPipelineStoresAndAtomics` | `True` (beta.7) | `True` | Patch 078, CTS 66/0 | CLOSED | Re-check FL11_1 with DXVK |
 | `features.VkPhysicalDeviceFeatures.shaderResourceResidency` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
 | `features.VkPhysicalDeviceFeatures.shaderResourceMinLod` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
 | `features.VkPhysicalDeviceFeatures.sparseBinding` | `False` | `True` | Generic PanVK exists; custom Kbase equivalence unproven | BLOCKED_KBASE | Defer sparse; assess Kbase VM semantics only when required |
@@ -333,6 +357,8 @@ Source: `v3.1.1` `https://raw.githubusercontent.com/doitsujin/dxvk/v3.1.1/VP_DXV
 | `properties.VkPhysicalDeviceConservativeRasterizationPropertiesEXT.fullyCoveredFragmentShaderInputVariable` | `False` | `True` | Pinned runtime does not satisfy; no post-pin matching backport found | NOT_SATISFIED | Investigate in the owning feature phase |
 
 ## vkd3d-2.14.1
+
+*(Status 2026-10-02: Deferred — vkd3d/D3D12 and FL12 out of scope for now. Blocked by `robustImageAccess2=false`; sparse is NO-GO on kbase).*
 
 Source: `v2.14.1` `https://raw.githubusercontent.com/HansKristian-Work/vkd3d-proton/v2.14.1/VP_D3D12_VKD3D_PROTON_profile.json` (`9ff2e08e82f03f214714591e0727a35c164639e71879c9721ca9e5b4bd0ddd17`)
 
@@ -835,6 +861,8 @@ Source: `v2.14.1` `https://raw.githubusercontent.com/HansKristian-Work/vkd3d-pro
 | `features.VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT.swapchainMaintenance1` | `None` | `True` | UNKNOWN | UNKNOWN | Extend capture or implementation audit before claiming support |
 
 ## vkd3d-3.0.1
+
+*(Status 2026-10-02: Deferred — vkd3d/D3D12 and FL12 out of scope for now. Blocked by `robustImageAccess2=false`; sparse is NO-GO on kbase).*
 
 Source: `v3.0.1` `https://raw.githubusercontent.com/HansKristian-Work/vkd3d-proton/v3.0.1/VP_D3D12_VKD3D_PROTON_profile.json` (`d37e753fa81e43251bbd576b17b888c1a7139b3fc8c16bd0e0ec9c7bed7a9db6`)
 
