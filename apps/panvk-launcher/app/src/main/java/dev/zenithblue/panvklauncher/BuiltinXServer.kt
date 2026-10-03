@@ -15,6 +15,33 @@ import com.winlator.xserver.XServer
 import java.io.File
 import java.lang.ref.WeakReference
 
+/** "WxH" X screen sizes: presets plus validated custom sizes. */
+object Resolution {
+    const val MIN_W = 320; const val MIN_H = 240; const val MAX_W = 3840; const val MAX_H = 2160
+
+    fun parse(s: String): Pair<Int, Int>? {
+        val m = Regex("^(\\d{1,5})x(\\d{1,5})$").matchEntire(s.trim()) ?: return null
+        val w = m.groupValues[1].toInt(); val h = m.groupValues[2].toInt()
+        return if (error(w, h) == null) w to h else null
+    }
+
+    /** Why a size is not allowed, or null. Even sizes only (YUV / scaler friendly). */
+    fun error(w: Int?, h: Int?): String? = when {
+        w == null || h == null -> "Enter width and height"
+        w < MIN_W || h < MIN_H -> "At least ${MIN_W}x$MIN_H"
+        w > MAX_W || h > MAX_H -> "At most ${MAX_W}x$MAX_H"
+        w % 2 != 0 || h % 2 != 0 -> "Use even numbers"
+        else -> null
+    }
+
+    /** "16:9", "4:3", or "1.85:1". */
+    fun aspect(w: Int, h: Int): String {
+        tailrec fun gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
+        val g = gcd(w, h)
+        return if (w / g <= 32) "${w / g}:${h / g}" else "%.2f:1".format(w / h.toFloat())
+    }
+}
+
 /**
  * In-process X server (Winlator's Java X server, LGPL-2.1, see third_party/winlator).
  * One instance per graphical Wine run. Listens on `<imagefs>/usr/tmp/.X11-unix/X0`,

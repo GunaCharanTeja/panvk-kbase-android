@@ -37,6 +37,12 @@ object DisplayServer {
         prefs(ctx).edit().putString("display_mode", if (mode == Mode.TERMUX) "termux" else "builtin").apply()
     }
 
+    /** Per-launch X screen size (game's own resolution); does not touch the saved default. Cleared after the run. */
+    @Volatile var launchOverride: String? = null
+
+    private fun effectiveResolution(ctx: Context): String =
+        launchOverride?.takeIf { Resolution.parse(it) != null } ?: resolution(ctx)
+
     fun resolution(ctx: Context): String =
         prefs(ctx).getString("display_res", BuiltinXServer.DEFAULT_RESOLUTION) ?: BuiltinXServer.DEFAULT_RESOLUTION
 
@@ -54,7 +60,7 @@ object DisplayServer {
     fun describe(ctx: Context): String {
         if (mode(ctx) == Mode.BUILTIN) {
             val state = if (BuiltinXServer.isRunning()) "running" else "idle"
-            return "Display: built-in X server ${resolution(ctx)} ($state)"
+            return "Display: built-in X server ${effectiveResolution(ctx)} ($state)"
         }
         if (!isInstalled(ctx)) return "Display: Termux:X11 not installed"
         val live = findLive(ctx)
@@ -93,7 +99,7 @@ object DisplayServer {
 
     fun prepare(ctx: Context, onLine: (String) -> Unit): Session? {
         if (mode(ctx) == Mode.BUILTIN) {
-            val session = BuiltinXServer.start(ctx, resolution(ctx), useShm(ctx), onLine) ?: return null
+            val session = BuiltinXServer.start(ctx, effectiveResolution(ctx), useShm(ctx), onLine) ?: return null
             val err = openBuiltin(ctx)
             if (err != null) onLine(err) else onLine("Display activity opened (surface and input).")
             return session
