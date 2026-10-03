@@ -70,8 +70,8 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
 1a. **32-bit (i686/WOW64) `vkMapMemory` at a caller-chosen address**. STATUS 2026-10-03: DEVICE-PROVEN for the draw test. mremap of the SAME_VA VMA is refused by kbase (`mremap ... failed: Invalid argument`, get_unmapped_area rejects fixed), so `kbase_kmod.c` `bo_mmap` now maps an anonymous MAP_FIXED shadow at the requested address, merged word-wise with the BO (snapshot) before every queue kick, after CSF waits, on flush/invalidate and on unmap. i686 D3D9 and D3D11 `dxdraw` now render triangle + textured quad (XGetImage, pixels identical to ARM64EC/x86_64; no MESA errors); 64-bit regression unchanged. Not proven: a real 32-bit game, large placed maps (merge is O(bytes) per kick/wait), CTS memory_map. Evidence: `apps/panvk-launcher/tests/results/samevaresults/README.md`.
 2. 089: DONE, device-verified (GS-selected viewport depth clamp/clip as ordered runs). Follow-up: in `panvk_vX_cmd_draw.c`, the `cs_if(pred)` tessellation conditional skips prepare_draw's GPU state writes on a false predicate but still clears their dirty flags (from 087; same bug as item 1).
 3. Re-check DXVK FL11_1 (VPSA is in since 078).
-4. `shaderOutputViewportIndex` from VS/TES (`shaderOutputLayer` is already on; the GS part is done in 076).
-5. `depthBounds`: exact check via tile-buffer stored depth.
+4. `shaderOutputViewportIndex` from VS/TES: DONE on v10/v11 (patch 090, `worklogs/driver-remaining/090-vs-viewport-index.md`), device-verified. v12+ keeps the bit off (no run splitting there). Open: FS `gl_PrimitiveID` restarts per viewport run.
+5. `depthBounds`: BLOCKED, bit stays off (`worklogs/driver-remaining/091-depth-bounds.md`). No hardware depth-bounds test on v10+, and the FS cannot read the stored depth.
 6. Prerast limits: 65536 invocations per draw (`PANVK_GPU_PRERAST_MAX_INVOCATIONS`), topology and indirect limits.
 7. `variableMultisampleRate` in secondary / inherited command buffers. The unsafe 086 was removed; this needs execution segmentation.
 8. Exact tessellation primitives-generated count: code may be present; needs a targeted check.
