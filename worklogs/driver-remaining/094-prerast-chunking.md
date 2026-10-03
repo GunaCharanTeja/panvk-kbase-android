@@ -25,7 +25,8 @@ APK `large_draw` (`tests/dxvk/vulkan/large-draw`, 14 cases): points, GS, tess, r
 
 ## Limits and open problems
 
-- Flake: restart-strip cases (`restart_direct`, `restart_indirect`) lose the device in about 2-10% of runs (chroot loops: 1/25, 1/25, 0/60, 1/60; APK: 1 in 9). dmesg shows a CS fatal on the compute subqueue (exception 0x72), no page fault. Not caused by long planner kernels (a spin experiment did not reproduce it) and not by the record alignment; an atomic store of `more` made it worse and was reverted. Cause unknown. Other chunked cases did not flake in 100+ runs.
+- Flake (fixed by 096): restart-strip cases (`restart_direct`, `restart_indirect`) lost the device in about 2-10% of runs (chroot loops: 1/25, 1/25, 0/60, 1/60; APK: 1 in 9). Cause: the single-invocation restart scan in `panlib_chunk_step` made each planner job long while the vertex/tiler group waited across CSGs; a long planner job also breaks the non-restart `strip_indirect` loop. See `096-parallel-chunk-planner.md`.
+- Conditional rendering does not predicate the lowering jobs or the primitives-generated counter of a chunked or tessellated draw (only the raster launch). This predates 093/094.
 - Chunks hold at most 2048 instances: lowering grids with 8192 or more instances hang the G615 (4000 works).
 - Chunked draws under rasterizer discard skip the raster draw (thousands of tiny draws exhaust the tiler heap).
 - Triangle fans above the cap are still not split (logged).
