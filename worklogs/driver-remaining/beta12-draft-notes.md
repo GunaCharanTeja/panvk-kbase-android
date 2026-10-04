@@ -1,4 +1,4 @@
-# beta.12 draft release notes (NOT RELEASED)
+# beta.12 release notes (source draft)
 
 Status: released as `g615-v11-csf-v0.1.0-beta.12` (prerelease) on 2026-10-04 after the v11 gate below.
 
