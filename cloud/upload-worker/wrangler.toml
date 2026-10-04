@@ -1,0 +1,20 @@
+name = "panvk-upload"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "panvk-logs"
+
+[vars]
+BUCKET_NAME = "panvk-logs"
+ACCOUNT_ID = "" # User fills with their Cloudflare Account ID
+DEV_DIRECT = "0"
+
+# Rate limiting binding
+# Note: Cloudflare rate limiting binding only supports periods of 10 or 60 seconds;
+# limit=2 with period=60 (2 requests/minute) approximates the ~10 requests/hour goal.
+[[ratelimits]]
+name = "UPLOAD_LIMIT"
+namespace_id = "1001"
+simple = { limit = 2, period = 60 }
