@@ -1,5 +1,7 @@
 package dev.zenithblue.panvktest
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -8,6 +10,7 @@ import android.provider.OpenableColumns
 import android.util.Log
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -28,9 +31,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,6 +46,13 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+data class RunItem(
+    val folder: File,
+    val name: String,
+    val passCount: Int,
+    val totalCount: Int
+)
 
 enum class DriverType(val label: String) {
     BUNDLED("Bundled PanVK"),
@@ -114,6 +126,7 @@ class MainActivity : ComponentActivity() {
     private var selectedLogFileState = mutableStateOf<File?>(null)
     private var selectedLogTextState = mutableStateOf<String?>(null)
     private var logFilesListState = mutableStateOf<List<File>>(emptyList())
+    private var runsListState = mutableStateOf<List<RunItem>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -129,6 +142,7 @@ class MainActivity : ComponentActivity() {
         }
 
         refreshLogsList()
+        refreshRunsList()
 
         val autorunExtra = intent.getStringExtra("autorun")
         // autorun = "all" or a single test name (e.g. gs_viewport_depth)
@@ -160,6 +174,143 @@ class MainActivity : ComponentActivity() {
         } else {
             logFilesListState.value = emptyList()
         }
+    }
+
+    private fun refreshRunsList() {
+        val runsDir = File(filesDir, "runs")
+        if (runsDir.exists()) {
+            val folders = (runsDir.listFiles() ?: emptyArray())
+                .filter { it.isDirectory }
+                .sortedByDescending { it.name }
+            runsListState.value = folders.map { folder ->
+                val summaryFile = File(folder, "summary.json")
+                var pass = 0
+                var total = 0
+                if (summaryFile.exists()) {
+                    try {
+                        val json = JSONObject(summaryFile.readText())
+                        pass = json.optInt("pass", json.optInt("passCount", 0))
+                        total = json.optInt("total", 0)
+                    } catch (_: Exception) {}
+                }
+                RunItem(folder = folder, name = folder.name, passCount = pass, totalCount = total)
+            }
+        } else {
+            runsListState.value = emptyList()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getAppVersion(): String {
+        return try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+        } catch (_: Exception) {
+            "1.0.0"
+        }
+    }
+
+    private suspend fun saveRun(results: List<TestResult>) {
+        try { writeRun(results) } catch (e: Exception) { Log.e("PanVKTest", "saveRun failed", e) }
+    }
+
+    private suspend fun writeRun(results: List<TestResult>) = withContext(Dispatchers.IO) {
+        val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val runsDir = File(filesDir, "runs").apply { mkdirs() }
+        var runFolder = File(runsDir, timestamp)
+        var n = 2
+        while (runFolder.exists()) runFolder = File(runsDir, "$timestamp-${n++}")
+        runFolder.mkdirs()
+
+        for (res in results) {
+            val testObj = JSONObject().apply {
+                put("name", res.name)
+                put("status", res.status)
+                put("mismatch", res.mismatch)
+                if (res.fps != null) put("fps", res.fps) else put("fps", JSONObject.NULL)
+                put("durationMs", res.durationMs)
+                if (res.extra != null) put("extra", res.extra) else put("extra", JSONObject.NULL)
+                if (res.logFile != null) put("log", res.logFile.name) else put("log", JSONObject.NULL)
+                put("lastLines", JSONArray(res.lastLines))
+            }
+            File(runFolder, "${res.name}.json").writeText(testObj.toString(2))
+            res.logFile?.let { srcLog ->
+                if (srcLog.exists()) {
+                    try {
+                        srcLog.copyTo(File(runFolder, srcLog.name), overwrite = true)
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
+        // Always re-query: cached info may belong to a previously selected driver.
+        val (rawJsonStr, parsedObj) = run {
+            val (obj, raw) = runInfo()
+            if (obj != null) {
+                val s = obj.toString(2)
+                withContext(Dispatchers.Main) {
+                    infoRawJsonState.value = s
+                    infoParsedState.value = parseVulkanInfo(obj)
+                    infoRawTextState.value = null
+                }
+                Pair(s, obj)
+            } else {
+                val errObj = JSONObject().apply { put("error", raw) }
+                Pair(errObj.toString(2), null)
+            }
+        }
+        File(runFolder, "device_info.json").writeText(rawJsonStr)
+
+        val summaryObj = JSONObject().apply {
+            put("timestamp", timestamp)
+            put("appVersion", getAppVersion())
+            put("driverType", driverTypeState.value.label)
+
+            val firstDevProps = parsedObj?.optJSONArray("devices")?.optJSONObject(0)?.optJSONObject("properties")
+            if (firstDevProps != null) {
+                for (key in listOf("deviceName", "driverName", "driverInfo", "driverVersion", "apiVersion")) {
+                    val v = firstDevProps.opt(key)
+                    if (v != null && v != JSONObject.NULL) {
+                        put(key, v)
+                    }
+                }
+            }
+
+            val passCount = results.count { it.status == "PASS" }
+            put("pass", passCount)
+            put("total", results.size)
+
+            val testsObj = JSONObject()
+            for (res in results) {
+                testsObj.put(res.name, res.status)
+            }
+            put("tests", testsObj)
+        }
+        File(runFolder, "summary.json").writeText(summaryObj.toString(2))
+    }
+
+    private suspend fun buildRunZip(runFolder: File): File = withContext(Dispatchers.IO) {
+        val shareDir = File(cacheDir, "share").apply { mkdirs() }
+        val zipFile = File(shareDir, "panprobe-${runFolder.name}.zip")
+        val entries = mutableListOf<Pair<String, File>>()
+        entries.add(Pair(runFolder.name, runFolder))
+
+        if (infoRawJsonState.value != null) {
+            val vkFile = File(shareDir, "vulkan-info.json").apply { writeText(infoRawJsonState.value!!) }
+            entries.add(Pair("vulkan-info.json", vkFile))
+        }
+
+        val logcatFile = File(shareDir, "logcat.txt")
+        try {
+            val process = Runtime.getRuntime().exec(
+                arrayOf("logcat", "-d", "-v", "threadtime", "--pid=" + android.os.Process.myPid())
+            )
+            val logcatText = process.inputStream.bufferedReader().use { it.readText() }
+            logcatFile.writeText(logcatText)
+            entries.add(Pair("logcat.txt", logcatFile))
+        } catch (_: Exception) {}
+
+        zipFiles(zipFile, entries)
+        zipFile
     }
 
     private fun getDriverPath(type: DriverType): String {
@@ -363,11 +514,13 @@ class MainActivity : ComponentActivity() {
 
         var passCount = 0
         val selected = if (which == "all") testCases else testCases.filter { it.name == which }
+        val runResults = mutableListOf<TestResult>()
         for (test in selected) {
             withContext(Dispatchers.Main) {
                 updateTestStatus(test.name, "RUNNING")
             }
             val res = executeTest(test)
+            runResults.add(res)
             withContext(Dispatchers.Main) {
                 updateTestResult(res)
             }
@@ -377,6 +530,10 @@ class MainActivity : ComponentActivity() {
             }
         }
         say("AUTORUN DONE pass=$passCount total=${selected.size}")
+        saveRun(runResults)
+        withContext(Dispatchers.Main) {
+            refreshRunsList()
+        }
     }
 
     private fun updateTestStatus(testName: String, status: String) {
@@ -388,6 +545,23 @@ class MainActivity : ComponentActivity() {
     private fun updateTestResult(res: TestResult) {
         testResultsState.value = testResultsState.value.map {
             if (it.name == res.name) res else it
+        }
+    }
+
+    private fun startRunAll() {
+        if (isRunningAllState.value) return
+        lifecycleScope.launch(Dispatchers.Main) {
+            isRunningAllState.value = true
+            val runResults = mutableListOf<TestResult>()
+            for (test in testCases) {
+                updateTestStatus(test.name, "RUNNING")
+                val res = executeTest(test)
+                runResults.add(res)
+                updateTestResult(res)
+            }
+            saveRun(runResults)
+            refreshRunsList()
+            isRunningAllState.value = false
         }
     }
 
@@ -520,6 +694,11 @@ class MainActivity : ComponentActivity() {
             parsedInfo = infoParsedState.value,
             rawJson = infoRawJsonState.value,
             rawErrorText = infoRawTextState.value,
+            hasRuns = runsListState.value.isNotEmpty(),
+            onRunTests = {
+                selectedTabState.intValue = 2
+                startRunAll()
+            },
             onLoadClick = {
                 coroutineScope.launch {
                     infoLoadingState.value = true
@@ -552,17 +731,7 @@ class MainActivity : ComponentActivity() {
                 Text("Tests", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Button(
                     enabled = !isRunningAllState.value,
-                    onClick = {
-                        coroutineScope.launch {
-                            isRunningAllState.value = true
-                            for (test in testCases) {
-                                updateTestStatus(test.name, "RUNNING")
-                                val res = executeTest(test)
-                                updateTestResult(res)
-                            }
-                            isRunningAllState.value = false
-                        }
-                    }
+                    onClick = { startRunAll() }
                 ) {
                     Text(if (isRunningAllState.value) "Running..." else "Run all")
                 }
@@ -605,6 +774,8 @@ class MainActivity : ComponentActivity() {
                                 updateTestStatus(test.name, "RUNNING")
                                 val res = executeTest(test)
                                 updateTestResult(res)
+                                saveRun(listOf(res))
+                                refreshRunsList()
                             }
                         },
                         onToggleExpand = {
@@ -718,6 +889,166 @@ class MainActivity : ComponentActivity() {
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
 
+        var cloudConfirmRun by remember { mutableStateOf<RunItem?>(null) }
+        var isUploading by remember { mutableStateOf(false) }
+        var uploadProgress by remember { mutableFloatStateOf(0f) }
+        var uploadErrorMsg by remember { mutableStateOf<String?>(null) }
+        var uploadSuccessUrl by remember { mutableStateOf<String?>(null) }
+
+        if (cloudConfirmRun != null) {
+            AlertDialog(
+                onDismissRequest = { cloudConfirmRun = null },
+                title = { Text("Send to cloud?") },
+                text = {
+                    Text("This uploads a ZIP of logs to a public file host (catbox.moe). Anyone with the link can download it. It may contain your device model, GPU info, Android version, app and package names and file paths. It does not include accounts, contacts or personal files. Share the link only in the PanVK Telegram group. Files may not be deletable.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val targetRun = cloudConfirmRun
+                            cloudConfirmRun = null
+                            if (targetRun != null) {
+                                coroutineScope.launch {
+                                    isUploading = true
+                                    uploadProgress = 0f
+                                    try {
+                                        val zip = buildRunZip(targetRun.folder)
+                                        val url = withContext(Dispatchers.IO) {
+                                            uploadToCloud(zip, getAppVersion()) { prog ->
+                                                uploadProgress = prog
+                                            }
+                                        }
+                                        isUploading = false
+                                        uploadSuccessUrl = url
+                                    } catch (e: Exception) {
+                                        isUploading = false
+                                        uploadErrorMsg = e.message ?: "Upload failed"
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Upload")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { cloudConfirmRun = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        if (isUploading) {
+            AlertDialog(
+                onDismissRequest = { /* non-dismissable */ },
+                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+                title = { Text("Uploading...") },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        @Suppress("DEPRECATION")
+                        LinearProgressIndicator(
+                            progress = uploadProgress,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = "${(uploadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
+        if (uploadErrorMsg != null) {
+            AlertDialog(
+                onDismissRequest = { uploadErrorMsg = null },
+                title = { Text("Upload Failed") },
+                text = {
+                    SelectionContainer {
+                        Text(uploadErrorMsg ?: "")
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { uploadErrorMsg = null }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+
+        if (uploadSuccessUrl != null) {
+            val url = uploadSuccessUrl!!
+            AlertDialog(
+                onDismissRequest = { uploadSuccessUrl = null },
+                title = { Text("Upload done") },
+                text = {
+                    SelectionContainer {
+                        Text(
+                            text = url,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                confirmButton = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("PanProbe Upload Link", url)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "Link copied to clipboard", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Copy")
+                            }
+                            Button(
+                                onClick = {
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, url)
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Share Link"))
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Share")
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                val tgIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/+E-NhUATmkqE5ODg1"))
+                                context.startActivity(tgIntent)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Open Telegram group")
+                        }
+                        OutlinedButton(
+                            onClick = { uploadSuccessUrl = null },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Close")
+                        }
+                    }
+                }
+            )
+        }
+
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -729,9 +1060,12 @@ class MainActivity : ComponentActivity() {
                     onClick = {
                         val logsDir = File(filesDir, "logs")
                         logsDir.listFiles()?.forEach { it.delete() }
+                        val runsDir = File(filesDir, "runs")
+                        runsDir.deleteRecursively()
                         selectedLogFileState.value = null
                         selectedLogTextState.value = null
                         refreshLogsList()
+                        refreshRunsList()
                     }
                 ) {
                     Text("Clear")
@@ -794,16 +1128,105 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } else {
-                if (logFilesListState.value.isEmpty()) {
+                if (runsListState.value.isEmpty() && logFilesListState.value.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No logs yet.")
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text("No logs yet.")
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Send the ZIP or link to the PanVK Telegram group so we can check your results.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(logFilesListState.value) { file ->
+                        if (runsListState.value.isNotEmpty()) {
+                            item(key = "runs_header") {
+                                Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+                                    Text("Runs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        "Send the ZIP or link to the PanVK Telegram group so we can check your results.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            items(runsListState.value, key = { "run_${it.name}" }) { run ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(run.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                                            Text(
+                                                "${run.passCount}/${run.totalCount}",
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = if (run.passCount == run.totalCount && run.totalCount > 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = {
+                                                    coroutineScope.launch {
+                                                        try {
+                                                            val zipFile = buildRunZip(run.folder)
+                                                            shareFile(context, zipFile, "application/zip", "Share Run ZIP")
+                                                        } catch (e: Exception) {
+                                                            Toast.makeText(context, "Zip failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                            ) {
+                                                Text("Zip & Share", maxLines = 1)
+                                            }
+                                            OutlinedButton(
+                                                onClick = { cloudConfirmRun = run },
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                            ) {
+                                                Text("Send to cloud", maxLines = 1)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (logFilesListState.value.isNotEmpty()) {
+                                item(key = "logs_header") {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text("Log Files", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else {
+                            item(key = "no_runs_hint") {
+                                Text(
+                                    "Send the ZIP or link to the PanVK Telegram group so we can check your results.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        items(logFilesListState.value, key = { "log_${it.name}" }) { file ->
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()

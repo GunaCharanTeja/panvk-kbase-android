@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -13,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import java.io.File
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -435,14 +437,61 @@ fun InfoTabContent(
     parsedInfo: ParsedVulkanInfo?,
     rawJson: String?,
     rawErrorText: String?,
+    hasRuns: Boolean = false,
+    onRunTests: () -> Unit = {},
     onLoadClick: () -> Unit
 ) {
     val context = LocalContext.current
+    var showRunTestsPrompt by remember { mutableStateOf(false) }
+
+    val shareJson = {
+        if (rawJson != null) {
+            try {
+                val shareDir = File(context.cacheDir, "share").apply { mkdirs() }
+                val jsonFile = File(shareDir, "vulkan-info.json")
+                jsonFile.writeText(rawJson)
+                shareFile(context, jsonFile, "application/json", "Share Vulkan JSON")
+            } catch (e: Exception) {
+                Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    if (showRunTestsPrompt) {
+        AlertDialog(
+            onDismissRequest = { showRunTestsPrompt = false },
+            text = {
+                Text("Please run the tests too. Testers need the test results along with the Vulkan JSON.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRunTestsPrompt = false
+                        onRunTests()
+                    }
+                ) {
+                    Text("Run tests now")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = {
+                        showRunTestsPrompt = false
+                        shareJson()
+                    }
+                ) {
+                    Text("Share JSON only")
+                }
+            }
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Pinned Top Action Bar: Load, Copy raw JSON, Export JSON
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -467,14 +516,14 @@ fun InfoTabContent(
 
                 OutlinedButton(
                     onClick = {
-                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, rawJson)
+                        if (hasRuns) {
+                            shareJson()
+                        } else {
+                            showRunTestsPrompt = true
                         }
-                        context.startActivity(Intent.createChooser(sendIntent, "Export JSON"))
                     }
                 ) {
-                    Text("Share", maxLines = 1)
+                    Text("Share Vulkan JSON", maxLines = 1)
                 }
             }
         }
