@@ -447,17 +447,12 @@ kbase_query_csif_info(int fd, struct drm_panthor_csif_info *csif)
     * reports a work register value that underflows the register file the
     * CS compiler was designed for).  Like panthor, read WORK_REGS, but
     * sanity-check it: shipping CSF parts have 96 (v10/v11) or 128 (v12+)
-    * CS registers, 4 of them unpreserved, so anything else falls back to
-    * 96, which every CSF part has.  Only trust the scoreboard count when it
+    * CS registers, 4 of them unpreserved.  Resolve implausible counts once
+    * the architecture is known.  Only trust the scoreboard count when it
     * is in the plausible [PANVK-supported] 1..16 range. */
    uint32_t stream_features = streams[0].features;
    uint32_t scoreboard_slot_count = (stream_features >> 8) & 0xff;
    uint32_t cs_reg_count = (stream_features & 0xff) + 1;
-   if (cs_reg_count != 96 && cs_reg_count != 128) {
-      mesa_logw("kbase: implausible CS work register count %u, using 96",
-                cs_reg_count);
-      cs_reg_count = 96;
-   }
 
    mesa_logd("kbase: GLB iface: version 0x%x, features 0x%x, %u groups, "
              "%u streams (stream 0: features 0x%x, group 0: %u streams, "
@@ -1304,6 +1299,15 @@ kbase_kmod_dev_create(int fd, uint32_t flags,
       simple_mtx_destroy(&kbase_dev->kcpu.lock);
       pan_kmod_free(allocator, kbase_dev);
       return NULL;
+   }
+
+   if (is_csf && kbase_dev->csif_info.cs_reg_count != 96 &&
+       kbase_dev->csif_info.cs_reg_count != 128) {
+      uint32_t cs_reg_count =
+         pan_arch(kbase_dev->base.props.gpu_id) >= 12 ? 128 : 96;
+      mesa_logw("kbase: implausible CS work register count %u, using %u",
+                kbase_dev->csif_info.cs_reg_count, cs_reg_count);
+      kbase_dev->csif_info.cs_reg_count = cs_reg_count;
    }
 
    const char *kcpu_sync = getenv("PANVK_KBASE_KCPU_SYNC");

@@ -869,7 +869,6 @@ Validation test: build with kbase; DRM enumeration unchanged.
 +   switch (arch) {
 +   case 6:
 +   case 7:
-+   case 14:
 +      if (!os_get_option("PAN_I_WANT_A_BROKEN_VULKAN_DRIVER")) {
 +         result = panvk_errorf(instance, VK_ERROR_INCOMPATIBLE_DRIVER,
 +                               "WARNING: panvk is not well-tested on v%d, "
@@ -883,6 +882,7 @@ Validation test: build with kbase; DRM enumeration unchanged.
 +   case 11:
 +   case 12:
 +   case 13:
++   case 14:
 +      break;
 +
 +   default:

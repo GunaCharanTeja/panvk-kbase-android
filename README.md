@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://t.me/+E-NhUATmkqE5ODg1"><img src="https://img.shields.io/badge/Telegram-Join%20testers-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Join the Telegram testers group"></a>
-  <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.12"><img src="https://img.shields.io/badge/driver-beta.12-orange?style=for-the-badge" alt="Driver beta.12"></a>
+  <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.13"><img src="https://img.shields.io/badge/driver-beta.13-orange?style=for-the-badge" alt="Driver beta.13"></a>
   <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panplay-v1.0.3"><img src="https://img.shields.io/badge/PanPlay-1.0.3-blue?style=for-the-badge&logo=android&logoColor=white" alt="PanPlay 1.0.3"></a>
 </p>
 
@@ -98,11 +98,11 @@ One row per Mesa arch. Each GPU carries its own status mark.
 | v6 | Bifrost 1st/2nd gen | JM | ❌ Mali-G71, ❔ G72 | Mesa marks G71 unsupported; G72 experimental upstream |
 | v7 | Bifrost 1st to 3rd gen | JM | 📋 Mali-G52, ❔ G31, ❔ G51, ❔ G76 | Profile `g52-v7-jm` (P25); needs the JM kbase path |
 | v9 | Valhall 1st/2nd gen | JM | 📋 Mali-G57, ❔ G77, ❔ G68, ❔ G78, ❔ G78AE | Profile `g57-v9-jm` (P26); needs a v9 backend port and the JM kbase path |
-| v10 | Valhall 3rd gen | CSF | 🔨 Mali-G610, 🔨 G310, ❔ G510, ❔ G710 | **Built, untested** (beta.12 universal ICD). G610/G310 are in the Mesa model table; G510/G710 need a tester's gpu_id |
+| v10 | Valhall 3rd gen | CSF | 🔨 Mali-G610, 🔨 G310, ❔ G510, ❔ G710 | **Built, untested** (beta.13 universal ICD). G610/G310 are in the Mesa model table; G510/G710 need a tester's gpu_id |
 | **v11** | **Valhall 4th gen** | **CSF** | ✅ **Mali-G615**, ❔ G715, ❔ Immortalis-G715 | G615 validated on Poco X6 Pro (Dimensity 8300). G715 and Immortalis-G715 share the same arch but are untested |
-| v12 | 5th Gen | CSF | 🔨 Mali-G720, ❔ G620, ❔ Immortalis-G720 | **Built, untested** (beta.12 universal ICD). G720 (variant 4) is in the Mesa model table; G620/Immortalis-G720 need a tester's gpu_id |
-| v13 | 5th Gen | CSF | ❔ Mali-G625, ❔ G725, ❔ Immortalis-G925 | No profile yet |
-| v14 | 5th Gen, G1 series | CSF | ❔ Mali G1-Pro, ❔ G1-Premium, ❔ G1-Ultra | Experimental upstream; no profile yet |
+| v12 | 5th Gen | CSF | 🔨 Mali-G720, ❔ G620, ❔ Immortalis-G720 | **Built, untested** (beta.13 universal ICD). G720 (variant 4) is in the Mesa model table; G620/Immortalis-G720 need a tester's gpu_id |
+| v13 | 5th Gen | CSF | 🔨 Mali-G725, ❔ G625, ❔ Immortalis-G925 | **Built, untested** (beta.13 universal ICD). G725 (variant 4) is in the Mesa model table; G625/Immortalis-G925 need a tester's gpu_id |
+| v14 | 5th Gen, G1 series | CSF | 🔨 Mali G1-Ultra, 🔨 G1-Premium, 🔨 G1-Pro | **Built, untested** (beta.13 universal ICD). All three are in the Mesa model table; experimental upstream |
 | v15 (unconfirmed) | G2 series | CSF | ❌ Mali G2-Ultra NX, ❌ G2-Premium NX (rumoured), ❌ G2-Pro NX (rumoured) | Not in Mesa yet |
 
 "Possible" means Mesa has code for the arch. It does not mean the arch works
@@ -148,13 +148,14 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-Latest: **[`g615-v11-csf-v0.1.0-beta.12`](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.12)**
-(prerelease, Mesa `5a07217f` plus the committed series up to 098). Each
+Latest: **[`g615-v11-csf-v0.1.0-beta.13`](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.13)**
+(prerelease, Mesa `5a07217f` plus the committed series up to 100). Each
 release ships the Android and glibc drivers, an `.adpkg` package, an EMULATOR
 zip, the test APK and screenshots. Full history: [`CHANGELOG.md`](CHANGELOG.md).
 
 | Release | Highlights |
 |---|---|
+| **beta.13** | One universal Android ICD for v10-v14. **Only v11 (G615) is tested; v10/v12/v13/v14 are built but untested, and testers are needed.** The kbase path now admits v14 without `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER`; v13 was already admitted. Fixes PanProbe `gs_viewport_depth` case A, which regressed in beta.11 (100). On kbase, `gpu_prerast` arenas are committed up front again. GPU-fault growth lost the first GS draw. The shared-TLS memory fix from 097 stays. The kbase CS register-count fallback is now 128 on v12+; 96 was too small. `driverInfo` now reads `PanVK-kbase beta.13 (Mesa 26.3.0-devel ...)`, shown in the DXVK HUD and PanProbe. |
 | **beta.12** | One universal Android ICD for v10, v11 and v12. **Only v11 (G615) is tested; v10 and v12 are built but untested, and testers are needed.** The release notes give the command that reports your GPU ID. |
 | **beta.11** | Fixes `VK_ERROR_DEVICE_LOST` on tiler heap OOM (098). Fixes the memory blow-up from per-pool TLS and eagerly committed prerast arenas (097). |
 | **beta.10** | Fast and correct 32-bit WoW64 games: placed maps now map the BO's dma-buf again at the requested address (091) instead of a shadow copy. Need for Speed Most Wanted (DXVK D3D9) went from 0.5 fps to 39-66 fps, with clean HUD and text. Also GPU chunking of large and indirect prerast draws (094, 096), the tessellation conditional-state fix (093), and the sample count for attachment-less secondaries (095). |

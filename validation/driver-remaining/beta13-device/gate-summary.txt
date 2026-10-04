@@ -1,0 +1,26 @@
+beta.13 universal v10-v14 build, v11 gate on Poco X6 Pro (Mali-G615 MC6), 2026-10-04
+Android ICD sha256 215939d2b80c052805346609b4344bf42024851a29911cda0a5032175bbeec57 (Mesa 5a07217f + series up to 100)
+glibc/chroot ICD sha256 7ea73dd1686a3e10d87018b0bf22fff9b7fc69c11f94b93a29e44a3869edde83 (same tree)
+Both contain libpanvk_v10..v14 (panvk_v10_..v13_ 143 symbols each, v14_ 141 in the Android .so).
+
+gs_viewport_depth bisect (PanProbe autorun gs_viewport_depth, imported driver, case A/B/C):
+  beta.9 release .so   PPP
+  beta.10 release .so  PPP
+  beta.11 release .so  FFP
+  beta.13 pre-fix      FPP x6
+  beta.13 minus 098    FPP x2
+  beta.13 minus 097    PPP x6+2
+  beta.13, 097 without ALLOC_ON_FAULT on the gpu_prerast arenas  PPP x6 (one earlier run: PPF)
+  -> 100: commit the arenas up front on kbase; shared TLS from 097 kept.
+
+PanProbe (bundled driver, beta.13 APK): 17/17 pass, 3 runs in a row.
+  Info: Mali-G615 MC6, Vulkan 1.4.363, driverInfo "PanVK-kbase beta.13 (Mesa 26.3.0-devel (git-5a07217f03))",
+  device id 0xB8A31030 (v11), 188 extensions, 196 formats.
+CTS memory.mapping.*, memory.map_placed.*, synchronization{,2}.basic.*: 4520 pass / 0 fail / 13 NotSupported (4533)
+CTS geometry.*: 195 pass / 0 fail / 4 NotSupported
+CTS pipeline + dynamic_state viewport cases: 177 pass / 0 fail / 10566 NotSupported
+CTS clipping.*: 180 pass / 128 fail; draw *viewport*: 328 pass / 60 fail / 6 NotSupported
+  The 188 failures (cts-preexisting-failures.txt) give identical results on the beta.10 and beta.12 binaries
+  (run alone: 16 pass, 172 fail on b10, b12 and b13). Not regressions.
+No "implausible CS work register count" warning on G615.
+PanPlay game tests skipped by request (user tests PanPlay).
