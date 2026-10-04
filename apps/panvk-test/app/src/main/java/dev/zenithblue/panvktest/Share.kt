@@ -13,6 +13,7 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipEntry
@@ -285,6 +286,14 @@ private fun uploadMultipart(
     }
 }
 
+private fun sameSchemeHostPort(u1: URL, u2: URL): Boolean {
+    val port1 = if (u1.port != -1) u1.port else u1.defaultPort
+    val port2 = if (u2.port != -1) u2.port else u2.defaultPort
+    return u1.protocol.equals(u2.protocol, ignoreCase = true) &&
+        u1.host.equals(u2.host, ignoreCase = true) &&
+        port1 == port2
+}
+
 fun uploadToR2(
     endpoint: String,
     f: File,
@@ -332,6 +341,22 @@ fun uploadToR2(
     val method = resObj.optString("method", "PUT").ifEmpty { "PUT" }
     val headersObj = resObj.optJSONObject("headers")
     val downloadUrl = resObj.getString("downloadUrl")
+
+    val parsedEndpoint = try { URL(endpoint) } catch (_: Exception) { null }
+    val parsedUpload = try { URL(uploadUrl) } catch (_: Exception) { null }
+    val parsedDownload = try { URL(downloadUrl) } catch (_: Exception) { null }
+
+    val uploadOk = parsedUpload != null && (
+        (parsedUpload.protocol.equals("https", ignoreCase = true) &&
+            parsedUpload.host.lowercase(Locale.US).endsWith(".r2.cloudflarestorage.com")) ||
+        (parsedEndpoint != null && sameSchemeHostPort(parsedUpload, parsedEndpoint))
+    )
+    val downloadOk = parsedDownload != null && parsedEndpoint != null &&
+        sameSchemeHostPort(parsedDownload, parsedEndpoint)
+
+    if (!uploadOk || !downloadOk) {
+        throw IOException("R2: unexpected upload URL host")
+    }
 
     if (cancelled.get()) throw CancellationException("Upload cancelled")
 

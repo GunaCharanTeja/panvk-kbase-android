@@ -27,6 +27,8 @@ Java_dev_zenithblue_panvklauncher_Native_probe(JNIEnv *env, jclass clazz, jstrin
     }
 
     PFN_vkGetInstanceProcAddr gipa = (PFN_vkGetInstanceProcAddr)dlsym(h, "vk_icdGetInstanceProcAddr");
+    /* Not an ICD (e.g. the system loader libvulkan.so): use its loader entry point. */
+    if (!gipa) gipa = (PFN_vkGetInstanceProcAddr)dlsym(h, "vkGetInstanceProcAddr");
     if (!gipa) {
         char fail[512];
         const char *err = dlerror();

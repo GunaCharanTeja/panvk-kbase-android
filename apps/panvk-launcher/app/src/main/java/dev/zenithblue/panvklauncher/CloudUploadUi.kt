@@ -21,6 +21,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -47,9 +48,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class CloudUploadState(
-    val endpoint: String = PANVK_UPLOAD_ENDPOINT,
+    endpoint: String = PANVK_UPLOAD_ENDPOINT,
     val zipProvider: suspend (Context, File) -> File = { ctx, dir -> SessionLogs.buildCloudZip(ctx, dir) }
 ) {
+    var endpoint by mutableStateOf(endpoint)
     var targetSession by mutableStateOf<File?>(null)
     var isUploading by mutableStateOf(false)
     var isPreparingZip by mutableStateOf(false)
@@ -75,6 +77,11 @@ class CloudUploadState(
         targetSession = null
         isRetryingA = false
         isRetryingB = false
+    }
+
+    fun clearOverride(context: Context) {
+        UploadPrefs.setStoredEndpoint(context, null)
+        endpoint = resolveUploadEndpoint(context, null)
     }
 
     fun cancelUpload() {
@@ -106,11 +113,15 @@ class CloudUploadState(
 
 @Composable
 fun rememberCloudUploadState(
-    endpoint: String = PANVK_UPLOAD_ENDPOINT,
+    endpoint: String? = null,
     zipProvider: suspend (Context, File) -> File = { ctx, dir -> SessionLogs.buildCloudZip(ctx, dir) }
 ): CloudUploadState {
-    return remember(endpoint) {
-        CloudUploadState(endpoint = endpoint, zipProvider = zipProvider)
+    val context = LocalContext.current
+    val effectiveEndpoint = remember(endpoint, context) {
+        resolveUploadEndpoint(context, endpoint)
+    }
+    return remember(effectiveEndpoint) {
+        CloudUploadState(endpoint = effectiveEndpoint, zipProvider = zipProvider)
     }
 }
 
@@ -352,7 +363,22 @@ fun CloudUploadFlow(state: CloudUploadState) {
             onDismissRequest = { state.dismissConfirm() },
             title = { Text("Send to cloud?") },
             text = {
-                Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Anyone with a link can download it. It may contain your device model, GPU info, Android version, game and app names, package names and file paths. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Anyone with a link can download it. It may contain your device model, GPU info, Android version, game and app names, package names and file paths. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
+                    if (state.endpoint != PANVK_UPLOAD_ENDPOINT) {
+                        Text(
+                            text = "Test upload endpoint override active: ${state.endpoint}",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        TextButton(
+                            onClick = { state.clearOverride(context) },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text("Clear override", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             },
             confirmButton = {
                 Button(

@@ -43,6 +43,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleUploadEndpointIntent(intent)
         val autoprobe = intent?.getBooleanExtra("autoprobe", false) ?: false
         // adb: am start -n dev.zenithblue.panvklauncher/.MainActivity --es run_exe /path/to/game.exe
         val autoRunExe = intent?.getStringExtra("run_exe")
@@ -71,8 +72,24 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        handleUploadEndpointIntent(intent)
         ShortcutRequests.fromIntent(this, intent)
     }
+
+    private fun handleUploadEndpointIntent(intent: Intent?) {
+        if (intent?.hasExtra("uploadEndpoint") == true) {
+            val extra = intent.getStringExtra("uploadEndpoint")
+            if (extra.isNullOrEmpty()) {
+                UploadPrefs.setStoredEndpoint(this, null)
+            } else if (isValidUploadEndpoint(extra)) {
+                UploadPrefs.setStoredEndpoint(this, extra)
+            }
+        }
+    }
+}
+
+object StoragePromptState {
+    var askedThisProcess = false
 }
 
 object StorageAccess {
@@ -334,7 +351,6 @@ fun LauncherApp(
 
     var pendingStoragePath by rememberSaveable { mutableStateOf<String?>(null) }
     var showStorageDialog by rememberSaveable { mutableStateOf(false) }
-    var storageAsked by rememberSaveable { mutableStateOf(false) }
     lateinit var resumePending: () -> Unit
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -368,7 +384,10 @@ fun LauncherApp(
 
     // Startup prompt (once per app open) + re-check when returning from Settings.
     LaunchedEffect(Unit) {
-        if (!storageAsked && !StorageAccess.granted(context)) { storageAsked = true; showStorageDialog = true }
+        if (!StoragePromptState.askedThisProcess && !StorageAccess.granted(context)) {
+            StoragePromptState.askedThisProcess = true
+            showStorageDialog = true
+        }
     }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {

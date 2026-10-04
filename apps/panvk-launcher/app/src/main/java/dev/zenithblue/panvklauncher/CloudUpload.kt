@@ -11,6 +11,7 @@ import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipEntry
@@ -19,16 +20,52 @@ import java.util.zip.ZipOutputStream
 
 const val PANVK_UPLOAD_ENDPOINT = ""
 
+object UploadPrefs {
+    private const val PREFS_NAME = "panplay_upload"
+    private const val KEY_ENDPOINT = "uploadEndpoint"
+
+    fun getStoredEndpoint(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_ENDPOINT, null)?.takeIf { it.isNotEmpty() }
+    }
+
+    fun setStoredEndpoint(context: Context, endpoint: String?) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (endpoint.isNullOrEmpty()) {
+            prefs.edit().remove(KEY_ENDPOINT).apply()
+        } else {
+            prefs.edit().putString(KEY_ENDPOINT, endpoint).apply()
+        }
+    }
+}
+
+fun isValidUploadEndpoint(endpoint: String?): Boolean {
+    if (endpoint == null) return false
+    val parsed = try { URL(endpoint) } catch (_: Exception) { null } ?: return false
+    val protocolOk = parsed.protocol.equals("http", ignoreCase = true) || parsed.protocol.equals("https", ignoreCase = true)
+    val hostOk = parsed.host.equals("127.0.0.1", ignoreCase = true) || parsed.host.equals("localhost", ignoreCase = true)
+    return protocolOk && hostOk
+}
+
 fun resolveUploadEndpoint(extraEndpoint: String?): String {
-    return if (extraEndpoint != null) {
-        val parsed = try { URL(extraEndpoint) } catch (_: Exception) { null }
-        val isValid = parsed != null &&
-            (parsed.protocol.equals("http", ignoreCase = true) || parsed.protocol.equals("https", ignoreCase = true)) &&
-            (parsed.host.equals("127.0.0.1", ignoreCase = true) || parsed.host.equals("localhost", ignoreCase = true))
-        if (isValid) extraEndpoint else PANVK_UPLOAD_ENDPOINT
+    return if (isValidUploadEndpoint(extraEndpoint)) {
+        extraEndpoint!!
     } else {
         PANVK_UPLOAD_ENDPOINT
     }
+}
+
+fun resolveUploadEndpoint(ctx: Context?, extraEndpoint: String? = null): String {
+    if (isValidUploadEndpoint(extraEndpoint)) {
+        return extraEndpoint!!
+    }
+    if (ctx != null) {
+        val stored = UploadPrefs.getStoredEndpoint(ctx)
+        if (isValidUploadEndpoint(stored)) {
+            return stored!!
+        }
+    }
+    return PANVK_UPLOAD_ENDPOINT
 }
 
 fun getAppVersion(ctx: Context): String {
@@ -264,6 +301,14 @@ private fun uploadMultipart(
     }
 }
 
+private fun sameSchemeHostPort(u1: URL, u2: URL): Boolean {
+    val port1 = if (u1.port != -1) u1.port else u1.defaultPort
+    val port2 = if (u2.port != -1) u2.port else u2.defaultPort
+    return u1.protocol.equals(u2.protocol, ignoreCase = true) &&
+        u1.host.equals(u2.host, ignoreCase = true) &&
+        port1 == port2
+}
+
 fun uploadToR2(
     endpoint: String,
     f: File,
@@ -311,6 +356,22 @@ fun uploadToR2(
     val method = resObj.optString("method", "PUT").ifEmpty { "PUT" }
     val headersObj = resObj.optJSONObject("headers")
     val downloadUrl = resObj.getString("downloadUrl")
+
+    val parsedEndpoint = try { URL(endpoint) } catch (_: Exception) { null }
+    val parsedUpload = try { URL(uploadUrl) } catch (_: Exception) { null }
+    val parsedDownload = try { URL(downloadUrl) } catch (_: Exception) { null }
+
+    val uploadOk = parsedUpload != null && (
+        (parsedUpload.protocol.equals("https", ignoreCase = true) &&
+            parsedUpload.host.lowercase(Locale.US).endsWith(".r2.cloudflarestorage.com")) ||
+        (parsedEndpoint != null && sameSchemeHostPort(parsedUpload, parsedEndpoint))
+    )
+    val downloadOk = parsedDownload != null && parsedEndpoint != null &&
+        sameSchemeHostPort(parsedDownload, parsedEndpoint)
+
+    if (!uploadOk || !downloadOk) {
+        throw IOException("R2: unexpected upload URL host")
+    }
 
     if (cancelled.get()) throw CancellationException("Upload cancelled")
 

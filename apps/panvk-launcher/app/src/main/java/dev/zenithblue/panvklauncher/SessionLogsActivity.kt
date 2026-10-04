@@ -73,7 +73,7 @@ class SessionLogsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val want = intent?.getStringExtra(EXTRA_DIR)
-        uploadEndpoint = resolveUploadEndpoint(intent?.getStringExtra("uploadEndpoint"))
+        uploadEndpoint = resolveUploadEndpoint(this, intent?.getStringExtra("uploadEndpoint"))
         setContent {
             PanvkTheme(mode = UiPrefs.theme(this), dynamic = UiPrefs.dynamic(this)) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

@@ -391,7 +391,105 @@ object SessionLogs {
         JSONObject().apply { put("error", t.message ?: t.toString()) }
     }
 
-    fun findGpuModel(ctx: Context, sc: Shortcut? = null, dir: File? = null): String {
+    private val PROBE_DEV_REGEX = Regex(
+        """^(.*?)\s+api=([0-9.]+)\s+driver=(?:0x)?([0-9a-fA-F]+)\s+vendor=(?:0x)?([0-9a-fA-F]+)\s+device=(?:0x)?([0-9a-fA-F]+)"""
+    )
+
+    @JvmOverloads
+    fun probeGpu(ctx: Context, driverPath: String? = null): JSONObject {
+        val probeErrors = JSONArray()
+        var firstDeviceLine: String? = null
+        var probeSource: String? = null
+
+        val candidateLib = driverPath?.takeIf { it.isNotEmpty() } ?: try {
+            val drivers = DriverManager.getDrivers(ctx)
+            DriverManager.getSelectedDriver(ctx, drivers).libPath
+        } catch (_: Throwable) {
+            try {
+                DriverManager.bundledDriver(ctx).libPath
+            } catch (_: Throwable) {
+                null
+            }
+        }
+
+        if (!candidateLib.isNullOrEmpty()) {
+            try {
+                val out = Native.probe(candidateLib)
+                if (out.startsWith("FAIL")) {
+                    probeErrors.put("PanVK driver ($candidateLib): $out")
+                } else {
+                    val line = out.lineSequence()
+                        .map { it.trim() }
+                        .firstOrNull { it.isNotEmpty() && !it.startsWith("FAIL") && PROBE_DEV_REGEX.containsMatchIn(it) }
+                    if (line != null) {
+                        firstDeviceLine = line
+                        probeSource = "bundled driver"
+                    } else {
+                        probeErrors.put("bundled driver ($candidateLib): no device found in output: ${out.take(200)}")
+                    }
+                }
+            } catch (t: Throwable) {
+                probeErrors.put("bundled driver ($candidateLib): ${t.message ?: t.toString()}")
+            }
+        } else {
+            probeErrors.put("bundled driver: library path is empty or not found")
+        }
+
+        if (firstDeviceLine == null) {
+            try {
+                val out = Native.probe("libvulkan.so")
+                if (out.startsWith("FAIL")) {
+                    probeErrors.put("system Vulkan (libvulkan.so): $out")
+                } else {
+                    val line = out.lineSequence()
+                        .map { it.trim() }
+                        .firstOrNull { it.isNotEmpty() && !it.startsWith("FAIL") && PROBE_DEV_REGEX.containsMatchIn(it) }
+                    if (line != null) {
+                        firstDeviceLine = line
+                        probeSource = "system Vulkan"
+                    } else {
+                        probeErrors.put("system Vulkan (libvulkan.so): no device found in output: ${out.take(200)}")
+                    }
+                }
+            } catch (t: Throwable) {
+                probeErrors.put("system Vulkan (libvulkan.so): ${t.message ?: t.toString()}")
+            }
+        }
+
+        val result = JSONObject()
+        if (firstDeviceLine != null) {
+            val match = PROBE_DEV_REGEX.find(firstDeviceLine)
+            if (match != null) {
+                val devName = match.groupValues[1].trim()
+                val apiVer = match.groupValues[2].trim()
+                val vendorId = match.groupValues[4].toLongOrNull(16) ?: 0L
+                val deviceId = match.groupValues[5].toLongOrNull(16) ?: 0L
+
+                result.put("deviceName", devName)
+                result.put("vendorID", vendorId)
+                result.put("deviceID", deviceId)
+                result.put("apiVersion", apiVer)
+
+                if (vendorId == 0x13b5L) {
+                    val gpuId = "0x%08x".format(deviceId)
+                    val arch = "v" + ((deviceId ushr 28) and 0xFL)
+                    result.put("gpuId", gpuId)
+                    result.put("arch", arch)
+                }
+                if (probeSource != null) {
+                    result.put("probeSource", probeSource)
+                }
+            }
+        }
+
+        if (probeErrors.length() > 0) {
+            result.put("probeErrors", probeErrors)
+        }
+        return result
+    }
+
+    fun findGpuModel(ctx: Context, sc: Shortcut? = null, dir: File? = null, probedDevName: String? = null): String {
+        if (!probedDevName.isNullOrEmpty()) return probedDevName
         // 1. Search cached vkinfo (JSON / txt in session dir, cacheDir, or filesDir)
         val jsonCandidates = listOfNotNull(
             dir?.let { File(it, "vkinfo.json") },
@@ -592,6 +690,11 @@ object SessionLogs {
             val pVersionName = pInfo?.versionName ?: "1.1.0"
             val pVersionCode = if (Build.VERSION.SDK_INT >= 28) (pInfo?.longVersionCode ?: 6L) else @Suppress("DEPRECATION") (pInfo?.versionCode?.toLong() ?: 6L)
 
+            val sessionDriverPath = manifestInfo.optJSONObject("driver")?.optString("libPath")?.takeIf { it.isNotEmpty() && File(it).isFile } // stale after reinstall
+            val probedGpu = probeGpu(ctx, sessionDriverPath)
+            val probedDevName = probedGpu.optString("deviceName").takeIf { it.isNotEmpty() }
+            val gpuModel = findGpuModel(ctx, matchedShortcut, dir, probedDevName)
+
             val manifestObj = JSONObject().apply {
                 put("timestamp", SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()))
                 put("app", JSONObject().apply {
@@ -636,11 +739,14 @@ object SessionLogs {
                 })
 
                 put("gpu", JSONObject().apply {
+                    for (k in probedGpu.keys()) {
+                        put(k, probedGpu.get(k))
+                    }
                     put("gpuinfo", gpuinfoRaw ?: JSONObject.NULL)
                     if (gpuinfoRaw == null) {
                         put("gpuinfo_unavailable_reason", gpuinfoUnavailableReason ?: "file missing")
                     }
-                    put("gpuModel", findGpuModel(ctx, matchedShortcut, dir))
+                    put("gpuModel", gpuModel)
                 })
 
                 put("files", filesArray)

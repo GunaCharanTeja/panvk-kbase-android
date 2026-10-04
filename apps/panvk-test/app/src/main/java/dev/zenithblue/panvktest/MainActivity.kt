@@ -1448,7 +1448,15 @@ class MainActivity : ComponentActivity() {
                 onDismissRequest = { cloudConfirmRun = null },
                 title = { Text("Send to cloud?") },
                 text = {
-                    Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Anyone with a link can download it. It may contain your device model, GPU info, Android version, app and package names and file paths. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Anyone with a link can download it. It may contain your device model, GPU info, Android version, app and package names and file paths. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
+                        if (uploadEndpoint != PANVK_UPLOAD_ENDPOINT) {
+                            Text(
+                                text = "Test upload endpoint override active: $uploadEndpoint",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 },
                 confirmButton = {
                     Button(
@@ -1749,6 +1757,38 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        var showClearConfirmDialog by remember { mutableStateOf(false) }
+
+        if (showClearConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearConfirmDialog = false },
+                title = { Text("Clear all logs and runs?") },
+                text = { Text("This deletes all saved test runs and log files on this device.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showClearConfirmDialog = false
+                            val logsDir = File(filesDir, "logs")
+                            logsDir.listFiles()?.forEach { it.delete() }
+                            val runsDir = File(filesDir, "runs")
+                            runsDir.deleteRecursively()
+                            selectedLogFileState.value = null
+                            selectedLogTextState.value = null
+                            refreshLogsList()
+                            refreshRunsList()
+                        }
+                    ) {
+                        Text("Clear")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showClearConfirmDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1758,14 +1798,7 @@ class MainActivity : ComponentActivity() {
                 SectionTitle("Logs")
                 Button(
                     onClick = {
-                        val logsDir = File(filesDir, "logs")
-                        logsDir.listFiles()?.forEach { it.delete() }
-                        val runsDir = File(filesDir, "runs")
-                        runsDir.deleteRecursively()
-                        selectedLogFileState.value = null
-                        selectedLogTextState.value = null
-                        refreshLogsList()
-                        refreshRunsList()
+                        showClearConfirmDialog = true
                     }
                 ) {
                     Text("Clear")
