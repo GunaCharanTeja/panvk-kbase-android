@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -542,7 +543,7 @@ fun InfoTabContent(
         when {
             isLoading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    BusyCard("Querying Vulkan driver info...", modifier = Modifier.widthIn(max = 400.dp))
                 }
             }
             parsedInfo != null -> {
@@ -562,13 +563,16 @@ fun InfoTabContent(
                 }
             }
             else -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Tap 'Load' to query Vulkan info.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                EmptyState(
+                    painter = painterResource(R.drawable.ic_tab_info),
+                    title = "No Vulkan Info",
+                    body = "Tap 'Load' to query Vulkan info.",
+                    action = {
+                        Button(onClick = onLoadClick) {
+                            Text("Load")
+                        }
+                    }
+                )
             }
         }
     }
@@ -885,7 +889,7 @@ fun SectionHeaderCard(
             .fillMaxWidth()
             .clickable(onClick = onToggle),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
         Row(
@@ -918,18 +922,7 @@ fun SectionHeaderCard(
                 else -> null
             }
             if (badgeText != null) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Text(
-                        text = badgeText,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
+                StatusPill(text = badgeText, tone = Tone.Neutral)
             }
         }
     }
@@ -1059,7 +1052,7 @@ private fun coreRequirementValue(dev: DeviceInfo, minor: Int): String {
 fun DeviceHeaderCard(dev: DeviceInfo) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1078,21 +1071,13 @@ fun DeviceHeaderCard(dev: DeviceInfo) {
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(Modifier.width(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Text(
-                        text = "Vulkan ${dev.apiVersion}",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+                StatusPill(
+                    text = "Vulkan ${dev.apiVersion}",
+                    tone = Tone.Accent
+                )
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
             // Driver Information
             if (dev.driverName != null || dev.driverInfo != null) {
@@ -1170,17 +1155,10 @@ fun ExtensionRow(ext: ExtensionItem) {
             modifier = Modifier.weight(1f)
         )
         Spacer(Modifier.width(8.dp))
-        Surface(
-            shape = RoundedCornerShape(4.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Text(
-                text = "v${ext.specVersion}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-            )
-        }
+        StatusPill(
+            text = "v${ext.specVersion}",
+            tone = Tone.Neutral
+        )
     }
 }
 
@@ -1195,8 +1173,8 @@ fun StructSubHeader(
             .fillMaxWidth()
             .clickable(onClick = onToggle)
             .padding(vertical = 2.dp),
-        shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Row(
             modifier = Modifier
@@ -1222,11 +1200,9 @@ fun StructSubHeader(
                 )
             }
             Spacer(Modifier.width(8.dp))
-            Text(
+            StatusPill(
                 text = "${group.supportedCount}/${group.totalCount}",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (group.supportedCount > 0) Color(0xFF2E7D32) else Color.Gray,
-                fontWeight = FontWeight.Bold
+                tone = if (group.supportedCount > 0) Tone.Ok else Tone.Neutral
             )
         }
     }
@@ -1247,11 +1223,9 @@ fun FeatureRow(feature: FeatureItem) {
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.weight(1f)
         )
-        Text(
-            text = if (feature.supported) "✓" else "✗",
-            color = if (feature.supported) Color(0xFF2E7D32) else Color.Gray,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp
+        StatusPill(
+            text = if (feature.supported) "YES" else "NO",
+            tone = if (feature.supported) Tone.Ok else Tone.Neutral
         )
     }
 }
@@ -1268,6 +1242,7 @@ fun LimitRow(key: String, value: String) {
         Text(
             text = key,
             style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(0.55f)
         )
         Spacer(Modifier.width(8.dp))
@@ -1288,12 +1263,12 @@ fun FormatRow(item: FormatFeatureItem) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             val displayName = item.name.removePrefix("VK_FORMAT_")
             Text(
@@ -1308,24 +1283,21 @@ fun FormatRow(item: FormatFeatureItem) {
                 FormatFlagsRow(
                     label = "Optimal",
                     flags = item.optimalFlags,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    tone = Tone.Accent
                 )
             }
             if (item.linearFlags.isNotEmpty()) {
                 FormatFlagsRow(
                     label = "Linear",
                     flags = item.linearFlags,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    tone = Tone.Neutral
                 )
             }
             if (item.bufferFlags.isNotEmpty()) {
                 FormatFlagsRow(
                     label = "Buffer",
                     flags = item.bufferFlags,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    tone = Tone.Ok
                 )
             }
         }
@@ -1337,8 +1309,7 @@ fun FormatRow(item: FormatFeatureItem) {
 fun FormatFlagsRow(
     label: String,
     flags: List<String>,
-    containerColor: Color,
-    contentColor: Color
+    tone: Tone = Tone.Accent
 ) {
     if (flags.isEmpty()) return
     Row(
@@ -1362,18 +1333,7 @@ fun FormatFlagsRow(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             flags.forEach { flag ->
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = containerColor,
-                    contentColor = contentColor
-                ) {
-                    Text(
-                        text = flag,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                }
+                StatusPill(text = flag, tone = tone)
             }
         }
     }

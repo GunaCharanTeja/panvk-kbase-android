@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -157,7 +158,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
+            PanvkTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize().safeDrawingPadding(),
                     color = MaterialTheme.colorScheme.background
@@ -715,27 +716,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @Suppress("DEPRECATION")
     @Composable
     fun MainScreen() {
-        Column(modifier = Modifier.fillMaxSize()) {
-            val tabs = listOf("Driver", "Info", "Tests", "Logs")
-            TabRow(selectedTabIndex = selectedTabState.intValue) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTabState.intValue == index,
-                        onClick = { selectedTabState.intValue = index },
-                        text = { Text(title) }
-                    )
-                }
-            }
+        val currentTab = AppTab.entries.getOrElse(selectedTabState.intValue) { AppTab.Driver }
+        val isAnyRunning = isRunningAllState.value || infoLoadingState.value || testResultsState.value.any { it.status == "RUNNING" }
 
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                when (selectedTabState.intValue) {
-                    0 -> DriverTab()
-                    1 -> InfoTab()
-                    2 -> TestsTab()
-                    3 -> LogsTab()
+        AppShell(
+            tab = currentTab,
+            onTab = { selectedTabState.intValue = it.ordinal },
+            running = isAnyRunning
+        ) { tab ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Box(
+                    modifier = Modifier
+                        .widthIn(max = 760.dp)
+                        .fillMaxSize()
+                ) {
+                    when (tab) {
+                        AppTab.Driver -> DriverTab()
+                        AppTab.Info -> InfoTab()
+                        AppTab.Tests -> TestsTab()
+                        AppTab.Logs -> LogsTab()
+                    }
                 }
             }
         }
@@ -771,66 +778,108 @@ class MainActivity : ComponentActivity() {
         }
 
         Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Vulkan Driver Selection", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            SectionTitle("Vulkan Driver Selection")
 
             DriverType.entries.forEach { type ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().clickable { driverTypeState.value = type },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(
-                        selected = driverTypeState.value == type,
-                        onClick = { driverTypeState.value = type }
+                val isSelected = driverTypeState.value == type
+                OutlinedCard(
+                    onClick = { driverTypeState.value = type },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.outlinedCardColors(
+                        containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(type.label, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            text = getDriverPath(type),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { driverTypeState.value = type }
                         )
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(type.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = getDriverPath(type),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
 
             if (driverTypeState.value == DriverType.IMPORTED) {
-                Button(onClick = { pickLauncher.launch(arrayOf("*/*")) }) {
-                    Text("Select .so file")
-                }
-                importedFileNameState.value?.let {
-                    Text("Imported file: $it", style = MaterialTheme.typography.bodyMedium)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(onClick = { pickLauncher.launch(arrayOf("*/*")) }) {
+                            Text("Select .so file")
+                        }
+                        importedFileNameState.value?.let {
+                            Text("Imported file: $it", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
             }
 
-            HorizontalDivider()
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            Text("Mesa Environment", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            SectionTitle("Mesa Environment")
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = mesaDebugEnabledState.value,
-                    onCheckedChange = { mesaDebugEnabledState.value = it }
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Mesa debug env")
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { mesaDebugEnabledState.value = !mesaDebugEnabledState.value },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = mesaDebugEnabledState.value,
+                            onCheckedChange = { mesaDebugEnabledState.value = it }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Mesa debug env", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    }
+
+                    OutlinedTextField(
+                        value = mesaDebugStrState.value,
+                        onValueChange = { mesaDebugStrState.value = it },
+                        label = { Text("Debug Variables (space-separated)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
-            OutlinedTextField(
-                value = mesaDebugStrState.value,
-                onValueChange = { mesaDebugStrState.value = it },
-                label = { Text("Debug Variables (space-separated)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(Modifier.padding(12.dp)) {
-                    Text("Always passed:", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
-                    Text("• MESA_LOG=file", style = MaterialTheme.typography.bodySmall)
-                    Text("• TMPDIR=${context.cacheDir.absolutePath}", style = MaterialTheme.typography.bodySmall)
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Always passed:", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text("• MESA_LOG=file", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                    Text("• TMPDIR=${context.cacheDir.absolutePath}", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                 }
             }
         }
@@ -878,7 +927,7 @@ class MainActivity : ComponentActivity() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Tests", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                SectionTitle("Tests")
                 Button(
                     enabled = !isRunningAllState.value,
                     onClick = { startRunAll() }
@@ -889,30 +938,45 @@ class MainActivity : ComponentActivity() {
 
             Spacer(Modifier.height(8.dp))
 
-            AndroidView(
-                factory = { ctx ->
-                    SurfaceView(ctx).apply {
-                        holder.addCallback(object : SurfaceHolder.Callback {
-                            override fun surfaceCreated(holder: SurfaceHolder) {
-                                swapSurface = holder.surface
-                            }
-                            override fun surfaceChanged(
-                                holder: SurfaceHolder, format: Int, width: Int, height: Int
-                            ) {
-                                swapSurface = holder.surface
-                            }
-                            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                swapSurface = null
-                            }
-                        })
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(160.dp)
-            )
+            if (isRunningAllState.value) {
+                BusyCard("Running test suite...", modifier = Modifier.padding(bottom = 8.dp))
+            }
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp),
+                shape = MaterialTheme.shapes.medium,
+                color = Color.Black
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        SurfaceView(ctx).apply {
+                            holder.addCallback(object : SurfaceHolder.Callback {
+                                override fun surfaceCreated(holder: SurfaceHolder) {
+                                    swapSurface = holder.surface
+                                }
+                                override fun surfaceChanged(
+                                    holder: SurfaceHolder, format: Int, width: Int, height: Int
+                                ) {
+                                    swapSurface = holder.surface
+                                }
+                                override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                    swapSurface = null
+                                }
+                            })
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
 
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 items(testCases) { test ->
                     val result = testResultsState.value.firstOrNull { it.name == test.name } ?: TestResult(test.name)
@@ -946,18 +1010,11 @@ class MainActivity : ComponentActivity() {
         onRunClick: () -> Unit,
         onToggleExpand: () -> Unit
     ) {
-        val statusColor = when (result.status) {
-            "PASS" -> Color(0xFF2E7D32)
-            "FAIL" -> Color(0xFFC62828)
-            "CRASH" -> Color(0xFF6A1B9A)
-            "TIMEOUT" -> Color(0xFFE65100)
-            "RUNNING" -> Color(0xFF1565C0)
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        }
-
         Card(
-            modifier = Modifier.fillMaxWidth().clickable { onToggleExpand() },
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleExpand() },
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Row(
@@ -967,43 +1024,44 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(test.name, fontWeight = FontWeight.Bold)
+                            Text(test.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
                             if (test.isDraw) {
                                 Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "[draw]",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
+                                StatusPill(
+                                    text = "draw",
+                                    tone = Tone.Accent
                                 )
                             }
                         }
+                        Spacer(Modifier.height(4.dp))
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                result.status,
-                                fontWeight = FontWeight.Bold,
-                                color = statusColor,
-                                style = MaterialTheme.typography.bodySmall
+                            StatusPill(
+                                text = result.status,
+                                tone = testStatusTone(result.status)
                             )
                             if (result.status != "IDLE" && result.status != "RUNNING") {
-                                Text("mismatch=${result.mismatch}", style = MaterialTheme.typography.bodySmall)
+                                Text("mismatch=${result.mismatch}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if (result.fps != null) {
-                                    Text("FPS ${result.fps}", style = MaterialTheme.typography.bodySmall)
+                                    Text("FPS ${result.fps}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Text("${result.durationMs}ms", style = MaterialTheme.typography.bodySmall)
+                                Text("${result.durationMs}ms", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         result.extra?.let {
-                            Text(it, style = MaterialTheme.typography.bodySmall)
+                            Spacer(Modifier.height(2.dp))
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+
+                    Spacer(Modifier.width(8.dp))
 
                     Button(
                         onClick = onRunClick,
                         enabled = result.status != "RUNNING" && !isRunningAllState.value,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                     ) {
                         Text("Run")
                     }
@@ -1011,16 +1069,21 @@ class MainActivity : ComponentActivity() {
 
                 if (result.isExpanded && result.lastLines.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    HorizontalDivider()
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Last ${result.lastLines.size} lines:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
                     Spacer(Modifier.height(4.dp))
-                    Text("Last ${result.lastLines.size} lines:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(8.dp)
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest
                     ) {
-                        SelectionContainer {
+                        SelectionContainer(modifier = Modifier.padding(8.dp)) {
                             Text(
                                 text = result.lastLines.joinToString("\n"),
                                 fontFamily = FontFamily.Monospace,
@@ -1147,9 +1210,8 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        @Suppress("DEPRECATION")
                         LinearProgressIndicator(
-                            progress = progress,
+                            progress = { progress },
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(
@@ -1216,16 +1278,12 @@ class MainActivity : ComponentActivity() {
                                     style = MaterialTheme.typography.bodySmall,
                                     fontFamily = FontFamily.Monospace
                                 )
-                                Text(
-                                    text = status,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = when {
-                                        status.startsWith("Verified") -> Color(0xFF2E7D32)
-                                        status.startsWith("Verify FAILED") -> MaterialTheme.colorScheme.error
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
+                                val statusTone = when {
+                                    status.startsWith("Verified") -> Tone.Ok
+                                    status.startsWith("Verify FAILED") -> Tone.Error
+                                    else -> Tone.Neutral
+                                }
+                                StatusPill(text = status, tone = statusTone)
                             }
                         }
                         if (status.startsWith("Verify FAILED")) {
@@ -1307,7 +1365,7 @@ class MainActivity : ComponentActivity() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Logs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                SectionTitle("Logs")
                 Button(
                     onClick = {
                         val logsDir = File(filesDir, "logs")
@@ -1327,49 +1385,58 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
 
             if (selectedLogFileState.value != null) {
-                Row(
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                 ) {
-                    Text(
-                        selectedLogFileState.value?.name ?: "",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                val textToShare = (selectedLogTextState.value ?: "").take(400_000)
-                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, textToShare)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            selectedLogFileState.value?.name ?: "",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    val textToShare = (selectedLogTextState.value ?: "").take(400_000)
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, textToShare)
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Share Log"))
                                 }
-                                context.startActivity(Intent.createChooser(sendIntent, "Share Log"))
+                            ) {
+                                Text("Share")
                             }
-                        ) {
-                            Text("Share")
-                        }
-                        OutlinedButton(onClick = {
-                            selectedLogFileState.value = null
-                            selectedLogTextState.value = null
-                        }) {
-                            Text("Close")
+                            OutlinedButton(onClick = {
+                                selectedLogFileState.value = null
+                                selectedLogTextState.value = null
+                            }) {
+                                Text("Close")
+                            }
                         }
                     }
                 }
 
                 Spacer(Modifier.height(8.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(8.dp)
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceContainerLowest
                 ) {
                     SelectionContainer(
-                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(10.dp)
+                            .verticalScroll(rememberScrollState())
                     ) {
                         Text(
                             text = selectedLogTextState.value ?: "",
@@ -1381,30 +1448,21 @@ class MainActivity : ComponentActivity() {
                 }
             } else {
                 if (runsListState.value.isEmpty() && logFilesListState.value.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Text("No logs yet.")
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "Send the ZIP or link to the PanVK Telegram group so we can check your results.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
+                    EmptyState(
+                        painter = painterResource(R.drawable.ic_tab_logs),
+                        title = "No logs yet.",
+                        body = "Send the ZIP or link to the PanVK Telegram group so we can check your results."
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         if (runsListState.value.isNotEmpty()) {
                             item(key = "runs_header") {
                                 Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
-                                    Text("Runs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    SectionTitle("Runs")
                                     Spacer(Modifier.height(2.dp))
                                     Text(
                                         "Send the ZIP or link to the PanVK Telegram group so we can check your results.",
@@ -1416,30 +1474,29 @@ class MainActivity : ComponentActivity() {
                             items(runsListState.value, key = { "run_${it.name}" }) { run ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                                 ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(run.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                                            Text(
-                                                "${run.passCount}/${run.totalCount}",
-                                                fontWeight = FontWeight.Bold,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = if (run.passCount == run.totalCount && run.totalCount > 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            Text(run.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                            val runPassTone = if (run.passCount == run.totalCount && run.totalCount > 0) Tone.Ok else Tone.Neutral
+                                            StatusPill(
+                                                text = "${run.passCount}/${run.totalCount}",
+                                                tone = runPassTone
                                             )
                                         }
-                                        Spacer(Modifier.height(8.dp))
+                                        Spacer(Modifier.height(10.dp))
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Button(
                                                 onClick = { cloudConfirmRun = run },
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                             ) {
                                                 Text("Send to cloud", maxLines = 1)
                                             }
@@ -1454,7 +1511,7 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }
                                                 },
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                             ) {
                                                 Text("Zip & Share", maxLines = 1)
                                             }
@@ -1465,7 +1522,7 @@ class MainActivity : ComponentActivity() {
                             if (logFilesListState.value.isNotEmpty()) {
                                 item(key = "logs_header") {
                                     Spacer(Modifier.height(4.dp))
-                                    Text("Log Files", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    SectionTitle("Log Files")
                                 }
                             }
                         } else {
@@ -1479,17 +1536,17 @@ class MainActivity : ComponentActivity() {
                         }
 
                         items(logFilesListState.value, key = { "log_${it.name}" }) { file ->
-                            Card(
+                            OutlinedCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
                                         selectedLogFileState.value = file
                                         selectedLogTextState.value = if (file.exists()) file.readText() else ""
                                     },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
