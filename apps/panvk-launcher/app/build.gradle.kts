@@ -82,6 +82,14 @@ android {
         }
     }
 
+    // Release APK is the debug build (debug key keeps upgrades working). AGP signs v2-only at minSdk 28;
+    // some installers report "invalid package" for that, so also add v1 (JAR) and v3 signatures.
+    signingConfigs.getByName("debug") {
+        enableV1Signing = true
+        enableV2Signing = true
+        enableV3Signing = true
+    }
+
     buildTypes {
         debug {
             isDebuggable = true
