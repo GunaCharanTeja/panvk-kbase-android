@@ -1,0 +1,36 @@
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+ICD device=Mali-G57 MC2 geometryShader=0 fillModeNonSolid=0 multiViewport=0 shaderClipDistance=0 shaderCullDistance=0 maxViewports=1 maxClip=0 maxCull=0 maxCombined=0
+FEATURE noAttachmentSamples=0xd sampleRateShading=1
+  cnt[slot 1 sample 1] = 0, want 256
+  cnt[slot 1 sample 2] = 0, want 256
+  cnt[slot 1 sample 3] = 0, want 256
+FAIL case prim_1x_4x_1x bad=3
+  cnt[slot 0 sample 1] = 0, want 256
+  cnt[slot 0 sample 2] = 0, want 256
+  cnt[slot 0 sample 3] = 0, want 256
+FAIL case sec_4x bad=3
+PASS case sec_1x bad=0
+  cnt[slot 1 sample 1] = 0, want 256
+  cnt[slot 1 sample 2] = 0, want 256
+  cnt[slot 1 sample 3] = 0, want 256
+FAIL case sec_1x_4x_1x_call bad=3
+  cnt[slot 1 sample 1] = 0, want 256
+  cnt[slot 1 sample 2] = 0, want 256
+  cnt[slot 1 sample 3] = 0, want 256
+FAIL case sec_1x_4x_1x_sep bad=3
+  cnt[slot 1 sample 1] = 0, want 256
+  cnt[slot 1 sample 2] = 0, want 256
+  cnt[slot 1 sample 3] = 0, want 256
+FAIL case inline_sec_inline bad=3
+  cnt[slot 0 sample 1] = 0, want 256
+  cnt[slot 2 sample 1] = 0, want 256
+  cnt[slot 0 sample 2] = 0, want 256
+  cnt[slot 2 sample 2] = 0, want 256
+  cnt[slot 0 sample 3] = 0, want 256
+  cnt[slot 2 sample 3] = 0, want 256
+FAIL case sec_inline_4x bad=6
+  cnt[slot 0 sample 1] = 0, want 256
+  cnt[slot 0 sample 2] = 0, want 256
+  cnt[slot 0 sample 3] = 0, want 256
+FAIL case sec_4x_sec_1x bad=3
+RESULT FAIL

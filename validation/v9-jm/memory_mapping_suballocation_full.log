@@ -1,0 +1,320 @@
+Writing test log into memory_mapping.qpa
+dEQP Core vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce (0xf6a29701) starting..
+  target implementation = 'Android'
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.variable.implicit_unmap'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.variable.implicit_unmap_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.simple'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.simple_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.remap'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.remap_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.flush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.flush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subflush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subflush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subflush_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subflush_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subflush_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subflush_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.invalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.invalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subinvalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subinvalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subinvalidate_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subinvalidate_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subinvalidate_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.33.subinvalidate_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.simple'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.simple_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.remap'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.remap_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.flush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.flush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subflush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subflush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subflush_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subflush_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subflush_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subflush_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.invalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.invalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subinvalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subinvalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subinvalidate_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subinvalidate_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subinvalidate_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.257.subinvalidate_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.simple'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.simple_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.remap'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.remap_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.flush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.flush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subflush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subflush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subflush_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subflush_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subflush_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subflush_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.invalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.invalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subinvalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subinvalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subinvalidate_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subinvalidate_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subinvalidate_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.4087.subinvalidate_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.simple'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.simple_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.remap'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.remap_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.flush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.flush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subflush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subflush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subflush_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subflush_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subflush_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subflush_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.invalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.invalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subinvalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subinvalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subinvalidate_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subinvalidate_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subinvalidate_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.8095.subinvalidate_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.simple'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.simple_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.remap'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.remap_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.flush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.flush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subflush'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subflush_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subflush_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subflush_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subflush_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subflush_overlapping_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.invalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.invalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subinvalidate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subinvalidate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subinvalidate_separate'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subinvalidate_separate_map2'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subinvalidate_overlapping'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.memory.mapping.suballocation.full.1048577.subinvalidate_overlapping_map2'..
+  Pass (Pass)
+
+DONE!
+
+Test run totals:
+  Passed:        102/102 (100.0%)
+  Failed:        0/102 (0.0%)
+  Not supported: 0/102 (0.0%)
+  Warnings:      0/102 (0.0%)
+  Waived:        0/102 (0.0%)

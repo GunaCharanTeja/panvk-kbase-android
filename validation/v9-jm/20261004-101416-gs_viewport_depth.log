@@ -1,0 +1,4 @@
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+PHYS 0 Mali-G57 MC2 vendor=0x13b5 device=0x90930010
+FEATURE geom=0 multiVp=0 depthClamp=1 clipExt=1 depthClipEnable=1
+FAIL required feature missing

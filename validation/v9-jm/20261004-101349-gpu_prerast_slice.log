@@ -1,0 +1,14 @@
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+ICD device=Mali-G57 MC2 id=0x90930010 api=1.3.363
+EXPOSURE geometryShader=0 fillModeNonSolid=0 shaderClipDistance=0 shaderCullDistance=0
+CASE idvs_before RGBA=255 0 0 255 PASS
+CASE direct RGBA=255 0 0 255 PASS
+CASE indexed RGBA=255 0 0 255 PASS
+CASE instanced RGBA=255 0 0 255 PASS
+CASE base_vertex RGBA=255 0 0 255 PASS
+CASE first_instance RGBA=255 0 0 255 PASS
+CASE zero_count RGBA=0 0 255 255 PASS
+CASE repeated_indices RGBA=255 0 0 255 PASS
+CASE primitive_restart RGBA=255 0 0 255 PASS
+CASE gpu_written_indirect RGBA=255 0 0 255 PASS
+FAIL Wait r=-4 line=588

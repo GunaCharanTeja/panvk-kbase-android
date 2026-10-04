@@ -1,9 +1,13 @@
 {
   "profile": "g57-v9-jm",
+  "device": "Lenovo TB336FU",
+  "soc": "MediaTek MT6835",
   "gpu": "Mali-G57",
+  "gpuId": "0x90930010",
   "panArch": 9,
   "frontend": "JM",
   "kernelInterface": "mali_kbase",
-  "reference": "https://github.com/Noysz/panvk-g99-jm",
-  "status": "planned P26 (reference: compute+vertex/fragment+MRT+indirect validated, WSI pending; v9 is a backend port, not a build flag)"
+  "kbaseUapi": "11.0",
+  "reference": "https://github.com/FristOneRR-Admin/FristOneRR-Panvk-Source",
+  "status": "test driver built and probed on Lenovo TB336FU 2026-10-04, not in universal ICD (PanProbe 1/17 pass, only vertex_stores (a SKIP))"
 }

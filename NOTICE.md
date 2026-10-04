@@ -71,6 +71,7 @@ must still carry provenance in the patch header.
 - https://github.com/leegao/mesa-funnymdzz (secondary)
 - https://github.com/LukeValen/panvk-mali-g52 (JM/Bifrost primary)
 - https://github.com/Noysz/panvk-g99-jm (JM/v9 primary)
+- https://github.com/FristOneRR-Admin/FristOneRR-Panvk-Source (FristOneRR-Panvk-Source, commit efd07ba; Mesa-derived, MIT per-file headers kept; used for the JM kbase submission and v9 JM backend in patches/jm-v9)
 
 Each patch under `patches/` must carry `purpose / source-reference /
 tested-GPU / tested-Kbase-UAPI / Mesa-base-range / dependencies /
@@ -106,3 +107,9 @@ Vendored locations:
 
 These files stay LGPL-2.1 and are not relicensed. Full source is in this
 repository so recipients can modify the code and rebuild the launcher APK.
+
+## 8. FristOneRR-Panvk-Source (Mesa-derived, MIT)
+
+`https://github.com/FristOneRR-Admin/FristOneRR-Panvk-Source` at commit `efd07ba`:
+Mesa-derived, MIT per-file headers kept. Used for the JM kbase submission and
+v9 JM backend in `patches/jm-v9`.

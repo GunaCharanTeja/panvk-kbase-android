@@ -1,0 +1,19 @@
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+ICD device=Mali-G57 MC2 textureCompressionBC=0
+FORMAT BC1_RGB_UNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC1_RGB_SRGB optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC1_RGBA_UNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC1_RGBA_SRGB optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC2_UNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC2_SRGB optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC3_UNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC3_SRGB optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC4_UNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC4_SNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC5_UNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC5_SNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC6H_UFLOAT optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC6H_SFLOAT optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC7_UNORM optimal=0x0 linear=0x0 ifp=-11 FAIL
+FORMAT BC7_SRGB optimal=0x0 linear=0x0 ifp=-11 FAIL
+BC_SUMMARY FAIL feature/format (fmt_fail=16)

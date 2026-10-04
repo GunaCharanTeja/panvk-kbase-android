@@ -1,0 +1,32 @@
+Writing test log into api_smoke.qpa
+dEQP Core vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce (0xf6a29701) starting..
+  target implementation = 'Android'
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+
+Test case 'dEQP-VK.api.smoke.create_sampler'..
+  Pass (Creating sampler succeeded)
+
+Test case 'dEQP-VK.api.smoke.create_shader'..
+  Pass (Creating shader module succeeded)
+
+Test case 'dEQP-VK.api.smoke.triangle'..
+  Pass (Rendering succeeded)
+
+Test case 'dEQP-VK.api.smoke.asm_triangle'..
+  Fail (Image comparison failed)
+
+Test case 'dEQP-VK.api.smoke.asm_triangle_no_opname'..
+  Pass (Rendering succeeded)
+
+Test case 'dEQP-VK.api.smoke.unused_resolve_attachment'..
+  Fail (Image comparison failed)
+
+DONE!
+
+Test run totals:
+  Passed:        4/6 (66.7%)
+  Failed:        2/6 (33.3%)
+  Not supported: 0/6 (0.0%)
+  Warnings:      0/6 (0.0%)
+  Waived:        0/6 (0.0%)
