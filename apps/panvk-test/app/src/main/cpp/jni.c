@@ -4,79 +4,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <dlfcn.h>
 #include <signal.h>
 #include <errno.h>
 #include <sys/wait.h>
 #include <sys/types.h>
-#include <unwind.h>
 #include <android/log.h>
-
-static const char *get_signal_name(int sig) {
-    switch (sig) {
-        case SIGSEGV: return "SIGSEGV";
-        case SIGBUS:  return "SIGBUS";
-        case SIGABRT: return "SIGABRT";
-        case SIGILL:  return "SIGILL";
-        case SIGFPE:  return "SIGFPE";
-        case SIGTRAP: return "SIGTRAP";
-        default:      return "UNKNOWN";
-    }
-}
-
-struct BacktraceState {
-    void **current;
-    void **end;
-};
-
-static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context *context, void *arg) {
-    struct BacktraceState *state = (struct BacktraceState *)arg;
-    uintptr_t pc = _Unwind_GetIP(context);
-    if (pc) {
-        if (state->current < state->end) {
-            *state->current++ = (void *)pc;
-        } else {
-            return _URC_END_OF_STACK;
-        }
-    }
-    return _URC_NO_REASON;
-}
-
-static void crash_handler(int sig, siginfo_t *si, void *unused) {
-    (void)unused;
-    char buf[512];
-    const char *sig_name = get_signal_name(sig);
-    void *addr = si ? si->si_addr : NULL;
-    int len = snprintf(buf, sizeof(buf), "CRASH signal=%d (%s) addr=%p\n", sig, sig_name, addr);
-    if (len > 0) {
-        write(STDERR_FILENO, buf, (size_t)len);
-    }
-
-    void *stack[64];
-    struct BacktraceState state = { stack, stack + 64 };
-    _Unwind_Backtrace(unwind_callback, &state);
-    int count = (int)(state.current - stack);
-
-    for (int i = 0; i < count; i++) {
-        Dl_info info;
-        if (dladdr(stack[i], &info) && info.dli_fname) {
-            const char *slash = strrchr(info.dli_fname, '/');
-            const char *lib = slash ? slash + 1 : info.dli_fname;
-            const char *sym = info.dli_sname ? info.dli_sname : "???";
-            uintptr_t offset = info.dli_saddr ? ((uintptr_t)stack[i] - (uintptr_t)info.dli_saddr)
-                                              : ((uintptr_t)stack[i] - (uintptr_t)info.dli_fbase);
-            len = snprintf(buf, sizeof(buf), "  #%02d: %s (%s+0x%lx)\n", i, lib, sym, (unsigned long)offset);
-        } else {
-            len = snprintf(buf, sizeof(buf), "  #%02d: %p\n", i, stack[i]);
-        }
-        if (len > 0) {
-            write(STDERR_FILENO, buf, (size_t)len);
-        }
-    }
-
-    signal(sig, SIG_DFL);
-    raise(sig);
-}
 
 JNIEXPORT jstring JNICALL Java_dev_zenithblue_panvktest_Native_run(
     JNIEnv *env,
@@ -142,10 +74,63 @@ JNIEXPORT jstring JNICALL Java_dev_zenithblue_panvktest_Native_run(
     }
     env_entries[env_count] = NULL;
 
+    /* Build runnerPath: dirname(c_libPath) + "/libpt_runner.so" */
+    char *runner_path = NULL;
+    const char *last_slash = strrchr(c_libPath, '/');
+    if (last_slash) {
+        size_t dir_len = (size_t)(last_slash - c_libPath);
+        const char *runner_name = "/libpt_runner.so";
+        runner_path = (char *)malloc(dir_len + strlen(runner_name) + 1);
+        if (runner_path) {
+            memcpy(runner_path, c_libPath, dir_len);
+            strcpy(runner_path + dir_len, runner_name);
+        }
+    } else {
+        runner_path = strdup("libpt_runner.so");
+    }
+
+    /* Build new_argv: {runnerPath, c_libPath, argv[0..argc-1], NULL} */
+    char **new_argv = (char **)calloc(argc + 3, sizeof(char *));
+    if (new_argv && runner_path) {
+        new_argv[0] = runner_path;
+        new_argv[1] = c_libPath;
+        for (int i = 0; i < argc; i++) {
+            new_argv[2 + i] = argv[i];
+        }
+        new_argv[2 + argc] = NULL;
+    } else {
+        free(runner_path);
+        free(new_argv);
+        free(c_libPath);
+        free(c_logPath);
+        for (int i = 0; i < argc; i++) free(argv[i]);
+        free(argv);
+        for (int i = 0; i < env_count; i++) free(env_entries[i]);
+        free(env_entries);
+        return (*env)->NewStringUTF(env, "exit:-1");
+    }
+
+    /* envp built pre-fork (child must not allocate). Custom entries first:
+     * getenv() returns the first match, so they override inherited ones. */
+    extern char **environ;
+    int inherited = 0;
+    while (environ && environ[inherited]) inherited++;
+    char **envp = (char **)calloc(env_count + inherited + 1, sizeof(char *));
+    int envc = 0;
+    if (envp) {
+        for (int i = 0; i < env_count; i++)
+            if (env_entries[i] && env_entries[i][0] != '\0') envp[envc++] = env_entries[i];
+        for (int i = 0; i < inherited; i++) envp[envc++] = environ[i];
+    }
+    static const char exec_fail[] = "FAIL exec libpt_runner.so\n";
+
     /* 2. Fork */
-    pid_t pid = fork();
+    pid_t pid = envp ? fork() : -1;
     if (pid < 0) {
         /* fork failed */
+        free(envp);
+        free(runner_path);
+        free(new_argv);
         free(c_libPath);
         free(c_logPath);
         for (int i = 0; i < argc; i++) free(argv[i]);
@@ -165,59 +150,16 @@ JNIEXPORT jstring JNICALL Java_dev_zenithblue_panvktest_Native_run(
                 close(fd);
             }
         }
-        setvbuf(stdout, NULL, _IONBF, 0);
-        setvbuf(stderr, NULL, _IONBF, 0);
+        execve(runner_path, new_argv, envp);
 
-        for (int i = 0; i < env_count; i++) {
-            if (env_entries[i] && env_entries[i][0] != '\0') {
-                putenv(env_entries[i]);
-            }
-        }
-
-        /* Set up alternate signal stack */
-        size_t stack_size = SIGSTKSZ < 65536 ? 65536 : SIGSTKSZ;
-        stack_t ss;
-        memset(&ss, 0, sizeof(ss));
-        ss.ss_sp = malloc(stack_size);
-        ss.ss_size = stack_size;
-        ss.ss_flags = 0;
-        if (ss.ss_sp) {
-            sigaltstack(&ss, NULL);
-        }
-
-        struct sigaction sa;
-        memset(&sa, 0, sizeof(sa));
-        sa.sa_sigaction = crash_handler;
-        sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
-        sigemptyset(&sa.sa_mask);
-        sigaction(SIGSEGV, &sa, NULL);
-        sigaction(SIGBUS, &sa, NULL);
-        sigaction(SIGABRT, &sa, NULL);
-        sigaction(SIGILL, &sa, NULL);
-        sigaction(SIGFPE, &sa, NULL);
-        sigaction(SIGTRAP, &sa, NULL);
-
-        void *h = dlopen(c_libPath, RTLD_NOW);
-        if (!h) {
-            fprintf(stderr, "FAIL dlopen %s\n", dlerror());
-            fflush(stderr);
-            _exit(127);
-        }
-
-        typedef int (*main_fn)(int, char **);
-        main_fn pfn_main = (main_fn)dlsym(h, "main");
-        if (!pfn_main) {
-            fprintf(stderr, "FAIL dlsym main: %s\n", dlerror());
-            fflush(stderr);
-            _exit(127);
-        }
-
-        int rc = pfn_main(argc, argv);
-        fflush(NULL);
-        _exit(rc);
+        write(STDERR_FILENO, exec_fail, sizeof(exec_fail) - 1);
+        _exit(127);
     }
 
     /* Parent process */
+    free(envp);
+    free(runner_path);
+    free(new_argv);
     free(c_libPath);
     free(c_logPath);
     for (int i = 0; i < argc; i++) free(argv[i]);

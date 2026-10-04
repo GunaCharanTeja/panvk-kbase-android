@@ -17,6 +17,9 @@ import androidx.compose.foundation.verticalScroll
 import java.io.File
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -442,17 +445,23 @@ fun InfoTabContent(
     onLoadClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var showRunTestsPrompt by remember { mutableStateOf(false) }
 
     val shareJson = {
         if (rawJson != null) {
-            try {
-                val shareDir = File(context.cacheDir, "share").apply { mkdirs() }
-                val jsonFile = File(shareDir, "vulkan-info.json")
-                jsonFile.writeText(rawJson)
-                shareFile(context, jsonFile, "application/json", "Share Vulkan JSON")
-            } catch (e: Exception) {
-                Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            coroutineScope.launch {
+                try {
+                    val jsonFile = withContext(Dispatchers.IO) {
+                        val shareDir = File(context.cacheDir, "share").apply { mkdirs() }
+                        val file = File(shareDir, "vulkan-info.json")
+                        file.writeText(rawJson)
+                        file
+                    }
+                    shareFile(context, jsonFile, "application/json", "Share Vulkan JSON")
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

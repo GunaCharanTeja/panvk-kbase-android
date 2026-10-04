@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
@@ -46,6 +47,8 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.CancellationException
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class RunItem(
     val folder: File,
@@ -290,27 +293,174 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun buildRunZip(runFolder: File): File = withContext(Dispatchers.IO) {
         val shareDir = File(cacheDir, "share").apply { mkdirs() }
-        val zipFile = File(shareDir, "panprobe-${runFolder.name}.zip")
-        val entries = mutableListOf<Pair<String, File>>()
-        entries.add(Pair(runFolder.name, runFolder))
-
-        if (infoRawJsonState.value != null) {
-            val vkFile = File(shareDir, "vulkan-info.json").apply { writeText(infoRawJsonState.value!!) }
-            entries.add(Pair("vulkan-info.json", vkFile))
+        val stageDir = File(shareDir, "stage-${runFolder.name}-${System.nanoTime()}").apply {
+            deleteRecursively()
+            mkdirs()
         }
+        val zipFile = File(shareDir, "panprobe-${runFolder.name}.zip")
 
-        val logcatFile = File(shareDir, "logcat.txt")
         try {
-            val process = Runtime.getRuntime().exec(
-                arrayOf("logcat", "-d", "-v", "threadtime", "--pid=" + android.os.Process.myPid())
-            )
-            val logcatText = process.inputStream.bufferedReader().use { it.readText() }
-            logcatFile.writeText(logcatText)
-            entries.add(Pair("logcat.txt", logcatFile))
-        } catch (_: Exception) {}
+            // 1. <run>/ folder
+            val stagedRun = File(stageDir, runFolder.name)
+            runFolder.copyRecursively(stagedRun, overwrite = true)
 
-        zipFiles(zipFile, entries)
-        zipFile
+            // 2. vulkan-info.json: the run's device_info.json content (or infoRawJsonState if run has none)
+            val runDevInfo = File(runFolder, "device_info.json")
+            val vkJsonStr = when {
+                runDevInfo.exists() -> runDevInfo.readText()
+                infoRawJsonState.value != null -> infoRawJsonState.value
+                else -> null
+            }
+            if (vkJsonStr != null) {
+                File(stageDir, "vulkan-info.json").writeText(vkJsonStr)
+            }
+
+            // 3. logcat.txt (app pid, as now)
+            val logcatFile = File(stageDir, "logcat.txt")
+            try {
+                val process = Runtime.getRuntime().exec(
+                    arrayOf("logcat", "-d", "-v", "threadtime", "--pid=" + android.os.Process.myPid())
+                )
+                val logcatText = process.inputStream.bufferedReader().use { it.readText() }
+                logcatFile.writeText(logcatText)
+            } catch (_: Exception) {}
+
+            // 4. system/ extras
+            val systemDir = File(stageDir, "system").apply { mkdirs() }
+
+            var gpuinfoRaw: String? = null
+            try {
+                val f = File("/sys/class/misc/mali0/device/gpuinfo")
+                if (f.canRead()) {
+                    val text = f.readText().trim()
+                    if (text.isNotEmpty()) {
+                        File(systemDir, "gpuinfo.txt").writeText(text)
+                        gpuinfoRaw = text
+                    }
+                }
+            } catch (_: Exception) {}
+
+            var procVersionText: String? = null
+            try {
+                val f = File("/proc/version")
+                if (f.canRead()) {
+                    val text = f.readText().trim()
+                    if (text.isNotEmpty()) {
+                        File(systemDir, "proc_version.txt").writeText(text)
+                        procVersionText = text
+                    }
+                }
+            } catch (_: Exception) {}
+
+            try {
+                val proc = Runtime.getRuntime().exec(arrayOf("getprop"))
+                val lines = proc.inputStream.bufferedReader().use { it.readLines() }
+                val keys = listOf("ro.product.", "ro.board.", "ro.soc.", "ro.hardware", "ro.build.version.", "ro.build.fingerprint")
+                val filtered = lines.filter { line -> keys.any { line.contains(it) } }
+                File(systemDir, "props.txt").writeText(filtered.joinToString("\n"))
+            } catch (_: Exception) {}
+
+            // 5. Driver resolution: read summary.json driverType if present; fall back to current driverTypeState
+            val summaryFile = File(runFolder, "summary.json")
+            val summaryDriverTypeLabel = if (summaryFile.exists()) {
+                try { JSONObject(summaryFile.readText()).optString("driverType").takeIf { it.isNotEmpty() } } catch (_: Exception) { null }
+            } else null
+
+            val resolvedDriverType = DriverType.entries.firstOrNull { it.label == summaryDriverTypeLabel }
+                ?: driverTypeState.value
+            val driverPath = getDriverPath(resolvedDriverType)
+            val driverFile = File(driverPath)
+            val driverReadable = driverFile.exists() && driverFile.canRead()
+            val driverSoSha256 = if (driverReadable) sha256(driverFile) else null
+            val driverBuildId = if (driverReadable) extractGnuBuildId(driverFile) else null
+
+            // 6. Parse vulkan JSON for properties
+            val vkJsonObj = try { vkJsonStr?.let { JSONObject(it) } } catch (_: Exception) { null }
+            val firstDevProps = vkJsonObj?.optJSONArray("devices")?.optJSONObject(0)?.optJSONObject("properties")
+            fun optVal(key: String): Any {
+                val v = firstDevProps?.opt(key)
+                return if (v == null || v == JSONObject.NULL || v == "null") JSONObject.NULL else v
+            }
+
+            // 7. Files array of all staged files (excluding manifest.json)
+            val filesArray = JSONArray()
+            val stagedFiles = stageDir.walkTopDown().filter { it.isFile }.sortedBy { it.relativeTo(stageDir).path }
+            for (f in stagedFiles) {
+                val relPath = f.relativeTo(stageDir).path.replace('\\', '/')
+                filesArray.put(JSONObject().apply {
+                    put("path", relPath)
+                    put("size", f.length())
+                    put("sha256", sha256(f))
+                })
+            }
+
+            // 8. manifest.json
+            val pInfo = try { packageManager.getPackageInfo(packageName, 0) } catch (_: Exception) { null }
+            val manifestObj = JSONObject().apply {
+                put("timestamp", SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()))
+                put("app", JSONObject().apply {
+                    put("versionName", pInfo?.versionName ?: getAppVersion())
+                    put("versionCode", pInfo?.longVersionCode ?: 0L)
+                })
+                put("driver", JSONObject().apply {
+                    put("type", resolvedDriverType.label)
+                    put("bundled", resolvedDriverType == DriverType.BUNDLED)
+                    put("path", driverPath)
+                    put("soSha256", driverSoSha256 ?: JSONObject.NULL)
+                    put("buildId", driverBuildId ?: JSONObject.NULL)
+                    put("driverName", optVal("driverName"))
+                    put("driverInfo", optVal("driverInfo"))
+                    put("driverVersion", optVal("driverVersion"))
+                })
+                put("device", JSONObject().apply {
+                    put("manufacturer", android.os.Build.MANUFACTURER)
+                    put("model", android.os.Build.MODEL)
+                    put("board", android.os.Build.BOARD)
+                    put("hardware", android.os.Build.HARDWARE)
+                    if (android.os.Build.VERSION.SDK_INT >= 31) {
+                        put("socManufacturer", android.os.Build.SOC_MANUFACTURER)
+                        put("socModel", android.os.Build.SOC_MODEL)
+                    } else {
+                        put("socManufacturer", JSONObject.NULL)
+                        put("socModel", JSONObject.NULL)
+                    }
+                })
+                put("gpu", JSONObject().apply {
+                    put("deviceName", optVal("deviceName"))
+                    put("deviceID", optVal("deviceID"))
+                    put("vendorID", optVal("vendorID"))
+                    put("apiVersion", optVal("apiVersion"))
+                    put("gpuinfo", gpuinfoRaw ?: JSONObject.NULL)
+                    // gpuinfo sysfs is usually SELinux-blocked; fall back to the Vulkan deviceID,
+                    // which is the Mali gpu_id on ARM (vendor 0x13B5). Arch major = gpu_id[31:28].
+                    val vkId = (optVal("deviceID") as? Number)?.toLong()
+                    val isArm = (optVal("vendorID") as? Number)?.toLong() == 0x13B5L
+                    val gpuId = (if (gpuinfoRaw != null) Regex("""0x[0-9a-fA-F]+""").find(gpuinfoRaw)?.value else null)
+                        ?: if (isArm && vkId != null) "0x%08x".format(vkId) else null
+                    put("gpuId", gpuId ?: JSONObject.NULL)
+                    val archMajor = gpuId?.removePrefix("0x")?.toLongOrNull(16)?.let { (it ushr 28) and 0xF }
+                    put("arch", archMajor?.let { "v$it" } ?: JSONObject.NULL)
+                    put("gpuModel", (if (gpuinfoRaw != null) Regex("""Mali-[A-Za-z0-9]+""").find(gpuinfoRaw)?.value else null) ?: JSONObject.NULL)
+                })
+                put("android", JSONObject().apply {
+                    put("release", android.os.Build.VERSION.RELEASE)
+                    put("sdk", android.os.Build.VERSION.SDK_INT)
+                    put("kernel", procVersionText ?: System.getProperty("os.version") ?: JSONObject.NULL)
+                })
+                put("files", filesArray)
+            }
+            File(stageDir, "manifest.json").writeText(manifestObj.toString(2))
+
+            // 9. Zip staged files
+            zipFiles(zipFile, listOf(Pair("", stageDir)))
+
+            // 10. Self-check
+            verifyZip(zipFile)
+
+            zipFile
+        } finally {
+            stageDir.deleteRecursively()
+        }
     }
 
     private fun getDriverPath(type: DriverType): String {
@@ -891,9 +1041,20 @@ class MainActivity : ComponentActivity() {
 
         var cloudConfirmRun by remember { mutableStateOf<RunItem?>(null) }
         var isUploading by remember { mutableStateOf(false) }
-        var uploadProgress by remember { mutableFloatStateOf(0f) }
+        var uploadBytesSent by remember { mutableLongStateOf(0L) }
+        var uploadTotalBytes by remember { mutableLongStateOf(0L) }
+        val currentCancelFlag = remember { mutableStateOf(AtomicBoolean(false)) }
         var uploadErrorMsg by remember { mutableStateOf<String?>(null) }
-        var uploadSuccessUrl by remember { mutableStateOf<String?>(null) }
+        var uploadSuccessResult by remember { mutableStateOf<UploadResult?>(null) }
+        var uploadSha256 by remember { mutableStateOf<String?>(null) }
+        var verifyStatus by remember { mutableStateOf<String?>(null) }
+        var isRetryingVerify by remember { mutableStateOf(false) }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                currentCancelFlag.value.set(true)
+            }
+        }
 
         if (cloudConfirmRun != null) {
             AlertDialog(
@@ -908,19 +1069,50 @@ class MainActivity : ComponentActivity() {
                             val targetRun = cloudConfirmRun
                             cloudConfirmRun = null
                             if (targetRun != null) {
+                                val flag = AtomicBoolean(false)
+                                currentCancelFlag.value.set(true)
+                                currentCancelFlag.value = flag
                                 coroutineScope.launch {
+                                    if (flag.get()) return@launch
                                     isUploading = true
-                                    uploadProgress = 0f
+                                    uploadBytesSent = 0L
+                                    uploadTotalBytes = 0L
                                     try {
                                         val zip = buildRunZip(targetRun.folder)
-                                        val url = withContext(Dispatchers.IO) {
-                                            uploadToCloud(zip, getAppVersion()) { prog ->
-                                                uploadProgress = prog
+                                        if (flag.get()) return@launch
+                                        val localSha = withContext(Dispatchers.IO) { sha256(zip) }
+                                        if (flag.get()) return@launch
+                                        var lastPercent = -1
+                                        val result = withContext(Dispatchers.IO) {
+                                            uploadToCloud(zip, getAppVersion(), flag) { sent, total ->
+                                                val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
+                                                if (pct != lastPercent || sent == total) {
+                                                    lastPercent = pct
+                                                    coroutineScope.launch {
+                                                        if (flag.get()) return@launch
+                                                        uploadBytesSent = sent
+                                                        uploadTotalBytes = total
+                                                    }
+                                                }
                                             }
                                         }
+                                        if (flag.get()) return@launch
+                                        val vStatus = withContext(Dispatchers.IO) {
+                                            verifyUpload(result.directUrl, localSha, getAppVersion(), flag)
+                                        }
+                                        if (flag.get()) return@launch
                                         isUploading = false
-                                        uploadSuccessUrl = url
+                                        uploadSuccessResult = result
+                                        uploadSha256 = localSha
+                                        verifyStatus = vStatus
+                                    } catch (_: CancellationException) {
+                                        if (flag.get()) return@launch
+                                        if (isUploading) {
+                                            isUploading = false
+                                            Toast.makeText(context, "Upload cancelled", Toast.LENGTH_SHORT).show()
+                                        }
                                     } catch (e: Exception) {
+                                        if (flag.get()) return@launch
                                         isUploading = false
                                         uploadErrorMsg = e.message ?: "Upload failed"
                                     }
@@ -940,6 +1132,12 @@ class MainActivity : ComponentActivity() {
         }
 
         if (isUploading) {
+            val progress = if (uploadTotalBytes > 0) (uploadBytesSent.toFloat() / uploadTotalBytes.toFloat()).coerceIn(0f, 1f) else 0f
+            val percent = (progress * 100).toInt()
+            val sentMb = uploadBytesSent / (1024.0 * 1024.0)
+            val totalMb = uploadTotalBytes / (1024.0 * 1024.0)
+            val progressText = String.format(Locale.US, "Uploading %.2f / %.2f MB (%d%%)", sentMb, totalMb, percent)
+
             AlertDialog(
                 onDismissRequest = { /* non-dismissable */ },
                 properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
@@ -951,17 +1149,27 @@ class MainActivity : ComponentActivity() {
                     ) {
                         @Suppress("DEPRECATION")
                         LinearProgressIndicator(
-                            progress = uploadProgress,
+                            progress = progress,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(
-                            text = "${(uploadProgress * 100).toInt()}%",
+                            text = progressText,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.align(Alignment.End)
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
                         )
                     }
                 },
-                confirmButton = {}
+                confirmButton = {
+                    OutlinedButton(
+                        onClick = {
+                            currentCancelFlag.value.set(true)
+                            isUploading = false
+                            Toast.makeText(context, "Upload cancelled", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("Cancel")
+                    }
+                }
             )
         }
 
@@ -982,18 +1190,62 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        if (uploadSuccessUrl != null) {
-            val url = uploadSuccessUrl!!
+        if (uploadSuccessResult != null) {
+            val res = uploadSuccessResult!!
+            val hex = uploadSha256 ?: ""
+            val status = verifyStatus ?: ""
+            val shareText = "PanProbe logs: ${res.url}\nSHA-256: $hex"
+
             AlertDialog(
-                onDismissRequest = { uploadSuccessUrl = null },
+                onDismissRequest = { uploadSuccessResult = null },
                 title = { Text("Upload done") },
                 text = {
-                    SelectionContainer {
-                        Text(
-                            text = url,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SelectionContainer {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = res.url,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "SHA-256: $hex",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = status,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = when {
+                                        status.startsWith("Verified") -> Color(0xFF2E7D32)
+                                        status.startsWith("Verify FAILED") -> MaterialTheme.colorScheme.error
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
+                        if (status.startsWith("Verify FAILED")) {
+                            OutlinedButton(
+                                enabled = !isRetryingVerify,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isRetryingVerify = true
+                                        verifyStatus = "Verifying..."
+                                        val newStatus = withContext(Dispatchers.IO) {
+                                            verifyUpload(res.directUrl, hex, getAppVersion())
+                                        }
+                                        verifyStatus = newStatus
+                                        isRetryingVerify = false
+                                    }
+                                }
+                            ) {
+                                Text(if (isRetryingVerify) "Retrying..." else "Retry")
+                            }
+                        }
                     }
                 },
                 confirmButton = {
@@ -1008,7 +1260,7 @@ class MainActivity : ComponentActivity() {
                             Button(
                                 onClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clip = ClipData.newPlainText("PanProbe Upload Link", url)
+                                    val clip = ClipData.newPlainText("PanProbe Upload Link", shareText)
                                     clipboard.setPrimaryClip(clip)
                                     Toast.makeText(context, "Link copied to clipboard", Toast.LENGTH_SHORT).show()
                                 },
@@ -1020,7 +1272,7 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, url)
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
                                     }
                                     context.startActivity(Intent.createChooser(sendIntent, "Share Link"))
                                 },
@@ -1039,7 +1291,7 @@ class MainActivity : ComponentActivity() {
                             Text("Open Telegram group")
                         }
                         OutlinedButton(
-                            onClick = { uploadSuccessUrl = null },
+                            onClick = { uploadSuccessResult = null },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Close")
@@ -1186,6 +1438,12 @@ class MainActivity : ComponentActivity() {
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Button(
+                                                onClick = { cloudConfirmRun = run },
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                            ) {
+                                                Text("Send to cloud", maxLines = 1)
+                                            }
+                                            OutlinedButton(
                                                 onClick = {
                                                     coroutineScope.launch {
                                                         try {
@@ -1199,12 +1457,6 @@ class MainActivity : ComponentActivity() {
                                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                             ) {
                                                 Text("Zip & Share", maxLines = 1)
-                                            }
-                                            OutlinedButton(
-                                                onClick = { cloudConfirmRun = run },
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                                            ) {
-                                                Text("Send to cloud", maxLines = 1)
                                             }
                                         }
                                     }

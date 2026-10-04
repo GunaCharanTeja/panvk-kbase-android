@@ -64,3 +64,13 @@ target_include_directories(panvktest PRIVATE
     "${VULKAN_INCLUDE_DIR}"
     "${REPO_ROOT}/tests/dxvk/vulkan/clip-cull")
 target_link_libraries(panvktest PRIVATE android log dl m)
+
+# Executable runner packaged as libpt_runner.so
+add_executable(pt_runner runner.c)
+target_compile_options(pt_runner PRIVATE -w -O2 -fvisibility=default)
+set_target_properties(pt_runner PROPERTIES
+    OUTPUT_NAME "libpt_runner.so"
+    SUFFIX ""
+    POSITION_INDEPENDENT_CODE TRUE
+)
+target_link_libraries(pt_runner PRIVATE dl log)
