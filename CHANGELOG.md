@@ -1,5 +1,35 @@
 # Changelog
 
+## g615-v11-csf-v0.1.0-beta.12 (prerelease)
+
+Mesa `5a07217f034b` + the series up to 098
+(`patchSeriesId sha256:0dda167ab137168856d453724821eebc044213b57832c4cbc393cb9f2bf4e868`).
+Tested only on Poco X6 Pro, Mali-G615 MC6 (v11), mali_kbase CSF UAPI 1.21. Android minApi 35.
+
+### Added
+- One universal Android ICD for v10, v11 and v12. The per-arch backends
+  (`libpanvk_v10`, `v11`, `v12`) were already linked into the `.so`, and the kbase
+  device path already admitted v10-v13. **v10 and v12 are built but untested**
+  (no hardware). GPUs recognised by the Mesa model table: G610, G310 (v10), G615,
+  G715 (v11), G720 variant 4 (v12). G710, G510, G620 and Immortalis-G720 fail with
+  `Unknown gpu_id` until a tester reports their gpu_id and variant.
+
+### Fixed
+- kbase: the CS work-register count reported by the firmware is used only when it
+  is 96 or 128; anything else falls back to 96 with a warning. A Pixel 7 (G710)
+  reports a bad value, and 256 wrapped to 0 in a `uint8_t`. No change on G615
+  (no warning logged).
+
+### Known issues
+- panvk-test `gs_viewport_depth` case A fails (same on the beta.11 binary).
+- Old kbase (CSF uAPI < ~1.13) may lack `GET_CPU_GPU_TIMEINFO`: timestamp queries read 0.
+- 4 KiB pages assumed; synchronous queue submission (low GPU clocks in NFS:MW).
+
+### Validation (G615)
+- CTS `memory.mapping.*`, `memory.map_placed.*`, `synchronization{,2}.basic.*`:
+  4520 pass / 0 fail / 13 NotSupported, same as beta.11.
+- PanPlay i686 D3D9 cube renders; MiSide reaches the main menu (~55-60 fps).
+
 ## g615-v11-csf-v0.1.0-beta.11 (prerelease)
 
 Mesa `5a07217f034b` + csf-v11 patches up to 098

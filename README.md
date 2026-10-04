@@ -54,6 +54,7 @@ upstream driver status are in
 
 Status key:
 - ✅ **Supported**: validated on a device.
+- 🔨 **Built, untested**: compiled into the universal ICD and recognised by the Mesa model table, but never run on that GPU.
 - 📋 **TODO**: a profile exists in `profiles/` and the port is planned.
 - ❔ **Possible, not tried**: Mesa has a backend for this arch, but no profile or device test exists here.
 - ❌ **Not possible**: no PanVK (Vulkan) backend exists for the arch.
@@ -69,9 +70,9 @@ One row per Mesa arch. Each GPU carries its own status mark.
 | v6 | Bifrost 1st/2nd gen | JM | ❌ Mali-G71, ❔ G72 | Mesa marks G71 unsupported; G72 experimental upstream |
 | v7 | Bifrost 1st to 3rd gen | JM | 📋 Mali-G52, ❔ G31, ❔ G51, ❔ G76 | Profile `g52-v7-jm` (P25); needs the JM kbase path |
 | v9 | Valhall 1st/2nd gen | JM | 📋 Mali-G57, ❔ G77, ❔ G68, ❔ G78, ❔ G78AE | Profile `g57-v9-jm` (P26); needs a v9 backend port and the JM kbase path |
-| v10 | Valhall 3rd gen | CSF | 📋 Mali-G610, ❔ G310, ❔ G510, ❔ G710 | Profile `g610-v10-csf` (P24) |
+| v10 | Valhall 3rd gen | CSF | 🔨 Mali-G610, 🔨 G310, ❔ G510, ❔ G710 | **Built, untested** (beta.12 universal ICD). G610/G310 are in the Mesa model table; G510/G710 need a tester's gpu_id |
 | **v11** | **Valhall 4th gen** | **CSF** | ✅ **Mali-G615**, ❔ G715, ❔ Immortalis-G715 | G615 validated on Poco X6 Pro (Dimensity 8300). G715 and Immortalis-G715 share the same arch but are untested |
-| v12 | 5th Gen | CSF | 📋 Mali-G720, ❔ G620, ❔ Immortalis-G720 | Profile `g720-v12-csf` (P24) |
+| v12 | 5th Gen | CSF | 🔨 Mali-G720, ❔ G620, ❔ Immortalis-G720 | **Built, untested** (beta.12 universal ICD). G720 (variant 4) is in the Mesa model table; G620/Immortalis-G720 need a tester's gpu_id |
 | v13 | 5th Gen | CSF | ❔ Mali-G625, ❔ G725, ❔ Immortalis-G925 | No profile yet |
 | v14 | 5th Gen, G1 series | CSF | ❔ Mali G1-Pro, ❔ G1-Premium, ❔ G1-Ultra | Experimental upstream; no profile yet |
 | v15 (unconfirmed) | G2 series | CSF | ❌ Mali G2-Ultra NX, ❌ G2-Premium NX (rumoured), ❌ G2-Pro NX (rumoured) | Not in Mesa yet |
@@ -119,13 +120,14 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-`g615-v11-csf-v0.1.0-beta.11` is the latest published tag (prerelease, Mesa
-`5a07217f` plus the committed csf-v11 series up to 098). It fixes the
-`VK_ERROR_DEVICE_LOST` on tiler heap OOM (098) and the memory blow-up from
-per-pool TLS and eagerly committed prerast arenas (097). Need for Speed Most
-Wanted stays at about 2.0 GB RSS and runs races at 40-44 fps with FEX Extreme.
-The bundled driver in PanPlay 1.0.3 is beta.11. See the
-[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.11).
+`g615-v11-csf-v0.1.0-beta.12` is the latest published tag (prerelease, Mesa
+`5a07217f` plus the committed series up to 098). It is one universal Android ICD
+for v10, v11 and v12. **Only v11 (G615) is tested; v10 and v12 are built but
+untested, and testers are needed** (see the release notes for the command that
+reports your GPU ID). See the
+[release page](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.12).
+beta.11 fixed the `VK_ERROR_DEVICE_LOST` on tiler heap OOM (098) and the memory
+blow-up from per-pool TLS and eagerly committed prerast arenas (097).
 beta.10 (up to 096) made 32-bit
 WoW64 games fast and correct. Placed maps now map the BO's dma-buf again at
 the requested address (091) instead of a shadow copy. Need for Speed Most

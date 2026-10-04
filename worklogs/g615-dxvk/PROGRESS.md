@@ -65,7 +65,7 @@ Checks:
 - 089 (depth clamp/clip per GS-selected viewport) is in the series (`patches/csf-v11/089-*.patch`) and verified on the G615 (`worklogs/driver-remaining/089-device-verification.md`). No CTS run.
 - Review files: `tmp/review-085-088/`.
 
-Released: beta.6 (up to 077), beta.7 (up to 082), beta.8 (up to 084), beta.9 (up to 092, tag `g615-v11-csf-v0.1.0-beta.9`), beta.10 (up to 096 including the new 091 dma-heap placed maps, tag `g615-v11-csf-v0.1.0-beta.10`), beta.11 (up to 098: device-wide TLS and grow-on-fault prerast arenas (097), only VERTEX_TILER_STARTED heap ops on kbase (098); fixes NFS:MW memory blow-up and DEVICE_LOST; tag `g615-v11-csf-v0.1.0-beta.11`, bundled in PanPlay 1.0.3). See `CHANGELOG.md`.
+Released: beta.6 (up to 077), beta.7 (up to 082), beta.8 (up to 084), beta.9 (up to 092, tag `g615-v11-csf-v0.1.0-beta.9`), beta.10 (up to 096 including the new 091 dma-heap placed maps, tag `g615-v11-csf-v0.1.0-beta.10`), beta.11 (up to 098: device-wide TLS and grow-on-fault prerast arenas (097), only VERTEX_TILER_STARTED heap ops on kbase (098); fixes NFS:MW memory blow-up and DEVICE_LOST; tag `g615-v11-csf-v0.1.0-beta.11`, bundled in PanPlay 1.0.3), beta.12 (universal v10/v11/v12 Android ICD, v10/v12 built but untested; kbase CS register-count fallback; tag `g615-v11-csf-v0.1.0-beta.12`). See `CHANGELOG.md`.
 Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELLATION.md`, `tmp/HANDOFF-devicelost.md`.
 
 ## What's left for DXVK (driver)
@@ -84,6 +84,8 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
 11. **Asynchronous kbase queue submission.** STATUS: Not started (deferred by the user 2026-10-03). Problem: `panvk_vX_gpu_queue.c` submits synchronously; each `vkQueueSubmit` blocks until the GPU finishes, so CPU and GPU never overlap. Effect: the MTK GED DVFS governor keeps the GPU at 265 MHz (lowest OPP), GPU busy 0-11%. NFS MW evidence: dxvk-submit sits in `do_sys_poll`; 30-50 fps with FEX Extreme while the GPU idles. Fix: return from submit after the kick; signal fences/timelines from CS sync objects or a completion thread. Keep sync_file export (075) and the dma-heap placed maps (091) correct. Gate: CTS synchronization subsets, plus NFS FPS and GPU busy before/after.
 
 ## Open problems
+
+- **MAJOR: missing Mesa model entries for v10/v12 GPUs.** Find gpu_id/variant for G710, G510, G620, Immortalis-G720 (and other v10/v12 GPUs absent from the Mesa panfrost model table, `src/panfrost/model/pan_model.c`). Today only G610 (variant 0), G310 v1-v5 and G720 (variant 4) match; the rest fail device creation with `Unknown gpu_id (...) or variant (...)`. Needs tester reports (dmesg/kbase gpu_id or `/sys/class/misc/mali0/device/gpuinfo`, plus the driver's `Unknown gpu_id` log line, which carries the variant). See `worklogs/driver-remaining/beta12-draft-notes.md`.
 
 - 2 intermittent DeviceLost in `transform_feedback query_copy_*`: not seen in the 096 CTS run (36144-case list, 0 DeviceLost); keep watching.
 - kbase/firmware: a long compute job while the vertex/tiler CSG waits on another CSG can get that group killed (096 root cause). 096 shortens the planner; other long single-workgroup jobs in that position could still hit it. Likely also behind the 2048-instance chunk cap.

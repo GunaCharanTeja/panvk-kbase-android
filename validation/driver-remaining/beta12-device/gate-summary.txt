@@ -1,0 +1,7 @@
+beta.12 universal build, v11 regression gate on Poco X6 Pro (Mali-G615 MC6), 2026-10-03/04
+Android ICD sha256 e4b1b76352610ac49c9527a2e45a166a9bbf9222a01ea634204d56a8b4fd4dd9 (Mesa 5a07217f + series up to 098 + kbase CS reg-count fallback)
+CTS (chroot ICD from the same tree, sha256 75fd1c83...): memory.mapping.*, memory.map_placed.*, synchronization{,2}.basic.* = 4520 pass / 0 fail / 13 NotSupported (4533)
+panvk-test autorun (imported driver): 16/17 pass; gs_viewport_depth case A fails, same on the beta.11 binary
+PanPlay i686 D3D9 cube: renders with DXVK_HUD full (cube-i686-d3d9.png)
+PanPlay MiSide x86_64 D3D11: language menu at 59.7 fps, continues loading (miside.png)
+logcat/CTS console: no "implausible CS work register count" on G615 (reported value is 96 or 128, path not taken)
