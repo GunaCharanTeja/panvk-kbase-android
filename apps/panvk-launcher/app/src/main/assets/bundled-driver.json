@@ -1,19 +1,19 @@
 {
-  "id": "panvk-kbase-g615-0.1.0-beta.12",
-  "name": "PanVK Kbase G615 — beta.12",
-  "packageVersion": "0.1.0-beta.12",
-  "displayVersion": "beta.12 (Mesa 5a07217f, ≤098, universal v10/v11/v12; v10/v12 untested)",
+  "id": "panvk-kbase-g615-0.1.0-beta.13",
+  "name": "PanVK Kbase G615 — beta.13",
+  "packageVersion": "0.1.0-beta.13",
+  "displayVersion": "beta.13 (Mesa 5a07217f, ≤100, universal v10-v14; only v11 tested)",
   "driverVersion": "Mesa 26.3.0-devel",
   "author": "panvk-kbase-android",
-  "description": "Experimental PanVK driver for Mali CSF GPUs on mali_kbase. Tested on Mali-G615 (v11); v10 and v12 are built but untested. Bundled in this APK.",
+  "description": "Experimental PanVK driver for Mali CSF GPUs on mali_kbase. Tested on Mali-G615 (v11); v10, v12, v13 and v14 are built but untested. Bundled in this APK.",
   "profile": "g615-v11-csf",
   "sourceCommit": "5a07217f034b3e50d8c7c7794f97a2df1742613b",
-  "patchSeriesId": "sha256:0dda167ab137168856d453724821eebc044213b57832c4cbc393cb9f2bf4e868",
+  "patchSeriesId": "sha256:b85576a0bebec3b56c9de083a6afd2ff8c26feafece2a844079b7bca254e3d9c",
   "release": {
     "repo": "zenithblue-oss/panvk-kbase-android",
-    "tag": "g615-v11-csf-v0.1.0-beta.12",
+    "tag": "g615-v11-csf-v0.1.0-beta.13",
     "asset": "libvulkan_panfrost-android-aarch64.so",
-    "sha256": "e4b1b76352610ac49c9527a2e45a166a9bbf9222a01ea634204d56a8b4fd4dd9",
-    "size": 30773712
+    "sha256": "215939d2b80c052805346609b4344bf42024851a29911cda0a5032175bbeec57",
+    "size": 30773880
   }
 }
