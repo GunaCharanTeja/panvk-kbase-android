@@ -441,7 +441,7 @@ fun InfoTabContent(
     parsedInfo: ParsedVulkanInfo?,
     rawJson: String?,
     rawErrorText: String?,
-    hasRuns: Boolean = false,
+    hasRuns: () -> Boolean = { false },
     onRunTests: () -> Unit = {},
     onLoadClick: () -> Unit
 ) {
@@ -526,7 +526,7 @@ fun InfoTabContent(
 
                 OutlinedButton(
                     onClick = {
-                        if (hasRuns) {
+                        if (hasRuns()) {
                             shareJson()
                         } else {
                             showRunTestsPrompt = true

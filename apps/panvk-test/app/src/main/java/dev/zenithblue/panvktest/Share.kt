@@ -195,7 +195,7 @@ fun <T> HttpURLConnection.cancellable(cancelled: AtomicBoolean, block: (HttpURLC
                 break
             }
             try {
-                Thread.sleep(200)
+                Thread.sleep(100)
             } catch (_: InterruptedException) {
                 break
             }
@@ -407,6 +407,7 @@ fun uploadToCloud(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        if (cancelled.get()) throw CancellationException("Upload cancelled")
         catboxError = e.message ?: e.toString()
     }
 
@@ -434,6 +435,7 @@ fun uploadToCloud(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        if (cancelled.get()) throw CancellationException("Upload cancelled")
         gofileError = e.message ?: e.toString()
     }
 
@@ -457,7 +459,10 @@ fun verifyUpload(
         }
         conn.cancellable(cancelled) { c ->
             val code = c.responseCode
-            if (cancelled.get()) throw CancellationException("Upload cancelled")
+            if (cancelled.get()) {
+                c.disconnect()
+                throw CancellationException("Upload cancelled")
+            }
             if (code !in 200..299) {
                 return@cancellable "Verify FAILED: HTTP $code"
             }
@@ -466,11 +471,17 @@ fun verifyUpload(
             var read: Int
             c.inputStream.use { stream ->
                 while (stream.read(buffer).also { read = it } != -1) {
-                    if (cancelled.get()) throw CancellationException("Upload cancelled")
+                    if (cancelled.get()) {
+                        c.disconnect()
+                        throw CancellationException("Upload cancelled")
+                    }
                     md.update(buffer, 0, read)
                 }
             }
-            if (cancelled.get()) throw CancellationException("Upload cancelled")
+            if (cancelled.get()) {
+                c.disconnect()
+                throw CancellationException("Upload cancelled")
+            }
             val downloadSha = md.digest().joinToString("") { "%02x".format(it) }
             if (downloadSha.equals(expectedSha256, ignoreCase = true)) {
                 "Verified ✓"
@@ -481,6 +492,7 @@ fun verifyUpload(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        if (cancelled.get()) throw CancellationException("Upload cancelled")
         "Verify FAILED: ${e.message ?: "download error"}"
     }
 }

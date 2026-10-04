@@ -135,18 +135,57 @@ class MainActivity : ComponentActivity() {
     private var selectedLogTextState = mutableStateOf<String?>(null)
     private var logFilesListState = mutableStateOf<List<File>>(emptyList())
     private var runsListState = mutableStateOf<List<RunItem>>(emptyList())
+    private val logsSeq = AtomicInteger(0)
+    private val runsSeq = AtomicInteger(0)
     private var uploadEndpoint: String = PANVK_UPLOAD_ENDPOINT
+
+    private fun saveDriverSelection(type: DriverType, importedName: String? = null) {
+        val sp = getSharedPreferences("panprobe", Context.MODE_PRIVATE)
+        val editor = sp.edit().putString("driver", type.name)
+        if (importedName != null) {
+            editor.putString("importedName", importedName)
+        }
+        editor.apply()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val sp = getSharedPreferences("panprobe", Context.MODE_PRIVATE)
+        val savedImportedName = sp.getString("importedName", null)
+        if (savedImportedName != null) {
+            importedFileNameState.value = savedImportedName
+        }
+        val savedDriver = sp.getString("driver", null)
+        if (savedDriver != null) {
+            val loadedType = when (savedDriver.uppercase(Locale.US)) {
+                "BUNDLED" -> DriverType.BUNDLED
+                "SYSTEM" -> DriverType.SYSTEM
+                "IMPORTED" -> {
+                    val importedSo = File(filesDir, "imported/libimported.so")
+                    if (importedSo.exists()) DriverType.IMPORTED else DriverType.BUNDLED
+                }
+                else -> DriverType.BUNDLED
+            }
+            driverTypeState.value = loadedType
+        }
 
         // Read intent extras for headless testing
         val driverExtra = intent.getStringExtra("driver")
         if (driverExtra != null) {
             when (driverExtra.lowercase(Locale.US)) {
-                "bundled" -> driverTypeState.value = DriverType.BUNDLED
-                "system" -> driverTypeState.value = DriverType.SYSTEM
-                "imported" -> driverTypeState.value = DriverType.IMPORTED
+                "bundled" -> {
+                    driverTypeState.value = DriverType.BUNDLED
+                    saveDriverSelection(DriverType.BUNDLED)
+                }
+                "system" -> {
+                    driverTypeState.value = DriverType.SYSTEM
+                    saveDriverSelection(DriverType.SYSTEM)
+                }
+                "imported" -> {
+                    driverTypeState.value = DriverType.IMPORTED
+                    saveDriverSelection(DriverType.IMPORTED)
+                }
             }
         }
 
@@ -186,37 +225,53 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshLogsList() {
-        val logsDir = File(filesDir, "logs")
-        if (logsDir.exists()) {
-            logFilesListState.value = (logsDir.listFiles() ?: emptyArray())
-                .filter { it.isFile }
-                .sortedByDescending { it.lastModified() }
-        } else {
-            logFilesListState.value = emptyList()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val seq = logsSeq.incrementAndGet()
+            val logsDir = File(filesDir, "logs")
+            val files = if (logsDir.exists()) {
+                (logsDir.listFiles() ?: emptyArray())
+                    .filter { it.isFile }
+                    .sortedByDescending { it.lastModified() }
+            } else {
+                emptyList()
+            }
+            withContext(Dispatchers.Main) {
+                if (seq == logsSeq.get()) {
+                    logFilesListState.value = files
+                }
+            }
         }
     }
 
     private fun refreshRunsList() {
-        val runsDir = File(filesDir, "runs")
-        if (runsDir.exists()) {
-            val folders = (runsDir.listFiles() ?: emptyArray())
-                .filter { it.isDirectory }
-                .sortedByDescending { it.name }
-            runsListState.value = folders.map { folder ->
-                val summaryFile = File(folder, "summary.json")
-                var pass = 0
-                var total = 0
-                if (summaryFile.exists()) {
-                    try {
-                        val json = JSONObject(summaryFile.readText())
-                        pass = json.optInt("pass", json.optInt("passCount", 0))
-                        total = json.optInt("total", 0)
-                    } catch (_: Exception) {}
+        lifecycleScope.launch(Dispatchers.IO) {
+            val seq = runsSeq.incrementAndGet()
+            val runsDir = File(filesDir, "runs")
+            val items = if (runsDir.exists()) {
+                val folders = (runsDir.listFiles() ?: emptyArray())
+                    .filter { it.isDirectory }
+                    .sortedByDescending { it.name }
+                folders.map { folder ->
+                    val summaryFile = File(folder, "summary.json")
+                    var pass = 0
+                    var total = 0
+                    if (summaryFile.exists()) {
+                        try {
+                            val json = JSONObject(summaryFile.readText())
+                            pass = json.optInt("pass", json.optInt("passCount", 0))
+                            total = json.optInt("total", 0)
+                        } catch (_: Exception) {}
+                    }
+                    RunItem(folder = folder, name = folder.name, passCount = pass, totalCount = total)
                 }
-                RunItem(folder = folder, name = folder.name, passCount = pass, totalCount = total)
+            } else {
+                emptyList()
             }
-        } else {
-            runsListState.value = emptyList()
+            withContext(Dispatchers.Main) {
+                if (seq == runsSeq.get()) {
+                    runsListState.value = items
+                }
+            }
         }
     }
 
@@ -346,16 +401,25 @@ class MainActivity : ComponentActivity() {
             val systemDir = File(stageDir, "system").apply { mkdirs() }
 
             var gpuinfoRaw: String? = null
+            var gpuinfoUnavailableReason: String? = null
             try {
                 val f = File("/sys/class/misc/mali0/device/gpuinfo")
-                if (f.canRead()) {
+                if (!f.exists()) {
+                    gpuinfoUnavailableReason = "file missing"
+                } else if (!f.canRead()) {
+                    gpuinfoUnavailableReason = "not readable (SELinux/permissions)"
+                } else {
                     val text = f.readText().trim()
                     if (text.isNotEmpty()) {
                         File(systemDir, "gpuinfo.txt").writeText(text)
                         gpuinfoRaw = text
+                    } else {
+                        gpuinfoUnavailableReason = "not readable (SELinux/permissions)"
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                gpuinfoUnavailableReason = e.message ?: e.toString()
+            }
 
             var procVersionText: String? = null
             try {
@@ -369,12 +433,22 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (_: Exception) {}
 
+            var roHardware: String? = null
             try {
                 val proc = Runtime.getRuntime().exec(arrayOf("getprop"))
                 val lines = proc.inputStream.bufferedReader().use { it.readLines() }
                 val keys = listOf("ro.product.", "ro.board.", "ro.soc.", "ro.hardware", "ro.build.version.", "ro.build.fingerprint")
                 val filtered = lines.filter { line -> keys.any { line.contains(it) } }
                 File(systemDir, "props.txt").writeText(filtered.joinToString("\n"))
+
+                val roHwRegex = Regex("""\[ro\.hardware\]:\s*\[(.*?)\]""")
+                for (line in lines) {
+                    val m = roHwRegex.find(line)
+                    if (m != null) {
+                        roHardware = m.groupValues[1].trim().takeIf { it.isNotEmpty() }
+                        break
+                    }
+                }
             } catch (_: Exception) {}
 
             // 5. Driver resolution: read summary.json driverType if present; fall back to current driverTypeState
@@ -443,11 +517,19 @@ class MainActivity : ComponentActivity() {
                     }
                 })
                 put("gpu", JSONObject().apply {
+                    val vkDeviceName = (optVal("deviceName") as? String)?.takeIf { it.isNotBlank() && it != "null" }
+                    val gpuinfoModel = if (gpuinfoRaw != null) Regex("""Mali-[A-Za-z0-9]+""").find(gpuinfoRaw)?.value else null
+                    val hwFallback = (android.os.Build.HARDWARE.takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) } ?: roHardware)?.let { "hardware: $it" }
+                    val gpuModel = vkDeviceName ?: gpuinfoModel ?: hwFallback
+
                     put("deviceName", optVal("deviceName"))
                     put("deviceID", optVal("deviceID"))
                     put("vendorID", optVal("vendorID"))
                     put("apiVersion", optVal("apiVersion"))
                     put("gpuinfo", gpuinfoRaw ?: JSONObject.NULL)
+                    if (gpuinfoRaw == null) {
+                        put("gpuinfo_unavailable_reason", gpuinfoUnavailableReason ?: "not readable (SELinux/permissions)")
+                    }
                     // gpuinfo sysfs is usually SELinux-blocked; fall back to the Vulkan deviceID,
                     // which is the Mali gpu_id on ARM (vendor 0x13B5). Arch major = gpu_id[31:28].
                     val vkId = (optVal("deviceID") as? Number)?.toLong()
@@ -457,7 +539,7 @@ class MainActivity : ComponentActivity() {
                     put("gpuId", gpuId ?: JSONObject.NULL)
                     val archMajor = gpuId?.removePrefix("0x")?.toLongOrNull(16)?.let { (it ushr 28) and 0xF }
                     put("arch", archMajor?.let { "v$it" } ?: JSONObject.NULL)
-                    put("gpuModel", (if (gpuinfoRaw != null) Regex("""Mali-[A-Za-z0-9]+""").find(gpuinfoRaw)?.value else null) ?: JSONObject.NULL)
+                    put("gpuModel", gpuModel ?: JSONObject.NULL)
                 })
                 put("android", JSONObject().apply {
                     put("release", android.os.Build.VERSION.RELEASE)
@@ -787,6 +869,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     importedFileNameState.value = name
+                    saveDriverSelection(driverTypeState.value, name)
                 } catch (e: Exception) {
                     importedFileNameState.value = "Error: ${e.message}"
                 }
@@ -804,7 +887,10 @@ class MainActivity : ComponentActivity() {
             DriverType.entries.forEach { type ->
                 val isSelected = driverTypeState.value == type
                 OutlinedCard(
-                    onClick = { driverTypeState.value = type },
+                    onClick = {
+                        driverTypeState.value = type
+                        saveDriverSelection(type)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.outlinedCardColors(
                         containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface
@@ -818,7 +904,10 @@ class MainActivity : ComponentActivity() {
                     ) {
                         RadioButton(
                             selected = isSelected,
-                            onClick = { driverTypeState.value = type }
+                            onClick = {
+                                driverTypeState.value = type
+                                saveDriverSelection(type)
+                            }
                         )
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
@@ -909,7 +998,10 @@ class MainActivity : ComponentActivity() {
             parsedInfo = infoParsedState.value,
             rawJson = infoRawJsonState.value,
             rawErrorText = infoRawTextState.value,
-            hasRuns = runsListState.value.isNotEmpty(),
+            hasRuns = {
+                val runsDir = File(filesDir, "runs")
+                runsDir.exists() && (runsDir.listFiles()?.any { it.isDirectory } == true)
+            },
             onRunTests = {
                 selectedTabState.intValue = 2
                 startRunAll()
@@ -1122,6 +1214,7 @@ class MainActivity : ComponentActivity() {
         var isUploading by remember { mutableStateOf(false) }
         var showLinkDialog by remember { mutableStateOf(false) }
         var showErrorDialog by remember { mutableStateOf(false) }
+        var uploadZipFile by remember { mutableStateOf<File?>(null) }
         var uploadSha256 by remember { mutableStateOf<String?>(null) }
         var pathAState by remember { mutableStateOf(UploadPathState(name = "catbox / gofile")) }
         var pathBState by remember { mutableStateOf(UploadPathState(name = "PanVK storage (R2)")) }
@@ -1137,6 +1230,219 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        fun startDualUpload(
+            zip: File,
+            localSha: String,
+            existingGen: Int? = null,
+            existingFlag: AtomicBoolean? = null
+        ) {
+            val gen = existingGen ?: uploadGeneration.incrementAndGet()
+            val flag = existingFlag ?: AtomicBoolean(false).also {
+                currentCancelFlag.value.set(true)
+                currentCancelFlag.value = it
+            }
+            uploadZipFile = zip
+            uploadSha256 = localSha
+            coroutineScope.launch {
+                if (flag.get() || uploadGeneration.get() != gen) return@launch
+                val endpoint = uploadEndpoint
+                val bInitialStatus = if (endpoint.isEmpty()) "Skipped (not configured)" else "Uploading"
+                val bInitialError = if (endpoint.isEmpty()) "Skipped (not configured)" else null
+                pathAState = UploadPathState(name = "catbox / gofile", status = "Uploading")
+                pathBState = UploadPathState(name = "PanVK storage (R2)", status = bInitialStatus, error = bInitialError)
+                isUploading = true
+                showLinkDialog = false
+                showErrorDialog = false
+
+                try {
+                    pathAState = pathAState.copy(totalBytes = zip.length())
+                    if (endpoint.isNotEmpty()) {
+                        pathBState = pathBState.copy(totalBytes = zip.length())
+                    }
+
+                    coroutineScope {
+                        val jobA = async(Dispatchers.IO) {
+                            var loggedCancelA = false
+                            fun logCancel() {
+                                if (!loggedCancelA) {
+                                    loggedCancelA = true
+                                    Log.i("PanProbe", "upload cancelled")
+                                }
+                            }
+
+                            if (flag.get() || uploadGeneration.get() != gen) {
+                                if (flag.get()) logCancel()
+                                return@async
+                            }
+                            var lastPercentA = -1
+                            try {
+                                val resA = uploadToCloud(zip, getAppVersion(), flag) { sent, total ->
+                                    val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
+                                    if (pct != lastPercentA || sent == total) {
+                                        lastPercentA = pct
+                                        if (!flag.get() && uploadGeneration.get() == gen) {
+                                            pathAState = pathAState.copy(bytesSent = sent, totalBytes = total)
+                                        }
+                                    }
+                                }
+                                if (flag.get() || uploadGeneration.get() != gen) {
+                                    if (flag.get()) logCancel()
+                                    return@async
+                                }
+                                if (resA.directUrl == null) {
+                                    if (uploadGeneration.get() == gen) {
+                                        pathAState = pathAState.copy(
+                                            url = resA.url,
+                                            directUrl = null,
+                                            status = "Done (not verified, gofile)",
+                                            verifyStatus = "– not verified",
+                                            bytesSent = zip.length(),
+                                            totalBytes = zip.length()
+                                        )
+                                    }
+                                } else {
+                                    if (uploadGeneration.get() == gen) {
+                                        pathAState = pathAState.copy(
+                                            url = resA.url,
+                                            directUrl = resA.directUrl,
+                                            status = "Verifying",
+                                            bytesSent = zip.length(),
+                                            totalBytes = zip.length()
+                                        )
+                                    }
+                                    val vA = verifyUpload(resA.directUrl, localSha, getAppVersion(), flag)
+                                    if (flag.get() || uploadGeneration.get() != gen) {
+                                        if (flag.get()) logCancel()
+                                        return@async
+                                    }
+                                    if (uploadGeneration.get() == gen) {
+                                        if (vA == "Verified ✓") {
+                                            pathAState = pathAState.copy(status = "Done ✓ verified", verifyStatus = "✓")
+                                        } else {
+                                            pathAState = pathAState.copy(status = "Failed: $vA", verifyStatus = "✗")
+                                        }
+                                    }
+                                }
+                            } catch (e: CancellationException) {
+                                logCancel()
+                                throw e
+                            } catch (e: Exception) {
+                                if (flag.get()) {
+                                    logCancel()
+                                    throw CancellationException("Upload cancelled")
+                                }
+                                if (!flag.get() && uploadGeneration.get() == gen) {
+                                    val msg = e.message ?: e.toString()
+                                    pathAState = pathAState.copy(status = "Failed: $msg", error = msg)
+                                }
+                            }
+                        }
+
+                        val jobB = async(Dispatchers.IO) {
+                            var loggedCancelB = false
+                            fun logCancel() {
+                                if (!loggedCancelB) {
+                                    loggedCancelB = true
+                                    Log.i("PanProbe", "upload cancelled")
+                                }
+                            }
+
+                            if (endpoint.isEmpty()) {
+                                if (uploadGeneration.get() == gen) {
+                                    pathBState = pathBState.copy(status = "Skipped (not configured)", error = "Skipped (not configured)")
+                                }
+                                return@async
+                            }
+
+                            if (flag.get() || uploadGeneration.get() != gen) {
+                                if (flag.get()) logCancel()
+                                return@async
+                            }
+                            var lastPercentB = -1
+                            try {
+                                val resB = uploadToR2(
+                                    endpoint = endpoint,
+                                    f = zip,
+                                    sha256Hex = localSha,
+                                    version = getAppVersion(),
+                                    cancelled = flag
+                                ) { sent, total ->
+                                    val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
+                                    if (pct != lastPercentB || sent == total) {
+                                        lastPercentB = pct
+                                        if (!flag.get() && uploadGeneration.get() == gen) {
+                                            pathBState = pathBState.copy(bytesSent = sent, totalBytes = total)
+                                        }
+                                    }
+                                }
+                                if (flag.get() || uploadGeneration.get() != gen) {
+                                    if (flag.get()) logCancel()
+                                    return@async
+                                }
+                                if (uploadGeneration.get() == gen) {
+                                    pathBState = pathBState.copy(
+                                        url = resB.url,
+                                        directUrl = resB.directUrl,
+                                        status = "Verifying",
+                                        bytesSent = zip.length(),
+                                        totalBytes = zip.length()
+                                    )
+                                }
+                                val vB = verifyUpload(resB.directUrl, localSha, getAppVersion(), flag)
+                                if (flag.get() || uploadGeneration.get() != gen) {
+                                    if (flag.get()) logCancel()
+                                    return@async
+                                }
+                                if (uploadGeneration.get() == gen) {
+                                    if (vB == "Verified ✓") {
+                                        pathBState = pathBState.copy(status = "Done ✓ verified", verifyStatus = "✓")
+                                    } else {
+                                        pathBState = pathBState.copy(status = "Failed: $vB", verifyStatus = "✗")
+                                    }
+                                }
+                            } catch (e: CancellationException) {
+                                logCancel()
+                                throw e
+                            } catch (e: Exception) {
+                                if (flag.get()) {
+                                    logCancel()
+                                    throw CancellationException("Upload cancelled")
+                                }
+                                if (!flag.get() && uploadGeneration.get() == gen) {
+                                    val msg = e.message ?: e.toString()
+                                    pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
+                                }
+                            }
+                        }
+
+                        jobA.await()
+                        jobB.await()
+                    }
+
+                    if (flag.get() || uploadGeneration.get() != gen) return@launch
+                    isUploading = false
+                    if (pathAState.url != null || pathBState.url != null) {
+                        showLinkDialog = true
+                    } else {
+                        showErrorDialog = true
+                    }
+                } catch (_: CancellationException) {
+                    if (flag.get() || uploadGeneration.get() != gen) return@launch
+                    if (isUploading) {
+                        isUploading = false
+                        Toast.makeText(context, "Upload cancelled", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    if (flag.get() || uploadGeneration.get() != gen) return@launch
+                    isUploading = false
+                    val msg = e.message ?: "Upload failed"
+                    if (pathAState.url == null) pathAState = pathAState.copy(status = "Failed: $msg", error = msg)
+                    if (pathBState.url == null) pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
+                    showErrorDialog = true
+                }
+            }
+        }
+
         if (cloudConfirmRun != null) {
             AlertDialog(
                 onDismissRequest = { cloudConfirmRun = null },
@@ -1146,171 +1452,36 @@ class MainActivity : ComponentActivity() {
                 },
                 confirmButton = {
                     Button(
+                        enabled = !isUploading,
                         onClick = {
                             val targetRun = cloudConfirmRun
                             cloudConfirmRun = null
-                            if (targetRun != null) {
+                            if (targetRun != null && !isUploading) {
                                 val gen = uploadGeneration.incrementAndGet()
                                 val flag = AtomicBoolean(false)
                                 currentCancelFlag.value.set(true)
                                 currentCancelFlag.value = flag
-                                coroutineScope.launch {
-                                    if (flag.get() || uploadGeneration.get() != gen) return@launch
-                                    val endpoint = uploadEndpoint
-                                    val bInitialStatus = if (endpoint.isEmpty()) "Skipped (not configured)" else "Uploading"
-                                    val bInitialError = if (endpoint.isEmpty()) "Skipped (not configured)" else null
-                                    pathAState = UploadPathState(name = "catbox / gofile", status = "Uploading")
-                                    pathBState = UploadPathState(name = "PanVK storage (R2)", status = bInitialStatus, error = bInitialError)
-                                    isUploading = true
-                                    showLinkDialog = false
-                                    showErrorDialog = false
 
+                                val endpoint = uploadEndpoint
+                                val bZipStatus = if (endpoint.isEmpty()) "Skipped (not configured)" else "Preparing ZIP..."
+                                val bZipError = if (endpoint.isEmpty()) "Skipped (not configured)" else null
+                                pathAState = UploadPathState(name = "catbox / gofile", status = "Preparing ZIP...")
+                                pathBState = UploadPathState(name = "PanVK storage (R2)", status = bZipStatus, error = bZipError)
+                                isUploading = true
+                                showLinkDialog = false
+                                showErrorDialog = false
+
+                                coroutineScope.launch {
                                     try {
                                         val zip = buildRunZip(targetRun.folder)
                                         if (flag.get() || uploadGeneration.get() != gen) return@launch
                                         val localSha = withContext(Dispatchers.IO) { sha256(zip) }
                                         if (flag.get() || uploadGeneration.get() != gen) return@launch
-                                        uploadSha256 = localSha
-
-                                        pathAState = pathAState.copy(totalBytes = zip.length())
-                                        if (endpoint.isNotEmpty()) {
-                                            pathBState = pathBState.copy(totalBytes = zip.length())
-                                        }
-
-                                        coroutineScope {
-                                            val jobA = async(Dispatchers.IO) {
-                                                if (flag.get() || uploadGeneration.get() != gen) return@async
-                                                var lastPercentA = -1
-                                                try {
-                                                    val resA = uploadToCloud(zip, getAppVersion(), flag) { sent, total ->
-                                                        val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
-                                                        if (pct != lastPercentA || sent == total) {
-                                                            lastPercentA = pct
-                                                            if (!flag.get() && uploadGeneration.get() == gen) {
-                                                                pathAState = pathAState.copy(bytesSent = sent, totalBytes = total)
-                                                            }
-                                                        }
-                                                    }
-                                                    if (flag.get() || uploadGeneration.get() != gen) return@async
-                                                    if (resA.directUrl == null) {
-                                                        if (uploadGeneration.get() == gen) {
-                                                            pathAState = pathAState.copy(
-                                                                url = resA.url,
-                                                                directUrl = null,
-                                                                status = "Done (not verified, gofile)",
-                                                                verifyStatus = "– not verified",
-                                                                bytesSent = zip.length(),
-                                                                totalBytes = zip.length()
-                                                            )
-                                                        }
-                                                    } else {
-                                                        if (uploadGeneration.get() == gen) {
-                                                            pathAState = pathAState.copy(
-                                                                url = resA.url,
-                                                                directUrl = resA.directUrl,
-                                                                status = "Verifying",
-                                                                bytesSent = zip.length(),
-                                                                totalBytes = zip.length()
-                                                            )
-                                                        }
-                                                        val vA = verifyUpload(resA.directUrl, localSha, getAppVersion(), flag)
-                                                        if (flag.get() || uploadGeneration.get() != gen) return@async
-                                                        if (uploadGeneration.get() == gen) {
-                                                            if (vA == "Verified ✓") {
-                                                                pathAState = pathAState.copy(status = "Done ✓ verified", verifyStatus = "✓")
-                                                            } else {
-                                                                pathAState = pathAState.copy(status = "Failed: $vA", verifyStatus = "✗")
-                                                            }
-                                                        }
-                                                    }
-                                                } catch (e: CancellationException) {
-                                                    throw e
-                                                } catch (e: Exception) {
-                                                    if (!flag.get() && uploadGeneration.get() == gen) {
-                                                        val msg = e.message ?: e.toString()
-                                                        pathAState = pathAState.copy(status = "Failed: $msg", error = msg)
-                                                    }
-                                                }
-                                            }
-
-                                            val jobB = async(Dispatchers.IO) {
-                                                if (flag.get() || uploadGeneration.get() != gen) return@async
-                                                if (endpoint.isEmpty()) {
-                                                    if (uploadGeneration.get() == gen) {
-                                                        pathBState = pathBState.copy(status = "Skipped (not configured)", error = "Skipped (not configured)")
-                                                    }
-                                                    return@async
-                                                }
-                                                var lastPercentB = -1
-                                                try {
-                                                    val resB = uploadToR2(
-                                                        endpoint = endpoint,
-                                                        f = zip,
-                                                        sha256Hex = localSha,
-                                                        version = getAppVersion(),
-                                                        cancelled = flag
-                                                    ) { sent, total ->
-                                                        val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
-                                                        if (pct != lastPercentB || sent == total) {
-                                                            lastPercentB = pct
-                                                            if (!flag.get() && uploadGeneration.get() == gen) {
-                                                                pathBState = pathBState.copy(bytesSent = sent, totalBytes = total)
-                                                            }
-                                                        }
-                                                    }
-                                                    if (flag.get() || uploadGeneration.get() != gen) return@async
-                                                    if (uploadGeneration.get() == gen) {
-                                                        pathBState = pathBState.copy(
-                                                            url = resB.url,
-                                                            directUrl = resB.directUrl,
-                                                            status = "Verifying",
-                                                            bytesSent = zip.length(),
-                                                            totalBytes = zip.length()
-                                                        )
-                                                    }
-                                                    val vB = verifyUpload(resB.directUrl, localSha, getAppVersion(), flag)
-                                                    if (flag.get() || uploadGeneration.get() != gen) return@async
-                                                    if (uploadGeneration.get() == gen) {
-                                                        if (vB == "Verified ✓") {
-                                                            pathBState = pathBState.copy(status = "Done ✓ verified", verifyStatus = "✓")
-                                                        } else {
-                                                            pathBState = pathBState.copy(status = "Failed: $vB", verifyStatus = "✗")
-                                                        }
-                                                    }
-                                                } catch (e: CancellationException) {
-                                                    throw e
-                                                } catch (e: Exception) {
-                                                    if (!flag.get() && uploadGeneration.get() == gen) {
-                                                        val msg = e.message ?: e.toString()
-                                                        pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
-                                                    }
-                                                }
-                                            }
-
-                                            jobA.await()
-                                            jobB.await()
-                                        }
-
-                                        if (flag.get() || uploadGeneration.get() != gen) return@launch
-                                        isUploading = false
-                                        if (pathAState.url != null || pathBState.url != null) {
-                                            showLinkDialog = true
-                                        } else {
-                                            showErrorDialog = true
-                                        }
-                                    } catch (_: CancellationException) {
-                                        if (flag.get() || uploadGeneration.get() != gen) return@launch
-                                        if (isUploading) {
-                                            isUploading = false
-                                            Toast.makeText(context, "Upload cancelled", Toast.LENGTH_SHORT).show()
-                                        }
+                                        startDualUpload(zip, localSha, gen, flag)
                                     } catch (e: Exception) {
                                         if (flag.get() || uploadGeneration.get() != gen) return@launch
                                         isUploading = false
-                                        val msg = e.message ?: "Upload failed"
-                                        if (pathAState.url == null) pathAState = pathAState.copy(status = "Failed: $msg", error = msg)
-                                        if (pathBState.url == null) pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
-                                        showErrorDialog = true
+                                        Toast.makeText(context, "Zip failed: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -1403,9 +1574,21 @@ class MainActivity : ComponentActivity() {
                 confirmButton = {
                     Button(onClick = {
                         showErrorDialog = false
+                        val zip = uploadZipFile
+                        val sha = uploadSha256
+                        if (zip != null && sha != null) {
+                            startDualUpload(zip, sha)
+                        }
+                    }) {
+                        Text("Retry")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = {
+                        showErrorDialog = false
                         uploadGeneration.incrementAndGet()
                     }) {
-                        Text("OK")
+                        Text("Cancel")
                     }
                 }
             )
@@ -1703,6 +1886,7 @@ class MainActivity : ComponentActivity() {
                                         ) {
                                             Button(
                                                 onClick = { cloudConfirmRun = run },
+                                                enabled = !isUploading,
                                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                             ) {
                                                 Text("Send to cloud", maxLines = 1)
@@ -1718,6 +1902,7 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }
                                                 },
+                                                enabled = !isUploading,
                                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                                             ) {
                                                 Text("Zip & Share", maxLines = 1)
