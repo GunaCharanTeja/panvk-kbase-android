@@ -137,7 +137,7 @@ class MainActivity : ComponentActivity() {
     private var runsListState = mutableStateOf<List<RunItem>>(emptyList())
     private val logsSeq = AtomicInteger(0)
     private val runsSeq = AtomicInteger(0)
-    private var uploadEndpoint: String = PANVK_UPLOAD_ENDPOINT
+    private var uploadEndpoint by mutableStateOf(PANVK_UPLOAD_ENDPOINT)
 
     private fun saveDriverSelection(type: DriverType, importedName: String? = null) {
         val sp = getSharedPreferences("panprobe", Context.MODE_PRIVATE)
@@ -1332,7 +1332,7 @@ class MainActivity : ComponentActivity() {
                                     throw CancellationException("Upload cancelled")
                                 }
                                 if (!flag.get() && uploadGeneration.get() == gen) {
-                                    val msg = e.message ?: e.toString()
+                                    val msg = friendlyUploadError(e)
                                     pathAState = pathAState.copy(status = "Failed: $msg", error = msg)
                                 }
                             }
@@ -1409,7 +1409,7 @@ class MainActivity : ComponentActivity() {
                                     throw CancellationException("Upload cancelled")
                                 }
                                 if (!flag.get() && uploadGeneration.get() == gen) {
-                                    val msg = e.message ?: e.toString()
+                                    val msg = friendlyUploadError(e)
                                     pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
                                 }
                             }
@@ -1435,7 +1435,7 @@ class MainActivity : ComponentActivity() {
                 } catch (e: Exception) {
                     if (flag.get() || uploadGeneration.get() != gen) return@launch
                     isUploading = false
-                    val msg = e.message ?: "Upload failed"
+                    val msg = friendlyUploadError(e)
                     if (pathAState.url == null) pathAState = pathAState.copy(status = "Failed: $msg", error = msg)
                     if (pathBState.url == null) pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
                     showErrorDialog = true
@@ -1455,6 +1455,13 @@ class MainActivity : ComponentActivity() {
                                 text = "Test upload endpoint override active: $uploadEndpoint",
                                 color = MaterialTheme.colorScheme.error
                             )
+                            TextButton(
+                                onClick = { uploadEndpoint = PANVK_UPLOAD_ENDPOINT },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Text("Clear override", style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 },
@@ -1489,7 +1496,7 @@ class MainActivity : ComponentActivity() {
                                     } catch (e: Exception) {
                                         if (flag.get() || uploadGeneration.get() != gen) return@launch
                                         isUploading = false
-                                        Toast.makeText(context, "Zip failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Zip failed: ${friendlyUploadError(e)}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }

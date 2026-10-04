@@ -2,14 +2,22 @@ package dev.zenithblue.panvklauncher
 
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.EOFException
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.io.InterruptedIOException
 import java.io.OutputStream
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.NoRouteToHostException
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.UnknownHostException
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.CancellationException
@@ -17,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
+import javax.net.ssl.SSLException
 
 const val PANVK_UPLOAD_ENDPOINT = ""
 
@@ -446,7 +455,7 @@ fun uploadToCloud(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        catboxError = e.message ?: e.toString()
+        catboxError = friendlyUploadError(e)
     }
 
     if (cancelled.get()) throw CancellationException("Upload cancelled")
@@ -473,7 +482,7 @@ fun uploadToCloud(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        gofileError = e.message ?: e.toString()
+        gofileError = friendlyUploadError(e)
     }
 
     throw IOException("Upload failed. Catbox: $catboxError; Gofile: $gofileError")
@@ -520,6 +529,45 @@ fun verifyUpload(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        "Verify FAILED: ${e.message ?: "download error"}"
+        "Verify FAILED: ${friendlyUploadError(e)}"
+    }
+}
+
+private val INTERNAL_OBJECT_REGEX = Regex("""[A-Za-z_][\w.]*@[0-9a-fA-F]+""")
+
+private fun isInternalMessage(msg: String): Boolean {
+    return INTERNAL_OBJECT_REGEX.containsMatchIn(msg) ||
+        msg.contains("com.android.", ignoreCase = true) ||
+        msg.contains("java.", ignoreCase = true) ||
+        msg.contains("okhttp", ignoreCase = true)
+}
+
+fun friendlyUploadError(e: Throwable): String {
+    Log.w("PanVKUpload", e.message ?: "Upload error", e)
+    return when {
+        e is SocketTimeoutException || (e is InterruptedIOException && e.message?.contains("timeout", ignoreCase = true) == true) ->
+            "Timed out"
+        e is UnknownHostException || e is ConnectException || e is NoRouteToHostException ->
+            "Host not reachable"
+        e is SSLException ->
+            "Secure connection failed"
+        e is IOException -> {
+            val msg = e.message
+            if (e is EOFException || e is SocketException || msg?.contains("unexpected end of stream", ignoreCase = true) == true) {
+                "Network error: connection lost"
+            } else if (msg.isNullOrBlank() || isInternalMessage(msg)) {
+                "Network error: connection lost"
+            } else {
+                msg
+            }
+        }
+        else -> {
+            val msg = e.message
+            if (!msg.isNullOrBlank() && !isInternalMessage(msg)) {
+                msg
+            } else {
+                "Upload failed"
+            }
+        }
     }
 }

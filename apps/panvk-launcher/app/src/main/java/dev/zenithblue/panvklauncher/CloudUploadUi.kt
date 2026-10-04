@@ -239,7 +239,7 @@ fun CloudUploadFlow(state: CloudUploadState) {
                                 logCancelA()
                                 return@async
                             }
-                            val msg = e.message ?: e.toString()
+                            val msg = friendlyUploadError(e)
                             state.pathAState = state.pathAState.copy(status = "Failed: $msg", error = msg)
                         }
                     }
@@ -316,7 +316,7 @@ fun CloudUploadFlow(state: CloudUploadState) {
                                 logCancelB()
                                 return@async
                             }
-                            val msg = e.message ?: e.toString()
+                            val msg = friendlyUploadError(e)
                             state.pathBState = state.pathBState.copy(status = "Failed: $msg", error = msg)
                         }
                     }
@@ -349,7 +349,7 @@ fun CloudUploadFlow(state: CloudUploadState) {
                 state.isUploading = false
                 state.isBusy = false
                 if (flag.get()) return@launch
-                val msg = e.message ?: "Upload failed"
+                val msg = friendlyUploadError(e)
                 if (state.pathAState.url == null) state.pathAState = state.pathAState.copy(status = "Failed: $msg", error = msg)
                 if (state.pathBState.url == null) state.pathBState = state.pathBState.copy(status = "Failed: $msg", error = msg)
                 state.showErrorDialog = true
@@ -415,7 +415,7 @@ fun CloudUploadFlow(state: CloudUploadState) {
                                     if (state.uploadGeneration.get() != gen) return@launch
                                     state.isBusy = false
                                     state.isPreparingZip = false
-                                    val msg = e.message ?: "Failed to prepare ZIP"
+                                    val msg = friendlyUploadError(e)
                                     state.pathAState = state.pathAState.copy(status = "Failed: $msg", error = msg)
                                     state.pathBState = state.pathBState.copy(status = "Failed: $msg", error = msg)
                                     state.showErrorDialog = true
