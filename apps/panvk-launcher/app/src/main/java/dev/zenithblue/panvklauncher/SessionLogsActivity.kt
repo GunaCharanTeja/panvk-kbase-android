@@ -24,8 +24,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
@@ -42,45 +45,77 @@ class SessionLogsActivity : ComponentActivity() {
             })
         }
 
-        fun share(ctx: Context, dir: File) {
-            val zip = SessionLogs.zip(ctx, dir)
-            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", zip)
-            val send = Intent(Intent.ACTION_SEND).apply {
-                type = "application/zip"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "PanPlay session logs${dir.name}")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        fun share(ctx: Context, dir: File, onBusy: ((Boolean) -> Unit)? = null) {
+            Toast.makeText(ctx, "Preparing ZIP...", Toast.LENGTH_SHORT).show()
+            onBusy?.invoke(true)
+            CoroutineScope(Dispatchers.Main).launch {
+                try {
+                    val zip = withContext(Dispatchers.IO) { SessionLogs.zip(ctx, dir) }
+                    val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", zip)
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/zip"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, "PanPlay session logs: ${dir.name}")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    ctx.startActivity(Intent.createChooser(send, "Share session logs").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                } catch (t: Throwable) {
+                    Toast.makeText(ctx, "Share failed: $t", Toast.LENGTH_LONG).show()
+                } finally {
+                    onBusy?.invoke(false)
+                }
             }
-            ctx.startActivity(Intent.createChooser(send, "Share session logs").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
         }
     }
+
+    private var uploadEndpoint: String = PANVK_UPLOAD_ENDPOINT
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val want = intent?.getStringExtra(EXTRA_DIR)
+        uploadEndpoint = resolveUploadEndpoint(intent?.getStringExtra("uploadEndpoint"))
         setContent {
             PanvkTheme(mode = UiPrefs.theme(this), dynamic = UiPrefs.dynamic(this)) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { Screen(want) { finish() } }
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Screen(want, uploadEndpoint) { finish() }
+                }
             }
         }
     }
 
     @Composable
-    private fun Screen(want: String?, onClose: () -> Unit) {
+    private fun Screen(want: String?, uploadEndpoint: String, onClose: () -> Unit) {
         val ctx = LocalContext.current
         val sessions = remember { SessionLogs.list(ctx) }
         var cur by remember { mutableStateOf(sessions.firstOrNull { it.name == want } ?: sessions.firstOrNull()) }
         var menu by remember { mutableStateOf(false) }
+
+        val uploadState = rememberCloudUploadState(endpoint = uploadEndpoint)
+        CloudUploadFlow(state = uploadState)
+
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Session logs", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 Button(onClick = onClose, modifier = Modifier.heightIn(min = 48.dp)) { Text("Close") }
             }
+            Text(
+                "Send the ZIP or link to the PanVK Telegram group so we can check your results.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             val d = cur
             if (d == null) { Text("No sessions recorded yet."); return@Column }
+            var isSharing by remember { mutableStateOf(false) }
+            val isBusy = uploadState.isBusy || isSharing
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    onClick = { try { share(ctx, d) } catch (t: Throwable) { android.widget.Toast.makeText(ctx, "Share failed: $t", android.widget.Toast.LENGTH_LONG).show() } },
+                    onClick = { uploadState.startFlow(d) },
+                    enabled = !isBusy,
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) { Text("Send to cloud") }
+                OutlinedButton(
+                    onClick = { share(ctx, d) { isSharing = it } },
+                    enabled = !isBusy,
                     modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Share as ZIP" }
                 ) { Text("Share as ZIP") }
                 Box {

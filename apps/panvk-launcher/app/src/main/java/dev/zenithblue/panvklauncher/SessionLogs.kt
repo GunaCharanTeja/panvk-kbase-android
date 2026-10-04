@@ -128,6 +128,13 @@ object SessionLogs {
 
         val dur = ((run?.endMs?.takeIf { it > 0 } ?: now) - (run?.startMs ?: startMs)) / 1000
         val uniq = errors.distinct()
+
+        val manifestInfo = try {
+            currentManifestInfo(ctx, sc, exePath, exit, reason, dur)
+        } catch (t: Throwable) {
+            JSONObject().apply { put("error", t.message ?: t.toString()) }
+        }
+
         val sum = JSONObject().apply {
             put("time", now); put("startMs", run?.startMs ?: startMs); put("durationSec", dur)
             put("game", sc?.name ?: exeFile.name); put("exe", exePath); put("reason", reason)
@@ -136,6 +143,7 @@ object SessionLogs {
             put("deviceLost", deviceLost); put("tombstone", tomb ?: JSONObject.NULL)
             put("errorCount", uniq.size); put("errors", JSONArray(uniq.take(60)))
             put("files", JSONArray((dir.listFiles() ?: emptyArray()).map { it.name }.sorted()))
+            put("manifestInfo", manifestInfo)
         }
         File(dir, "session.json").writeText(sum.toString(2))
         File(dir, "summary.txt").writeText(buildString {
@@ -204,23 +212,461 @@ object SessionLogs {
     } catch (_: Throwable) { null }
 
     private fun prune(ctx: Context) {
+        val zips = zipDir(ctx)
         list(ctx).drop(KEEP).forEach { d ->
-            d.deleteRecursively(); File(zipDir(ctx), d.name + ".zip").delete()
+            d.deleteRecursively()
+            zips.listFiles()?.forEach { f ->
+                if (f.isFile && (f.name == "${d.name}.zip" || f.name.startsWith("${d.name}-"))) {
+                    f.delete()
+                }
+            }
         }
+    }
+
+    fun getWineVersion(ctx: Context): JSONObject {
+        try {
+            val containerJson = File(ctx.filesDir, "container/container.json")
+            if (containerJson.isFile) {
+                val winePath = JSONObject(containerJson.readText()).optString("wine", "")
+                if (winePath.isNotEmpty()) {
+                    val profile = File(winePath, "profile.json")
+                    if (profile.isFile) {
+                        val ver = JSONObject(profile.readText()).optString("versionName", "")
+                        if (ver.isNotEmpty()) {
+                            return JSONObject().apply {
+                                put("version", ver)
+                                put("source", "container")
+                            }
+                        }
+                    }
+                    val dirName = File(winePath).name
+                    if (dirName.isNotEmpty()) {
+                        return JSONObject().apply {
+                            put("version", dirName)
+                            put("source", "container")
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        val installedVer = ContentManager.current(ctx, "Proton")?.versionName
+            ?: ContentManager.list(ctx).firstOrNull { it.type == "Proton" && ContentManager.isComplete(it) }?.versionName
+            ?: ContentManager.list(ctx).firstOrNull { it.type == "Proton" }?.versionName
+        if (installedVer != null) {
+            return JSONObject().apply {
+                put("version", installedVer)
+                put("source", "installed")
+            }
+        }
+
+        val catalogVer = ContentManager.CATALOG.firstOrNull { it.type == "Proton" }?.versionName
+        if (catalogVer != null) {
+            return JSONObject().apply {
+                put("version", catalogVer)
+                put("source", "catalog default (not confirmed installed)")
+            }
+        }
+
+        return JSONObject().apply {
+            put("version", JSONObject.NULL)
+            put("source", "none")
+        }
+    }
+
+    fun getDxvkVersion(ctx: Context): JSONObject {
+        try {
+            val containerJson = File(ctx.filesDir, "container/container.json")
+            if (containerJson.isFile) {
+                val dxvkPath = JSONObject(containerJson.readText()).optString("dxvk", "")
+                if (dxvkPath.isNotEmpty()) {
+                    val profile = File(dxvkPath, "profile.json")
+                    if (profile.isFile) {
+                        val ver = JSONObject(profile.readText()).optString("versionName", "")
+                        if (ver.isNotEmpty()) {
+                            return JSONObject().apply {
+                                put("version", ver)
+                                put("source", "container")
+                            }
+                        }
+                    }
+                    val dirName = File(dxvkPath).name
+                    if (dirName.isNotEmpty()) {
+                        return JSONObject().apply {
+                            put("version", dirName)
+                            put("source", "container")
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
+        if (File(ctx.filesDir, "container/.wine/drive_c/windows/system32/dxgi.dll").isFile) {
+            val ver = ContentManager.current(ctx, "DXVK")?.versionName
+                ?: ContentManager.list(ctx).firstOrNull { it.type == "DXVK" && ContentManager.isComplete(it) }?.versionName
+                ?: ContentManager.list(ctx).firstOrNull { it.type == "DXVK" }?.versionName
+            if (ver != null) {
+                return JSONObject().apply {
+                    put("version", ver)
+                    put("source", "container")
+                }
+            }
+        }
+
+        val installedVer = ContentManager.current(ctx, "DXVK")?.versionName
+            ?: ContentManager.list(ctx).firstOrNull { it.type == "DXVK" && ContentManager.isComplete(it) }?.versionName
+            ?: ContentManager.list(ctx).firstOrNull { it.type == "DXVK" }?.versionName
+        if (installedVer != null) {
+            return JSONObject().apply {
+                put("version", installedVer)
+                put("source", "installed")
+            }
+        }
+
+        val catalogVer = ContentManager.CATALOG.firstOrNull { it.type == "DXVK" }?.versionName
+        if (catalogVer != null) {
+            return JSONObject().apply {
+                put("version", catalogVer)
+                put("source", "catalog default (not confirmed installed)")
+            }
+        }
+
+        return JSONObject().apply {
+            put("version", JSONObject.NULL)
+            put("source", "none")
+        }
+    }
+
+    fun currentManifestInfo(
+        ctx: Context,
+        sc: Shortcut?,
+        exePath: String,
+        exitCode: Any? = JSONObject.NULL,
+        reason: String = "",
+        durationSec: Long = 0L,
+        gameName: String? = null
+    ): JSONObject = try {
+        val drivers = DriverManager.getDrivers(ctx)
+        val d = sc?.driver?.takeIf { it.isNotEmpty() }?.let { id -> drivers.firstOrNull { it.id == id } }
+            ?: DriverManager.getSelectedDriver(ctx, drivers)
+        val lib = File(d.libPath)
+        val wineVer = getWineVersion(ctx)
+        val dxvkVer = getDxvkVersion(ctx)
+        val res = if (!sc?.resolution.isNullOrEmpty()) "${DisplayServer.resolution(ctx)} (${sc.resolution})" else DisplayServer.resolution(ctx)
+
+        val actualExitCode = when (exitCode) {
+            null, Int.MIN_VALUE -> JSONObject.NULL
+            else -> exitCode
+        }
+
+        JSONObject().apply {
+            put("game", gameName ?: sc?.name ?: if (exePath.isNotEmpty()) File(exePath).name else "")
+            put("exe", exePath)
+            put("driver", JSONObject().apply {
+                put("name", d.name)
+                put("id", d.id)
+                put("version", d.version)
+                put("bundled", d.bundled)
+                put("libPath", d.libPath)
+                put("soSha256", if (lib.exists() && lib.canRead()) sha256(lib) else JSONObject.NULL)
+                put("buildId", elfBuildId(lib) ?: JSONObject.NULL)
+            })
+            put("wine", JSONObject().apply {
+                put("version", wineVer.opt("version"))
+                put("source", wineVer.opt("source"))
+            })
+            put("fexMode", FexPresets.resolve(sc?.fex ?: ""))
+            put("dxvk", JSONObject().apply {
+                put("enabled", ContainerManager.isDxvkEnabled(ctx))
+                put("version", dxvkVer.opt("version"))
+                put("source", dxvkVer.opt("source"))
+            })
+            put("resolution", res)
+            put("controller", ControllerInput.config.toJson())
+            put("exitCode", actualExitCode)
+            put("reason", reason)
+            put("durationSec", durationSec)
+        }
+    } catch (t: Throwable) {
+        JSONObject().apply { put("error", t.message ?: t.toString()) }
+    }
+
+    fun findGpuModel(ctx: Context, sc: Shortcut? = null, dir: File? = null): String {
+        // 1. Search cached vkinfo (JSON / txt in session dir, cacheDir, or filesDir)
+        val jsonCandidates = listOfNotNull(
+            dir?.let { File(it, "vkinfo.json") },
+            File(ctx.cacheDir, "vkinfo.json"),
+            File(ctx.filesDir, "vkinfo.json"),
+            File(ctx.filesDir, "container/vkinfo.json")
+        )
+        for (f in jsonCandidates) {
+            if (f.isFile && f.canRead()) {
+                try {
+                    val j = JSONObject(f.readText())
+                    val devName = j.optJSONArray("devices")?.optJSONObject(0)
+                        ?.optJSONObject("properties")?.optString("deviceName")
+                        ?: j.optString("deviceName")
+                    if (devName.isNotEmpty()) return devName
+                } catch (_: Exception) {}
+            }
+        }
+
+        val txtCandidates = listOfNotNull(
+            dir?.let { File(it, "vkinfo.txt") },
+            File(ctx.cacheDir, "vkinfo.txt"),
+            File(ctx.filesDir, "vkinfo.txt")
+        )
+        for (f in txtCandidates) {
+            if (f.isFile && f.canRead()) {
+                try {
+                    val text = f.readText()
+                    val match = Regex("""(?i)device\s*name\s*[:=]\s*([^\r\n]+)""").find(text)
+                        ?: Regex("""^([A-Za-z0-9_-]+)\s+api=""", RegexOption.MULTILINE).find(text)
+                    if (match != null) {
+                        val name = match.groupValues[1].trim()
+                        if (name.isNotEmpty()) return name
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        if (dir != null && dir.isDirectory) {
+            val logFiles = dir.listFiles { f -> f.isFile && (f.name.startsWith("dxvk-") || f.name == "wine-run.log") } ?: emptyArray()
+            for (f in logFiles) {
+                try {
+                    val match = Regex("""(?i)Device\s+name:\s*([^\r\n]+)""").find(f.readText())
+                    if (match != null) {
+                        val name = match.groupValues[1].trim()
+                        if (name.isNotEmpty()) return name
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        // 2. Search DriverManager (selected or shortcut driver metadata, bundled-driver.json)
+        try {
+            val drivers = DriverManager.getDrivers(ctx)
+            val d = sc?.driver?.takeIf { it.isNotEmpty() }?.let { id -> drivers.firstOrNull { it.id == id } }
+                ?: DriverManager.getSelectedDriver(ctx, drivers)
+
+            val driverDir = File(d.libPath).parentFile
+            val metaFile = if (driverDir != null) File(driverDir, "meta.json") else null
+            if (metaFile != null && metaFile.isFile) {
+                try {
+                    val j = JSONObject(metaFile.readText())
+                    val dev = j.optString("deviceName").ifEmpty { j.optString("gpuModel") }.ifEmpty { j.optString("gpu") }
+                    if (dev.isNotEmpty()) return dev
+                } catch (_: Exception) {}
+            }
+
+            val bundledMeta = try {
+                ctx.assets.open("bundled-driver.json").bufferedReader().use { JSONObject(it.readText()) }
+            } catch (_: Exception) { null }
+            if (bundledMeta != null) {
+                val dev = bundledMeta.optString("deviceName").ifEmpty { bundledMeta.optString("gpuModel") }
+                if (dev.isNotEmpty()) return dev
+            }
+
+            // Driver names describe the driver's target GPU (e.g. "G615"), not this device: never guess from them.
+        } catch (_: Exception) {}
+
+        return "hardware: " + Build.HARDWARE
     }
 
     fun zipDir(ctx: Context) = File(ctx.cacheDir, "session-zips").apply { mkdirs() }
 
-    /** Zip of one session dir in cache/session-zips (FileProvider path). Rebuilt when missing. */
-    fun zip(ctx: Context, dir: File): File {
-        val z = File(zipDir(ctx), dir.name + ".zip")
-        if (z.isFile && z.lastModified() >= (dir.listFiles()?.maxOfOrNull { it.lastModified() } ?: 0)) return z
-        ZipOutputStream(z.outputStream().buffered()).use { out ->
-            for (f in (dir.listFiles() ?: emptyArray()).sortedBy { it.name }) {
-                if (!f.isFile) continue
-                out.putNextEntry(ZipEntry(dir.name + "/" + f.name)); f.inputStream().use { it.copyTo(out) }; out.closeEntry()
-            }
+    fun buildCloudZip(ctx: Context, dir: File): File {
+        val sessionZipsDir = zipDir(ctx)
+        val stageDir = File(sessionZipsDir, "stage-${dir.name}-${System.nanoTime()}").apply {
+            deleteRecursively()
+            mkdirs()
         }
-        return z
+        val zipFile = File(sessionZipsDir, "${dir.name}-${System.nanoTime()}.zip")
+
+        return try {
+            // 1. Copy session dir files under "<dir.name>/"
+            val stagedSession = File(stageDir, dir.name).apply { mkdirs() }
+            dir.copyRecursively(stagedSession, overwrite = true)
+
+            // 2. system/ extras
+            val systemDir = File(stageDir, "system").apply { mkdirs() }
+
+            var gpuinfoRaw: String? = null
+            var gpuinfoUnavailableReason: String? = null
+            try {
+                val f = File("/sys/class/misc/mali0/device/gpuinfo")
+                if (!f.exists()) {
+                    gpuinfoUnavailableReason = "file missing"
+                } else if (!f.canRead()) {
+                    gpuinfoUnavailableReason = "not readable (SELinux/permissions)"
+                } else {
+                    val text = f.readText().trim()
+                    if (text.isNotEmpty()) {
+                        File(systemDir, "gpuinfo.txt").writeText(text)
+                        gpuinfoRaw = text
+                    } else {
+                        gpuinfoUnavailableReason = "file missing"
+                    }
+                }
+            } catch (e: Exception) {
+                gpuinfoUnavailableReason = e.message ?: e.toString()
+            }
+
+            var procVersionText: String? = null
+            try {
+                val f = File("/proc/version")
+                if (f.canRead()) {
+                    val text = f.readText().trim()
+                    if (text.isNotEmpty()) {
+                        File(systemDir, "proc_version.txt").writeText(text)
+                        procVersionText = text
+                    }
+                }
+            } catch (_: Exception) {}
+
+            try {
+                val proc = Runtime.getRuntime().exec(arrayOf("getprop"))
+                val lines = proc.inputStream.bufferedReader().use { it.readLines() }
+                val keys = listOf("ro.product.", "ro.board.", "ro.soc.", "ro.hardware", "ro.build.version.", "ro.build.fingerprint")
+                val filtered = lines.filter { line -> keys.any { line.contains(it) } }
+                File(systemDir, "props.txt").writeText(filtered.joinToString("\n"))
+            } catch (_: Exception) {}
+
+            // Read manifestInfo from staged session.json
+            val sessionJsonFile = File(stagedSession, "session.json")
+            val sessionJson = if (sessionJsonFile.isFile) {
+                try { JSONObject(sessionJsonFile.readText()) } catch (_: Exception) { null }
+            } else null
+
+            val rawManifestInfo = sessionJson?.optJSONObject("manifestInfo")
+            val manifestInfoSource: String
+
+            val gameFromSession = sessionJson?.optString("game")?.takeIf { it.isNotEmpty() }
+            val exeFromSession = sessionJson?.optString("exe") ?: ""
+            val exitFromSession = if (sessionJson != null) {
+                if (!sessionJson.isNull("exitCode")) sessionJson.opt("exitCode")
+                else if (!sessionJson.isNull("exit")) sessionJson.opt("exit")
+                else JSONObject.NULL
+            } else JSONObject.NULL
+            val reasonFromSession = sessionJson?.optString("reason") ?: ""
+            val durFromSession = sessionJson?.optLong("durationSec") ?: 0L
+
+            val allShortcuts = ShortcutStore.list(ctx) + BuiltinTests.list(ctx)
+            val matchedShortcut = (if (gameFromSession != null) ShortcutStore.find(ctx, gameFromSession) else null)
+                ?: if (exeFromSession.isNotEmpty()) allShortcuts.firstOrNull {
+                    it.exe.equals(exeFromSession, true) || ShortcutStore.resolveExe(ctx, it.exe).equals(exeFromSession, true)
+                } else null
+
+            val manifestInfo: JSONObject
+            if (rawManifestInfo != null) {
+                manifestInfoSource = "recorded at session end"
+                manifestInfo = rawManifestInfo
+            } else {
+                manifestInfoSource = "computed at upload time (session predates 1.1.0)"
+                manifestInfo = currentManifestInfo(
+                    ctx = ctx,
+                    sc = matchedShortcut,
+                    exePath = exeFromSession,
+                    exitCode = exitFromSession,
+                    reason = reasonFromSession,
+                    durationSec = durFromSession,
+                    gameName = gameFromSession
+                )
+            }
+
+            // 3. Staged files array (excluding manifest.json)
+            val filesArray = JSONArray()
+            val stagedFiles = stageDir.walkTopDown().filter { it.isFile && it.name != "manifest.json" }
+                .sortedBy { it.relativeTo(stageDir).path.replace('\\', '/') }
+            for (f in stagedFiles) {
+                val relPath = f.relativeTo(stageDir).path.replace('\\', '/')
+                filesArray.put(JSONObject().apply {
+                    put("path", relPath)
+                    put("size", f.length())
+                    put("sha256", sha256(f))
+                })
+            }
+
+            // 4. manifest.json LAST
+            val pInfo = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0) } catch (_: Exception) { null }
+            val pVersionName = pInfo?.versionName ?: "1.1.0"
+            val pVersionCode = if (Build.VERSION.SDK_INT >= 28) (pInfo?.longVersionCode ?: 6L) else @Suppress("DEPRECATION") (pInfo?.versionCode?.toLong() ?: 6L)
+
+            val manifestObj = JSONObject().apply {
+                put("timestamp", SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()))
+                put("app", JSONObject().apply {
+                    put("versionName", pVersionName)
+                    put("versionCode", pVersionCode)
+                })
+
+                // everything from manifestInfo
+                for (k in manifestInfo.keys()) {
+                    put(k, manifestInfo.get(k))
+                }
+                put("manifestInfoSource", manifestInfoSource)
+
+                // Keep game/exe/exitCode/reason/durationSec from session.json
+                if (sessionJson != null) {
+                    if (sessionJson.has("game")) put("game", sessionJson.optString("game"))
+                    if (sessionJson.has("exe")) put("exe", sessionJson.optString("exe"))
+                    if (sessionJson.has("reason")) put("reason", sessionJson.optString("reason"))
+                    if (!sessionJson.isNull("exitCode")) put("exitCode", sessionJson.opt("exitCode"))
+                    else if (!sessionJson.isNull("exit")) put("exitCode", sessionJson.opt("exit"))
+                    if (sessionJson.has("durationSec")) put("durationSec", sessionJson.optLong("durationSec"))
+                }
+
+                put("device", JSONObject().apply {
+                    put("manufacturer", Build.MANUFACTURER)
+                    put("model", Build.MODEL)
+                    put("board", Build.BOARD)
+                    put("hardware", Build.HARDWARE)
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        put("socManufacturer", Build.SOC_MANUFACTURER)
+                        put("socModel", Build.SOC_MODEL)
+                    } else {
+                        put("socManufacturer", JSONObject.NULL)
+                        put("socModel", JSONObject.NULL)
+                    }
+                })
+
+                put("android", JSONObject().apply {
+                    put("release", Build.VERSION.RELEASE)
+                    put("sdk", Build.VERSION.SDK_INT)
+                    put("kernel", procVersionText ?: System.getProperty("os.version") ?: JSONObject.NULL)
+                })
+
+                put("gpu", JSONObject().apply {
+                    put("gpuinfo", gpuinfoRaw ?: JSONObject.NULL)
+                    if (gpuinfoRaw == null) {
+                        put("gpuinfo_unavailable_reason", gpuinfoUnavailableReason ?: "file missing")
+                    }
+                    put("gpuModel", findGpuModel(ctx, matchedShortcut, dir))
+                })
+
+                put("files", filesArray)
+            }
+
+            File(stageDir, "manifest.json").writeText(manifestObj.toString(2))
+
+            // 5. Zip staged files
+            zipFiles(zipFile, listOf(Pair("", stageDir)))
+
+            // 6. Verify zip
+            verifyZip(zipFile)
+
+            // Delete older zips for the same session (keep the new one)
+            sessionZipsDir.listFiles()?.forEach { f ->
+                if (f.isFile && f != zipFile && (f.name == "${dir.name}.zip" || f.name.startsWith("${dir.name}-"))) {
+                    f.delete()
+                }
+            }
+
+            zipFile
+        } finally {
+            stageDir.deleteRecursively()
+        }
     }
+
+    /** Zip of one session dir in cache/session-zips (FileProvider path). Uses buildCloudZip so testers get the manifest. */
+    fun zip(ctx: Context, dir: File): File = buildCloudZip(ctx, dir)
 }
