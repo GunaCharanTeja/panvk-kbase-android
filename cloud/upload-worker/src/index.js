@@ -5,6 +5,7 @@ const SHA256_REGEX = /^[0-9a-f]{64}$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_UPLOAD_SIZE = 200 * 1024 * 1024; // 200 MB
+const devKeys = new Map();
 
 function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -38,9 +39,36 @@ export default {
 
       // POST /upload-url
       if (pathname === "/upload-url" && request.method === "POST") {
+        // Rate limiting
+        // Local dev (DEV_DIRECT on 127.0.0.1) skips the limiter so smoke tests can loop.
+        const devLocal = env.DEV_DIRECT === "1" &&
+          (url.hostname === "127.0.0.1" || url.hostname === "localhost");
+        if (env.UPLOAD_LIMIT && !devLocal) {
+          const clientIp =
+            request.headers.get("cf-connecting-ip") || "unknown";
+          const { success } = await env.UPLOAD_LIMIT.limit({ key: clientIp });
+          if (!success) {
+            return jsonResponse({ error: "Rate limit exceeded" }, 429);
+          }
+        }
+
+        const contentLengthHeader = request.headers.get("content-length");
+        if (!contentLengthHeader) {
+          return jsonResponse({ error: "Missing Content-Length" }, 413);
+        }
+        const reqContentLength = parseInt(contentLengthHeader, 10);
+        if (
+          isNaN(reqContentLength) ||
+          reqContentLength < 0 ||
+          reqContentLength > 4096
+        ) {
+          return jsonResponse({ error: "Payload too large" }, 413);
+        }
+
         let body;
         try {
-          body = await request.json();
+          const rawText = (await request.text()).slice(0, 4096);
+          body = JSON.parse(rawText);
         } catch {
           return jsonResponse({ error: "Invalid JSON body" }, 400);
         }
@@ -89,16 +117,6 @@ export default {
           );
         }
 
-        // Rate limiting
-        if (env.UPLOAD_LIMIT) {
-          const clientIp =
-            request.headers.get("cf-connecting-ip") || "unknown";
-          const { success } = await env.UPLOAD_LIMIT.limit({ key: clientIp });
-          if (!success) {
-            return jsonResponse({ error: "Rate limit exceeded" }, 429);
-          }
-        }
-
         const id = crypto.randomUUID();
         const date = new Date().toISOString().slice(0, 10);
         const key = `uploads/${date}/${id}.zip`;
@@ -106,8 +124,16 @@ export default {
 
         // Local development direct upload mode
         if (env.DEV_DIRECT === "1") {
+          devKeys.set(id, {
+            size,
+            sha256,
+            expires: Date.now() + 900 * 1000,
+          });
           const uploadUrl = `${origin}/dev-put/${date}/${id}`;
-          const headers = { "content-type": "application/zip" };
+          const headers = {
+            "content-type": "application/zip",
+            "content-length": String(size),
+          };
           return jsonResponse({
             uploadUrl,
             method: "PUT",
@@ -137,13 +163,14 @@ export default {
         const uploadHeaders = {
           "x-amz-checksum-sha256": hexToBase64(sha256),
           "content-type": "application/zip",
+          "content-length": String(size),
         };
 
         const r2Url = `https://${env.ACCOUNT_ID}.r2.cloudflarestorage.com/${bucketName}/${key}?X-Amz-Expires=900`;
         const signed = await aws.sign(r2Url, {
           method: "PUT",
           headers: uploadHeaders,
-          aws: { signQuery: true },
+          aws: { signQuery: true, allHeaders: true },
         });
 
         return jsonResponse({
@@ -158,7 +185,9 @@ export default {
       // PUT /dev-put/<date>/<id> (only available when DEV_DIRECT === "1")
       const devPutMatch = pathname.match(/^\/dev-put\/([^/]+)\/([^/]+)$/);
       if (devPutMatch) {
-        if (request.method !== "PUT" || env.DEV_DIRECT !== "1") {
+        const isLocal =
+          url.hostname === "127.0.0.1" || url.hostname === "localhost";
+        if (request.method !== "PUT" || env.DEV_DIRECT !== "1" || !isLocal) {
           return jsonResponse({ error: "Not found" }, 404);
         }
 
@@ -167,25 +196,44 @@ export default {
           return jsonResponse({ error: "Not found" }, 404);
         }
 
-        const contentLengthHeader = request.headers.get("content-length");
-        if (contentLengthHeader) {
-          const contentLength = parseInt(contentLengthHeader, 10);
-          if (
-            isNaN(contentLength) ||
-            contentLength < 0 ||
-            contentLength > MAX_UPLOAD_SIZE
-          ) {
-            return jsonResponse({ error: "Payload too large" }, 413);
-          }
+        const devEntry = devKeys.get(id);
+        if (!devEntry || Date.now() > devEntry.expires) {
+          devKeys.delete(id);
+          return jsonResponse({ error: "Forbidden" }, 403);
         }
 
+        const contentLengthHeader = request.headers.get("content-length");
+        const contentLength = contentLengthHeader
+          ? parseInt(contentLengthHeader, 10)
+          : NaN;
+        if (isNaN(contentLength) || contentLength !== devEntry.size) {
+          return jsonResponse({ error: "Content-Length mismatch" }, 400);
+        }
+
+        const bodyBuffer = await request.arrayBuffer();
+        if (bodyBuffer.byteLength !== devEntry.size) {
+          return jsonResponse({ error: "Payload size mismatch" }, 400);
+        }
+
+        const hashBuffer = await crypto.subtle.digest("SHA-256", bodyBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const bodySha256 = hashArray
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+
+        if (bodySha256 !== devEntry.sha256) {
+          return jsonResponse({ error: "SHA-256 mismatch" }, 400);
+        }
+
+        devKeys.delete(id);
+
         const key = `uploads/${date}/${id}.zip`;
-        const result = await env.BUCKET.put(key, request.body, {
+        const result = await env.BUCKET.put(key, bodyBuffer, {
           httpMetadata: { contentType: "application/zip" },
         });
 
         const size =
-          result?.size ?? parseInt(contentLengthHeader || "0", 10);
+          result?.size ?? bodyBuffer.byteLength;
         return jsonResponse({ ok: true, size }, 200);
       }
 

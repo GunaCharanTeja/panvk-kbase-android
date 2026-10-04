@@ -138,7 +138,86 @@ fun extractGnuBuildId(file: File): String? {
     return null
 }
 
+const val PANVK_UPLOAD_ENDPOINT = ""
+
 data class UploadResult(val url: String, val host: String, val directUrl: String?)
+
+data class UploadPathState(
+    val name: String,
+    val bytesSent: Long = 0L,
+    val totalBytes: Long = 0L,
+    val status: String = "Uploading",
+    val url: String? = null,
+    val directUrl: String? = null,
+    val verifyStatus: String? = null,
+    val error: String? = null
+)
+
+private fun streamFileWithProgress(
+    file: File,
+    os: java.io.OutputStream,
+    conn: HttpURLConnection,
+    cancelled: AtomicBoolean,
+    onProgress: (bytesSent: Long, total: Long) -> Unit
+) {
+    val fileLength = file.length()
+    var bytesWritten = 0L
+    onProgress(0L, fileLength)
+    file.inputStream().use { fis ->
+        val buffer = ByteArray(64 * 1024)
+        var read: Int
+        while (fis.read(buffer).also { read = it } != -1) {
+            if (cancelled.get()) {
+                conn.disconnect()
+                throw CancellationException("Upload cancelled")
+            }
+            os.write(buffer, 0, read)
+            bytesWritten += read
+            onProgress(bytesWritten, fileLength)
+        }
+    }
+    if (cancelled.get()) {
+        conn.disconnect()
+        throw CancellationException("Upload cancelled")
+    }
+}
+
+fun <T> HttpURLConnection.cancellable(cancelled: AtomicBoolean, block: (HttpURLConnection) -> T): T {
+    if (cancelled.get()) {
+        disconnect()
+        throw CancellationException("Upload cancelled")
+    }
+    val done = AtomicBoolean(false)
+    val watcher = Thread({
+        while (!done.get()) {
+            if (cancelled.get()) {
+                disconnect()
+                break
+            }
+            try {
+                Thread.sleep(200)
+            } catch (_: InterruptedException) {
+                break
+            }
+        }
+    }, "http-cancel-watcher").apply {
+        isDaemon = true
+        start()
+    }
+
+    return try {
+        block(this)
+    } catch (e: IOException) {
+        if (cancelled.get()) {
+            throw CancellationException("Upload cancelled")
+        }
+        throw e
+    } finally {
+        done.set(true)
+        watcher.interrupt()
+        disconnect()
+    }
+}
 
 private fun uploadMultipart(
     urlStr: String,
@@ -183,48 +262,119 @@ private fun uploadMultipart(
         setFixedLengthStreamingMode(totalLength)
     }
 
-    try {
-        conn.outputStream.use { os ->
+    return conn.cancellable(cancelled) {
+        it.outputStream.use { os ->
             os.write(preBytes)
-            var bytesWritten = 0L
-            onProgress(0L, fileLength)
-            file.inputStream().use { fis ->
-                val buffer = ByteArray(64 * 1024)
-                var read: Int
-                while (fis.read(buffer).also { read = it } != -1) {
-                    if (cancelled.get()) {
-                        conn.disconnect()
-                        throw CancellationException("Upload cancelled")
-                    }
-                    os.write(buffer, 0, read)
-                    bytesWritten += read
-                    onProgress(bytesWritten, fileLength)
-                }
-            }
-            if (cancelled.get()) {
-                conn.disconnect()
-                throw CancellationException("Upload cancelled")
-            }
+            streamFileWithProgress(file, os, it, cancelled, onProgress)
             os.write(postBytes)
             os.flush()
         }
         onProgress(fileLength, fileLength)
 
         if (cancelled.get()) {
-            conn.disconnect()
             throw CancellationException("Upload cancelled")
         }
 
+        val code = it.responseCode
+        val stream = if (code in 200..299) it.inputStream else it.errorStream
+        val responseBody = stream?.bufferedReader()?.use { reader -> reader.readText() } ?: ""
+        if (code !in 200..299) {
+            throw IOException("HTTP $code: $responseBody")
+        }
+        responseBody
+    }
+}
+
+fun uploadToR2(
+    endpoint: String,
+    f: File,
+    sha256Hex: String,
+    app: String = "panprobe",
+    version: String,
+    cancelled: AtomicBoolean = AtomicBoolean(false),
+    onProgress: (bytesSent: Long, total: Long) -> Unit
+): UploadResult {
+    if (cancelled.get()) throw CancellationException("Upload cancelled")
+    val reqJson = JSONObject().apply {
+        put("app", app)
+        put("version", version)
+        put("size", f.length())
+        put("sha256", sha256Hex)
+    }.toString().toByteArray(Charsets.UTF_8)
+
+    val postUrl = URL("${endpoint.trimEnd('/')}/upload-url")
+    val postConn = (postUrl.openConnection() as HttpURLConnection).apply {
+        requestMethod = "POST"
+        doOutput = true
+        doInput = true
+        useCaches = false
+        connectTimeout = 30_000
+        readTimeout = 120_000
+        setRequestProperty("User-Agent", "PanProbe/$version")
+        setRequestProperty("Content-Type", "application/json")
+        setFixedLengthStreamingMode(reqJson.size)
+    }
+
+    val resObj = postConn.cancellable(cancelled) { conn ->
+        conn.outputStream.use { it.write(reqJson) }
+        if (cancelled.get()) {
+            throw CancellationException("Upload cancelled")
+        }
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val responseBody = stream?.bufferedReader()?.use { it.readText() } ?: ""
         if (code !in 200..299) {
-            throw IOException("HTTP $code: $responseBody")
+            throw IOException(if (code == 429) "rate limited" else responseBody.ifEmpty { "HTTP $code" })
         }
-        return responseBody
-    } finally {
-        conn.disconnect()
+        JSONObject(responseBody)
     }
+    val uploadUrl = resObj.getString("uploadUrl")
+    val method = resObj.optString("method", "PUT").ifEmpty { "PUT" }
+    val headersObj = resObj.optJSONObject("headers")
+    val downloadUrl = resObj.getString("downloadUrl")
+
+    if (cancelled.get()) throw CancellationException("Upload cancelled")
+
+    val putUrl = URL(uploadUrl)
+    val putConn = (putUrl.openConnection() as HttpURLConnection).apply {
+        requestMethod = method
+        doOutput = true
+        doInput = true
+        useCaches = false
+        connectTimeout = 30_000
+        readTimeout = 120_000
+        setFixedLengthStreamingMode(f.length())
+        if (headersObj != null) {
+            for (key in headersObj.keys()) {
+                // Content-Length comes from setFixedLengthStreamingMode (same value the Worker signed).
+                if (key.equals("content-length", ignoreCase = true)) {
+                    if (headersObj.getString(key) != f.length().toString()) throw IOException("size mismatch")
+                    continue
+                }
+                setRequestProperty(key, headersObj.getString(key))
+            }
+        }
+    }
+
+    putConn.cancellable(cancelled) { conn ->
+        conn.outputStream.use { os ->
+            streamFileWithProgress(f, os, conn, cancelled, onProgress)
+            os.flush()
+        }
+        onProgress(f.length(), f.length())
+
+        if (cancelled.get()) {
+            throw CancellationException("Upload cancelled")
+        }
+
+        val putCode = conn.responseCode
+        val putStream = if (putCode in 200..299) conn.inputStream else conn.errorStream
+        val putBody = putStream?.bufferedReader()?.use { it.readText() } ?: ""
+        if (putCode !in 200..299) {
+            throw IOException(if (putCode == 429) "rate limited" else putBody.ifEmpty { "HTTP $putCode" })
+        }
+    }
+    return UploadResult(url = downloadUrl, host = "r2", directUrl = downloadUrl)
 }
 
 fun uploadToCloud(
@@ -305,16 +455,16 @@ fun verifyUpload(
             readTimeout = 120_000
             setRequestProperty("User-Agent", "PanProbe/$version")
         }
-        try {
-            val code = conn.responseCode
+        conn.cancellable(cancelled) { c ->
+            val code = c.responseCode
             if (cancelled.get()) throw CancellationException("Upload cancelled")
             if (code !in 200..299) {
-                return "Verify FAILED: HTTP $code"
+                return@cancellable "Verify FAILED: HTTP $code"
             }
             val md = MessageDigest.getInstance("SHA-256")
             val buffer = ByteArray(64 * 1024)
             var read: Int
-            conn.inputStream.use { stream ->
+            c.inputStream.use { stream ->
                 while (stream.read(buffer).also { read = it } != -1) {
                     if (cancelled.get()) throw CancellationException("Upload cancelled")
                     md.update(buffer, 0, read)
@@ -327,8 +477,6 @@ fun verifyUpload(
             } else {
                 "Verify FAILED: hash mismatch"
             }
-        } finally {
-            conn.disconnect()
         }
     } catch (e: CancellationException) {
         throw e

@@ -40,16 +40,20 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 data class RunItem(
     val folder: File,
@@ -131,6 +135,7 @@ class MainActivity : ComponentActivity() {
     private var selectedLogTextState = mutableStateOf<String?>(null)
     private var logFilesListState = mutableStateOf<List<File>>(emptyList())
     private var runsListState = mutableStateOf<List<RunItem>>(emptyList())
+    private var uploadEndpoint: String = PANVK_UPLOAD_ENDPOINT
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -143,6 +148,17 @@ class MainActivity : ComponentActivity() {
                 "system" -> driverTypeState.value = DriverType.SYSTEM
                 "imported" -> driverTypeState.value = DriverType.IMPORTED
             }
+        }
+
+        val extraEndpoint = intent.getStringExtra("uploadEndpoint")
+        uploadEndpoint = if (extraEndpoint != null) {
+            val parsed = try { URL(extraEndpoint) } catch (_: Exception) { null }
+            val isValid = parsed != null &&
+                (parsed.protocol.equals("http", ignoreCase = true) || parsed.protocol.equals("https", ignoreCase = true)) &&
+                (parsed.host.equals("127.0.0.1", ignoreCase = true) || parsed.host.equals("localhost", ignoreCase = true))
+            if (isValid) extraEndpoint else PANVK_UPLOAD_ENDPOINT
+        } else {
+            PANVK_UPLOAD_ENDPOINT
         }
 
         refreshLogsList()
@@ -1104,18 +1120,20 @@ class MainActivity : ComponentActivity() {
 
         var cloudConfirmRun by remember { mutableStateOf<RunItem?>(null) }
         var isUploading by remember { mutableStateOf(false) }
-        var uploadBytesSent by remember { mutableLongStateOf(0L) }
-        var uploadTotalBytes by remember { mutableLongStateOf(0L) }
-        val currentCancelFlag = remember { mutableStateOf(AtomicBoolean(false)) }
-        var uploadErrorMsg by remember { mutableStateOf<String?>(null) }
-        var uploadSuccessResult by remember { mutableStateOf<UploadResult?>(null) }
+        var showLinkDialog by remember { mutableStateOf(false) }
+        var showErrorDialog by remember { mutableStateOf(false) }
         var uploadSha256 by remember { mutableStateOf<String?>(null) }
-        var verifyStatus by remember { mutableStateOf<String?>(null) }
-        var isRetryingVerify by remember { mutableStateOf(false) }
+        var pathAState by remember { mutableStateOf(UploadPathState(name = "catbox / gofile")) }
+        var pathBState by remember { mutableStateOf(UploadPathState(name = "PanVK storage (R2)")) }
+        var isRetryingA by remember { mutableStateOf(false) }
+        var isRetryingB by remember { mutableStateOf(false) }
+        val currentCancelFlag = remember { mutableStateOf(AtomicBoolean(false)) }
+        val uploadGeneration = remember { AtomicInteger(0) }
 
         DisposableEffect(Unit) {
             onDispose {
                 currentCancelFlag.value.set(true)
+                uploadGeneration.incrementAndGet()
             }
         }
 
@@ -1124,7 +1142,7 @@ class MainActivity : ComponentActivity() {
                 onDismissRequest = { cloudConfirmRun = null },
                 title = { Text("Send to cloud?") },
                 text = {
-                    Text("This uploads a ZIP of logs to a public file host (catbox.moe). Anyone with the link can download it. It may contain your device model, GPU info, Android version, app and package names and file paths. It does not include accounts, contacts or personal files. Share the link only in the PanVK Telegram group. Files may not be deletable.")
+                    Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Anyone with a link can download it. It may contain your device model, GPU info, Android version, app and package names and file paths. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
                 },
                 confirmButton = {
                     Button(
@@ -1132,52 +1150,167 @@ class MainActivity : ComponentActivity() {
                             val targetRun = cloudConfirmRun
                             cloudConfirmRun = null
                             if (targetRun != null) {
+                                val gen = uploadGeneration.incrementAndGet()
                                 val flag = AtomicBoolean(false)
                                 currentCancelFlag.value.set(true)
                                 currentCancelFlag.value = flag
                                 coroutineScope.launch {
-                                    if (flag.get()) return@launch
+                                    if (flag.get() || uploadGeneration.get() != gen) return@launch
+                                    val endpoint = uploadEndpoint
+                                    val bInitialStatus = if (endpoint.isEmpty()) "Skipped (not configured)" else "Uploading"
+                                    val bInitialError = if (endpoint.isEmpty()) "Skipped (not configured)" else null
+                                    pathAState = UploadPathState(name = "catbox / gofile", status = "Uploading")
+                                    pathBState = UploadPathState(name = "PanVK storage (R2)", status = bInitialStatus, error = bInitialError)
                                     isUploading = true
-                                    uploadBytesSent = 0L
-                                    uploadTotalBytes = 0L
+                                    showLinkDialog = false
+                                    showErrorDialog = false
+
                                     try {
                                         val zip = buildRunZip(targetRun.folder)
-                                        if (flag.get()) return@launch
+                                        if (flag.get() || uploadGeneration.get() != gen) return@launch
                                         val localSha = withContext(Dispatchers.IO) { sha256(zip) }
-                                        if (flag.get()) return@launch
-                                        var lastPercent = -1
-                                        val result = withContext(Dispatchers.IO) {
-                                            uploadToCloud(zip, getAppVersion(), flag) { sent, total ->
-                                                val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
-                                                if (pct != lastPercent || sent == total) {
-                                                    lastPercent = pct
-                                                    coroutineScope.launch {
-                                                        if (flag.get()) return@launch
-                                                        uploadBytesSent = sent
-                                                        uploadTotalBytes = total
+                                        if (flag.get() || uploadGeneration.get() != gen) return@launch
+                                        uploadSha256 = localSha
+
+                                        pathAState = pathAState.copy(totalBytes = zip.length())
+                                        if (endpoint.isNotEmpty()) {
+                                            pathBState = pathBState.copy(totalBytes = zip.length())
+                                        }
+
+                                        coroutineScope {
+                                            val jobA = async(Dispatchers.IO) {
+                                                if (flag.get() || uploadGeneration.get() != gen) return@async
+                                                var lastPercentA = -1
+                                                try {
+                                                    val resA = uploadToCloud(zip, getAppVersion(), flag) { sent, total ->
+                                                        val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
+                                                        if (pct != lastPercentA || sent == total) {
+                                                            lastPercentA = pct
+                                                            if (!flag.get() && uploadGeneration.get() == gen) {
+                                                                pathAState = pathAState.copy(bytesSent = sent, totalBytes = total)
+                                                            }
+                                                        }
+                                                    }
+                                                    if (flag.get() || uploadGeneration.get() != gen) return@async
+                                                    if (resA.directUrl == null) {
+                                                        if (uploadGeneration.get() == gen) {
+                                                            pathAState = pathAState.copy(
+                                                                url = resA.url,
+                                                                directUrl = null,
+                                                                status = "Done (not verified, gofile)",
+                                                                verifyStatus = "– not verified",
+                                                                bytesSent = zip.length(),
+                                                                totalBytes = zip.length()
+                                                            )
+                                                        }
+                                                    } else {
+                                                        if (uploadGeneration.get() == gen) {
+                                                            pathAState = pathAState.copy(
+                                                                url = resA.url,
+                                                                directUrl = resA.directUrl,
+                                                                status = "Verifying",
+                                                                bytesSent = zip.length(),
+                                                                totalBytes = zip.length()
+                                                            )
+                                                        }
+                                                        val vA = verifyUpload(resA.directUrl, localSha, getAppVersion(), flag)
+                                                        if (flag.get() || uploadGeneration.get() != gen) return@async
+                                                        if (uploadGeneration.get() == gen) {
+                                                            if (vA == "Verified ✓") {
+                                                                pathAState = pathAState.copy(status = "Done ✓ verified", verifyStatus = "✓")
+                                                            } else {
+                                                                pathAState = pathAState.copy(status = "Failed: $vA", verifyStatus = "✗")
+                                                            }
+                                                        }
+                                                    }
+                                                } catch (e: CancellationException) {
+                                                    throw e
+                                                } catch (e: Exception) {
+                                                    if (!flag.get() && uploadGeneration.get() == gen) {
+                                                        val msg = e.message ?: e.toString()
+                                                        pathAState = pathAState.copy(status = "Failed: $msg", error = msg)
                                                     }
                                                 }
                                             }
+
+                                            val jobB = async(Dispatchers.IO) {
+                                                if (flag.get() || uploadGeneration.get() != gen) return@async
+                                                if (endpoint.isEmpty()) {
+                                                    if (uploadGeneration.get() == gen) {
+                                                        pathBState = pathBState.copy(status = "Skipped (not configured)", error = "Skipped (not configured)")
+                                                    }
+                                                    return@async
+                                                }
+                                                var lastPercentB = -1
+                                                try {
+                                                    val resB = uploadToR2(
+                                                        endpoint = endpoint,
+                                                        f = zip,
+                                                        sha256Hex = localSha,
+                                                        version = getAppVersion(),
+                                                        cancelled = flag
+                                                    ) { sent, total ->
+                                                        val pct = if (total > 0) ((sent * 100) / total).toInt() else 0
+                                                        if (pct != lastPercentB || sent == total) {
+                                                            lastPercentB = pct
+                                                            if (!flag.get() && uploadGeneration.get() == gen) {
+                                                                pathBState = pathBState.copy(bytesSent = sent, totalBytes = total)
+                                                            }
+                                                        }
+                                                    }
+                                                    if (flag.get() || uploadGeneration.get() != gen) return@async
+                                                    if (uploadGeneration.get() == gen) {
+                                                        pathBState = pathBState.copy(
+                                                            url = resB.url,
+                                                            directUrl = resB.directUrl,
+                                                            status = "Verifying",
+                                                            bytesSent = zip.length(),
+                                                            totalBytes = zip.length()
+                                                        )
+                                                    }
+                                                    val vB = verifyUpload(resB.directUrl, localSha, getAppVersion(), flag)
+                                                    if (flag.get() || uploadGeneration.get() != gen) return@async
+                                                    if (uploadGeneration.get() == gen) {
+                                                        if (vB == "Verified ✓") {
+                                                            pathBState = pathBState.copy(status = "Done ✓ verified", verifyStatus = "✓")
+                                                        } else {
+                                                            pathBState = pathBState.copy(status = "Failed: $vB", verifyStatus = "✗")
+                                                        }
+                                                    }
+                                                } catch (e: CancellationException) {
+                                                    throw e
+                                                } catch (e: Exception) {
+                                                    if (!flag.get() && uploadGeneration.get() == gen) {
+                                                        val msg = e.message ?: e.toString()
+                                                        pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
+                                                    }
+                                                }
+                                            }
+
+                                            jobA.await()
+                                            jobB.await()
                                         }
-                                        if (flag.get()) return@launch
-                                        val vStatus = withContext(Dispatchers.IO) {
-                                            verifyUpload(result.directUrl, localSha, getAppVersion(), flag)
-                                        }
-                                        if (flag.get()) return@launch
+
+                                        if (flag.get() || uploadGeneration.get() != gen) return@launch
                                         isUploading = false
-                                        uploadSuccessResult = result
-                                        uploadSha256 = localSha
-                                        verifyStatus = vStatus
+                                        if (pathAState.url != null || pathBState.url != null) {
+                                            showLinkDialog = true
+                                        } else {
+                                            showErrorDialog = true
+                                        }
                                     } catch (_: CancellationException) {
-                                        if (flag.get()) return@launch
+                                        if (flag.get() || uploadGeneration.get() != gen) return@launch
                                         if (isUploading) {
                                             isUploading = false
                                             Toast.makeText(context, "Upload cancelled", Toast.LENGTH_SHORT).show()
                                         }
                                     } catch (e: Exception) {
-                                        if (flag.get()) return@launch
+                                        if (flag.get() || uploadGeneration.get() != gen) return@launch
                                         isUploading = false
-                                        uploadErrorMsg = e.message ?: "Upload failed"
+                                        val msg = e.message ?: "Upload failed"
+                                        if (pathAState.url == null) pathAState = pathAState.copy(status = "Failed: $msg", error = msg)
+                                        if (pathBState.url == null) pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
+                                        showErrorDialog = true
                                     }
                                 }
                             }
@@ -1195,12 +1328,6 @@ class MainActivity : ComponentActivity() {
         }
 
         if (isUploading) {
-            val progress = if (uploadTotalBytes > 0) (uploadBytesSent.toFloat() / uploadTotalBytes.toFloat()).coerceIn(0f, 1f) else 0f
-            val percent = (progress * 100).toInt()
-            val sentMb = uploadBytesSent / (1024.0 * 1024.0)
-            val totalMb = uploadTotalBytes / (1024.0 * 1024.0)
-            val progressText = String.format(Locale.US, "Uploading %.2f / %.2f MB (%d%%)", sentMb, totalMb, percent)
-
             AlertDialog(
                 onDismissRequest = { /* non-dismissable */ },
                 properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
@@ -1208,23 +1335,47 @@ class MainActivity : ComponentActivity() {
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(
-                            text = progressText,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
+                        for (path in listOf(pathAState, pathBState)) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(path.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+                                val progress = if (path.totalBytes > 0) {
+                                    (path.bytesSent.toFloat() / path.totalBytes.toFloat()).coerceIn(0f, 1f)
+                                } else if (path.status.startsWith("Done") || path.status == "Verifying") {
+                                    1f
+                                } else {
+                                    0f
+                                }
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                val progressText = if (path.status == "Uploading") {
+                                    val percent = (progress * 100).toInt()
+                                    val sentMb = path.bytesSent / (1024.0 * 1024.0)
+                                    val totalMb = path.totalBytes / (1024.0 * 1024.0)
+                                    String.format(Locale.US, "Uploading %.2f / %.2f MB (%d%%)", sentMb, totalMb, percent)
+                                } else {
+                                    path.status
+                                }
+                                Text(
+                                    text = progressText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                                )
+                            }
+                        }
                     }
                 },
                 confirmButton = {
                     OutlinedButton(
                         onClick = {
                             currentCancelFlag.value.set(true)
+                            uploadGeneration.incrementAndGet()
                             isUploading = false
                             Toast.makeText(context, "Upload cancelled", Toast.LENGTH_SHORT).show()
                         }
@@ -1235,74 +1386,127 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        if (uploadErrorMsg != null) {
+        if (showErrorDialog) {
+            val errA = pathAState.error ?: pathAState.status
+            val errB = pathBState.error ?: pathBState.status
             AlertDialog(
-                onDismissRequest = { uploadErrorMsg = null },
+                onDismissRequest = {
+                    showErrorDialog = false
+                    uploadGeneration.incrementAndGet()
+                },
                 title = { Text("Upload Failed") },
                 text = {
                     SelectionContainer {
-                        Text(uploadErrorMsg ?: "")
+                        Text("${pathAState.name}: $errA\n\n${pathBState.name}: $errB")
                     }
                 },
                 confirmButton = {
-                    Button(onClick = { uploadErrorMsg = null }) {
+                    Button(onClick = {
+                        showErrorDialog = false
+                        uploadGeneration.incrementAndGet()
+                    }) {
                         Text("OK")
                     }
                 }
             )
         }
 
-        if (uploadSuccessResult != null) {
-            val res = uploadSuccessResult!!
+        if (showLinkDialog) {
             val hex = uploadSha256 ?: ""
-            val status = verifyStatus ?: ""
-            val shareText = "PanProbe logs: ${res.url}\nSHA-256: $hex"
+            val shareText = buildString {
+                append("PanProbe logs:\n")
+                if (pathAState.url != null) append(pathAState.url).append("\n")
+                if (pathBState.url != null) append(pathBState.url).append("\n")
+                append("SHA-256: $hex")
+            }
 
             AlertDialog(
-                onDismissRequest = { uploadSuccessResult = null },
+                onDismissRequest = {
+                    showLinkDialog = false
+                    uploadGeneration.incrementAndGet()
+                },
                 title = { Text("Upload done") },
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        SelectionContainer {
+                        for (p in listOf(pathAState, pathBState)) {
+                            val isPathA = p.name == pathAState.name
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(
-                                    text = res.url,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = "SHA-256: $hex",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                val statusTone = when {
-                                    status.startsWith("Verified") -> Tone.Ok
-                                    status.startsWith("Verify FAILED") -> Tone.Error
-                                    else -> Tone.Neutral
-                                }
-                                StatusPill(text = status, tone = statusTone)
-                            }
-                        }
-                        if (status.startsWith("Verify FAILED")) {
-                            OutlinedButton(
-                                enabled = !isRetryingVerify,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        isRetryingVerify = true
-                                        verifyStatus = "Verifying..."
-                                        val newStatus = withContext(Dispatchers.IO) {
-                                            verifyUpload(res.directUrl, hex, getAppVersion())
+                                Text(p.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                                if (p.url != null) {
+                                    SelectionContainer {
+                                        Text(
+                                            text = p.url,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        val (statusText, statusTone) = when (p.verifyStatus) {
+                                            "✓" -> Pair("✓", Tone.Ok)
+                                            "– not verified" -> Pair("– not verified", Tone.Neutral)
+                                            "✗" -> Pair("✗", Tone.Error)
+                                            else -> Pair(p.verifyStatus ?: "", Tone.Neutral)
                                         }
-                                        verifyStatus = newStatus
-                                        isRetryingVerify = false
+                                        StatusPill(text = statusText, tone = statusTone)
+
+                                        if (p.verifyStatus == "✗" && p.directUrl != null) {
+                                            val isRetrying = if (isPathA) isRetryingA else isRetryingB
+                                            OutlinedButton(
+                                                enabled = !isRetrying,
+                                                onClick = {
+                                                    val retryGen = uploadGeneration.get()
+                                                    coroutineScope.launch {
+                                                        if (isPathA) isRetryingA = true else isRetryingB = true
+                                                        val currentP = if (isPathA) pathAState else pathBState
+                                                        if (isPathA) {
+                                                            pathAState = pathAState.copy(status = "Verifying", verifyStatus = "Verifying...")
+                                                        } else {
+                                                            pathBState = pathBState.copy(status = "Verifying", verifyStatus = "Verifying...")
+                                                        }
+                                                        val newStatus = withContext(Dispatchers.IO) {
+                                                            verifyUpload(currentP.directUrl, hex, getAppVersion(), currentCancelFlag.value)
+                                                        }
+                                                        if (uploadGeneration.get() != retryGen) return@launch
+                                                        val isOk = newStatus == "Verified ✓"
+                                                        val updated = currentP.copy(
+                                                            status = if (isOk) "Done ✓ verified" else "Failed: $newStatus",
+                                                            verifyStatus = if (isOk) "✓" else "✗"
+                                                        )
+                                                        if (isPathA) pathAState = updated else pathBState = updated
+                                                        if (isPathA) isRetryingA = false else isRetryingB = false
+                                                    }
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                                modifier = Modifier.height(28.dp)
+                                            ) {
+                                                Text(if (isRetrying) "Retrying..." else "Retry", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    SelectionContainer {
+                                        Text(
+                                            text = p.error ?: p.status,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
                                     }
                                 }
-                            ) {
-                                Text(if (isRetryingVerify) "Retrying..." else "Retry")
                             }
+                        }
+
+                        SelectionContainer {
+                            Text(
+                                text = "SHA-256: $hex",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace
+                            )
                         }
                     }
                 },
@@ -1349,7 +1553,10 @@ class MainActivity : ComponentActivity() {
                             Text("Open Telegram group")
                         }
                         OutlinedButton(
-                            onClick = { uploadSuccessResult = null },
+                            onClick = {
+                                showLinkDialog = false
+                                uploadGeneration.incrementAndGet()
+                            },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Close")
