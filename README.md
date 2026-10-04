@@ -1,5 +1,7 @@
 # PanVK Kbase Android Driver
 
+> **🧪 Testers wanted!** Test your games with PanPlay. After each run, whether the game crashed or not, open the session logs screen, tap **Share as ZIP**, and send the ZIP to our Telegram group: **[t.me/+E-NhUATmkqE5ODg1](https://t.me/+E-NhUATmkqE5ODg1)**. Include the game name, your GPU, the FPS you saw and any glitches.
+
 <p align="center">
   <img src="apps/panvk-launcher/tests/results/samevaresults/cube/x86_64-d3d11-cube-hud.png" alt="Direct3D 11 cube demo running through DXVK on PanVK (Mali-G615)" width="100%">
 </p>
