@@ -337,7 +337,10 @@ class MainActivity : ComponentActivity() {
                 }
                 Pair(s, obj)
             } else {
-                val errObj = JSONObject().apply { put("error", raw) }
+                val errObj = JSONObject().apply {
+                    put("error", raw)
+                    put("glInfo", glInfoJson())
+                }
                 Pair(errObj.toString(2), null)
             }
         }
@@ -390,6 +393,12 @@ class MainActivity : ComponentActivity() {
                 runDevInfo.exists() -> runDevInfo.readText()
                 infoRawJsonState.value != null -> infoRawJsonState.value
                 else -> null
+            }?.let { raw ->
+                try {
+                    JSONObject(raw).apply { put("glInfo", glInfoJson()) }.toString(2)
+                } catch (_: Exception) {
+                    raw
+                }
             }
             if (vkJsonStr != null) {
                 File(stageDir, "vulkan-info.json").writeText(vkJsonStr)
@@ -496,6 +505,7 @@ class MainActivity : ComponentActivity() {
 
             // 8. manifest.json
             val pInfo = try { packageManager.getPackageInfo(packageName, 0) } catch (_: Exception) { null }
+            val glInfo = queryGlInfo()
             val manifestObj = JSONObject().apply {
                 put("timestamp", SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()))
                 put("app", JSONObject().apply {
@@ -535,6 +545,9 @@ class MainActivity : ComponentActivity() {
                     }
                 })
                 put("gpu", JSONObject().apply {
+                    put("glRenderer", glInfo?.renderer ?: JSONObject.NULL)
+                    put("glVendor", glInfo?.vendor ?: JSONObject.NULL)
+                    put("glVersion", glInfo?.version ?: JSONObject.NULL)
                     val vkDeviceName = gpuName(gpuVal("deviceName"))
                     val gpuinfoModel = if (gpuinfoRaw != null) Regex("""Mali-[A-Za-z0-9]+""").find(gpuinfoRaw)?.value else null
                     val gpuModel = vkDeviceName ?: gpuinfoModel
@@ -624,8 +637,9 @@ class MainActivity : ComponentActivity() {
 
         val jsonText = if (jsonFile.exists()) jsonFile.readText() else ""
         val jsonObject = try { JSONObject(jsonText) } catch (_: Exception) { null }
+        jsonObject?.put("glInfo", glInfoJson())
 
-        Pair(jsonObject, if (jsonObject != null) jsonText else "Result: $res\n$logContent")
+        Pair(jsonObject, if (jsonObject != null) jsonObject.toString(2) else "Result: $res\n$logContent")
     }
 
 

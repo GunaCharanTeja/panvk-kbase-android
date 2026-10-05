@@ -448,6 +448,10 @@ fun InfoTabContent(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var showRunTestsPrompt by remember { mutableStateOf(false) }
+    var glInfo by remember { mutableStateOf<GlInfo?>(null) }
+    LaunchedEffect(Unit) {
+        glInfo = withContext(Dispatchers.IO) { queryGlInfo() }
+    }
 
     val shareJson = {
         if (rawJson != null) {
@@ -456,7 +460,7 @@ fun InfoTabContent(
                     val jsonFile = withContext(Dispatchers.IO) {
                         val shareDir = File(context.cacheDir, "share").apply { mkdirs() }
                         val file = File(shareDir, "vulkan-info.json")
-                        file.writeText(rawJson)
+                        file.writeText(JSONObject(rawJson).apply { put("glInfo", glInfoJson()) }.toString(2))
                         file
                     }
                     shareFile(context, jsonFile, "application/json", "Share Vulkan JSON")
@@ -540,6 +544,15 @@ fun InfoTabContent(
 
         Spacer(Modifier.height(8.dp))
 
+        if (parsedInfo == null) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    GlInfoRow(glInfo)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         when {
             isLoading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -547,7 +560,7 @@ fun InfoTabContent(
                 }
             }
             parsedInfo != null -> {
-                VulkanInfoLazyList(parsedInfo)
+                VulkanInfoLazyList(parsedInfo, glInfo)
             }
             rawErrorText != null -> {
                 SelectionContainer(
@@ -579,7 +592,7 @@ fun InfoTabContent(
 }
 
 @Composable
-fun VulkanInfoLazyList(info: ParsedVulkanInfo) {
+fun VulkanInfoLazyList(info: ParsedVulkanInfo, glInfo: GlInfo? = null) {
     var selectedDeviceIndex by remember { mutableIntStateOf(0) }
     val selectedDev = info.devices.getOrNull(selectedDeviceIndex) ?: info.devices.firstOrNull()
 
@@ -625,7 +638,7 @@ fun VulkanInfoLazyList(info: ParsedVulkanInfo) {
         // 1. Header Card
         if (selectedDev != null) {
             item(key = "header_card_${selectedDev.index}") {
-                DeviceHeaderCard(selectedDev)
+                DeviceHeaderCard(selectedDev, glInfo)
             }
         } else {
             item(key = "no_devices") {
@@ -633,11 +646,16 @@ fun VulkanInfoLazyList(info: ParsedVulkanInfo) {
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Text(
-                        text = "No Vulkan physical devices found.",
+                    Column(
                         modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        GlInfoRow(glInfo)
+                        Text(
+                            text = "No Vulkan physical devices found.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
         }
@@ -1049,7 +1067,7 @@ private fun coreRequirementValue(dev: DeviceInfo, minor: Int): String {
 // ============================================================================
 
 @Composable
-fun DeviceHeaderCard(dev: DeviceInfo) {
+fun DeviceHeaderCard(dev: DeviceInfo, glInfo: GlInfo? = null) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -1078,6 +1096,8 @@ fun DeviceHeaderCard(dev: DeviceInfo) {
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            GlInfoRow(glInfo)
 
             // Driver Information
             if (dev.driverName != null || dev.driverInfo != null) {
@@ -1115,6 +1135,12 @@ fun DeviceHeaderCard(dev: DeviceInfo) {
             }
         }
     }
+}
+
+@Composable
+private fun GlInfoRow(glInfo: GlInfo?) {
+    val value = listOfNotNull(glInfo?.renderer, glInfo?.vendor, glInfo?.version).joinToString(" · ")
+    InfoKeyVal("GPU (OpenGL ES)", value.ifEmpty { "N/A" })
 }
 
 @Composable

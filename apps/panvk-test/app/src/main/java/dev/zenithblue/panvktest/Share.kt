@@ -332,9 +332,9 @@ fun buildUploadRecord(
         put("verified_a", pathA.verifyStatus == "✓")
         put("verified_b", pathB.verifyStatus == "✓")
     }
-    fun putText(key: String, value: Any?, limit: Int = 128) {
+    fun putText(key: String, value: Any?, limit: Int = 128, target: JSONObject = record) {
         if (value == null || value == JSONObject.NULL) return
-        record.put(key, value.toString().filterNot { Character.isISOControl(it) }.take(limit))
+        target.put(key, value.toString().filterNot { Character.isISOControl(it) }.take(limit))
     }
     val app = manifest.optJSONObject("app")
     putText("version", app?.opt("versionName"), 32)
@@ -343,9 +343,13 @@ fun buildUploadRecord(
     putText("device_model", device?.opt("model"))
     putText("soc", device?.opt("socModel")?.takeUnless { it == JSONObject.NULL } ?: device?.opt("hardware"))
     val gpu = manifest.optJSONObject("gpu")
-    putText("gpu_model", gpuName(gpu?.opt("gpuModel")) ?: gpuName(gpu?.opt("deviceName")))
+    putText("gpu_model", gpuName(gpu?.opt("glRenderer")) ?: gpuName(gpu?.opt("gpuModel")) ?: gpuName(gpu?.opt("deviceName")))
     putText("gpu_id", gpu?.opt("gpuId"))
     putText("arch", gpu?.opt("arch"))
+    val glExtra = JSONObject()
+    putText("glVendor", gpu?.opt("glVendor"), target = glExtra)
+    putText("glVersion", gpu?.opt("glVersion"), target = glExtra)
+    if (glExtra.length() > 0) record.put("extra_json", glExtra)
     val driver = manifest.optJSONObject("driver")
     putText("driver_name", driver?.opt("driverName"))
     putText("driver_version", driver?.opt("driverVersion"))
