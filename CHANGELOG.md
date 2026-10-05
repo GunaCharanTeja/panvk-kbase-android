@@ -1,5 +1,58 @@
 # Changelog
 
+## g615-v11-csf-v0.1.0-beta.15 (prerelease)
+
+Mesa `5a07217f034b` + the series up to 105. Tested on Poco X6 Pro, Mali-G615 MC6 (v11),
+mali_kbase CSF UAPI 1.21. Mali v9 stays experimental (unchanged from beta.14).
+
+### Performance (Need for Speed: Most Wanted in PanPlay, gameplay window, HUD shows `PanVK-kbase beta.15`)
+
+| Build (2 runs each) | fps | p50 / p99 frame time | frames > 50 ms | frames > 100 ms | GPU busy / clock |
+|---|---|---|---|---|---|
+| beta.14 | 24.3 / 23.6 | 33 / 102 ms | 634 / 663 | 34 / 44 | 94% / ~840 MHz |
+| beta.15 | 38.3 / 37.0 (40.1 on the final .so) | 22-24 / 58 ms | 77 / 83 (84) | 1 / 1 (1) | ~96% / ~1310 MHz |
+
+### Fixed
+
+- Tiler heap renewal no longer drains the graphics subqueues on the CPU (102).
+  It ran on almost every submit (~5700 renewals in 140 s, 15 ms each). Two
+  TILER_HEAP descriptor slots let in-flight work keep the retired heap; a
+  bounded drain happens only if the retired heap stays busy for 4x the budget.
+- Same-queue binary semaphores are waited for on the GPU by default (103).
+  The CPU wait cost ~21 ms about once per frame. `PANVK_KBASE_GPU_SEMAPHORE_WAITS=0`
+  restores CPU waits.
+- The next tiler heap context is created on a worker thread (104), taking
+  ~7 ms of `KBASE_IOCTL_CS_TILER_HEAP_INIT` off `vkQueueSubmit` ~12 times a second.
+- `PANVK_DEBUG=trace` on kbase: the CS trace buffers are now reset before each
+  submit (105). Before, every submit re-decoded all earlier traces (a 700 MB
+  log for one PanProbe test).
+- The CSF tracebuf is mapped at a kbase-assigned VA (101), fixing PanProbe with
+  the Mesa debug env.
+- `driverInfo` reads `PanVK-kbase beta.15`.
+
+### Notes
+
+- kbase submission already returned right after the ring kick; the remaining
+  NFS limit is GPU time (~96% busy at ~1310 MHz). More fps needs GPU-side work (beta.16).
+- Dropped: allocating the 160 MiB prerast arenas lazily. It saved ~480 MiB of GPU
+  memory in NFS (3 VkDevices) but cost ~3 fps in interleaved runs.
+
+### Validation
+
+- CTS (glibc build of the same series): synchronization basic/smoke/timeline/implicit
+  + memory, 11331 cases: 11257 pass / 56 fail / 18 not supported; the 56 fail on beta.14 too.
+  The wider 66,796-case sync/memory/query run on 102+103: 0 new failures vs beta.14.
+- PanProbe 17/17 on the Poco with the Mesa debug env off; with it on, all tests pass
+  (the PanProbe app itself can run out of memory reading very large trace logs).
+- v9 tablet (Mali-G57 MC2): PanProbe 1/17, unchanged.
+
+### Known issues
+
+- Fallout 4 (GOG GOTY, x86_64) hangs before it loads any graphics driver: black
+  screen, no DXVK log. Same on beta.14. Outside the driver; see
+  `worklogs/driver-remaining/fo4-hang-before-driver.md`.
+- Mali v9 is experimental and partly broken. v10/v12/v13/v14 are untested.
+
 ## g615-v11-csf-v0.1.0-beta.13 (prerelease)
 
 Mesa `5a07217f034b` + the series up to 100

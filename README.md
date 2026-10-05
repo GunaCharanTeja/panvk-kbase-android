@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://t.me/+E-NhUATmkqE5ODg1"><img src="https://img.shields.io/badge/Telegram-Join%20testers-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Join the Telegram testers group"></a>
-  <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.14"><img src="https://img.shields.io/badge/driver-beta.14-orange?style=for-the-badge" alt="Driver beta.14"></a>
+  <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.15"><img src="https://img.shields.io/badge/driver-beta.15-orange?style=for-the-badge" alt="Driver beta.15"></a>
   <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panplay-v1.2.1"><img src="https://img.shields.io/badge/PanPlay-1.2.1-blue?style=for-the-badge&logo=android&logoColor=white" alt="PanPlay 1.2.1"></a>
   <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panprobe-v1.2.1"><img src="https://img.shields.io/badge/PanProbe-1.2.1-blue?style=for-the-badge&logo=android&logoColor=white" alt="PanProbe 1.2.1"></a>
 </p>
@@ -149,13 +149,14 @@ change creates a new release even if the Mesa SHA is unchanged.
 
 ### Current status
 
-Latest: **[`g615-v11-csf-v0.1.0-beta.14`](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.14)**
+Latest: **[`g615-v11-csf-v0.1.0-beta.15`](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.15)**
 (prerelease, Mesa `5a07217f` plus the committed series up to 100 and `jm-v9`). Each
 release ships the Android and glibc drivers, an `.adpkg` package, an EMULATOR
 zip, the test APK and screenshots. Full history: [`CHANGELOG.md`](CHANGELOG.md).
 
 | Release | Highlights |
 |---|---|
+| **beta.15** | Faster kbase submission on v11: no CPU graphics drain on tiler heap renewal (102), same-queue semaphores waited on the GPU (103), next tiler heap created on a worker thread (104). NFS: Most Wanted on G615 goes from 24 to 38-40 fps, p99 frame time 102 to 58 ms, >50 ms frames 650 to ~80. `PANVK_DEBUG=trace` works on kbase again (101, 105). CTS sync + memory: no new failures; PanProbe 17/17. v9 still experimental. Fallout 4 hangs before loading the driver (also on beta.14). |
 | **beta.14** | Adds **EXPERIMENTAL, partly broken** Mali v9 (Valhall JM: G57/G68/G77/G78 class) support to the universal ICD (`jm-v9` series: kbase JM atom submission, v9 backend ported from FristOneRR-Panvk-Source, Vulkan 1.1 reporting). Tested only on Mali-G57 MC2: CTS `api.smoke` 4/6, `simple_draw` 4/4, `synchronization.basic` 21 pass/8 not supported, PanProbe 1/17. v10/v12/v13/v14 untested; v11 was tested on beta.13. `driverInfo` reads `PanVK-kbase beta.14`. |
 | **beta.13** | One universal Android ICD for v10-v14. **Only v11 (G615) is tested; v10/v12/v13/v14 are built but untested, and testers are needed.** The kbase path now admits v14 without `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER`; v13 was already admitted. Fixes PanProbe `gs_viewport_depth` case A, which regressed in beta.11 (100). On kbase, `gpu_prerast` arenas are committed up front again. GPU-fault growth lost the first GS draw. The shared-TLS memory fix from 097 stays. The kbase CS register-count fallback is now 128 on v12+; 96 was too small. `driverInfo` now reads `PanVK-kbase beta.13 (Mesa 26.3.0-devel ...)`, shown in the DXVK HUD and PanProbe. |
 | **beta.12** | One universal Android ICD for v10, v11 and v12. **Only v11 (G615) is tested; v10 and v12 are built but untested, and testers are needed.** The release notes give the command that reports your GPU ID. |
