@@ -7,8 +7,8 @@
 <p align="center">
   <a href="https://t.me/+E-NhUATmkqE5ODg1"><img src="https://img.shields.io/badge/Telegram-Join%20testers-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Join the Telegram testers group"></a>
   <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/g615-v11-csf-v0.1.0-beta.13"><img src="https://img.shields.io/badge/driver-beta.13-orange?style=for-the-badge" alt="Driver beta.13"></a>
-  <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panplay-v1.1.0"><img src="https://img.shields.io/badge/PanPlay-1.1.0-blue?style=for-the-badge&logo=android&logoColor=white" alt="PanPlay 1.1.0"></a>
-  <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panprobe-v1.1.0"><img src="https://img.shields.io/badge/PanProbe-1.1.0-blue?style=for-the-badge&logo=android&logoColor=white" alt="PanProbe 1.1.0"></a>
+  <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panplay-v1.2.0"><img src="https://img.shields.io/badge/PanPlay-1.2.0-blue?style=for-the-badge&logo=android&logoColor=white" alt="PanPlay 1.2.0"></a>
+  <a href="https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panprobe-v1.2.0"><img src="https://img.shields.io/badge/PanProbe-1.2.0-blue?style=for-the-badge&logo=android&logoColor=white" alt="PanProbe 1.2.0"></a>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 > [!IMPORTANT]
 > **🧪 Testers wanted!**
 >
-> 1. Install [PanPlay](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panplay-v1.1.0) and play your games.
+> 1. Install [PanPlay](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panplay-v1.2.0) and play your games.
 > 2. After **every** run, whether the game crashed or not, open the session logs screen and tap **Send to cloud** (or **Share as ZIP**).
 > 3. Send the link or ZIP to the **[Telegram testers group](https://t.me/+E-NhUATmkqE5ODg1)**, with the game name, your GPU, the FPS you saw and any glitches.
 
@@ -54,8 +54,8 @@ apps that can load an alternate Vulkan ICD.
 
 | | App | What it is | Download |
 |---|---|---|---|
-| <img src="apps/panvk-launcher/docs/panplay-logo-512.png" width="48" alt="PanPlay logo"> | **PanPlay** (`apps/panvk-launcher`) | Windows game launcher (Wine + DXVK + built-in X server) with the PanVK driver bundled | [PanPlay 1.1.0](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panplay-v1.1.0) · [all releases](https://github.com/zenithblue-oss/panvk-kbase-android/releases?q=panplay&expanded=true) |
-| <img src="apps/panvk-test/docs/panprobe-logo-512.png" width="48" alt="PanProbe logo"> | **PanProbe** (`apps/panvk-test`) | Vulkan feature/extension info and on-device driver tests | [PanProbe 1.1.0](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panprobe-v1.1.0) · [all releases](https://github.com/zenithblue-oss/panvk-kbase-android/releases?q=panprobe&expanded=true) |
+| <img src="apps/panvk-launcher/docs/panplay-logo-512.png" width="48" alt="PanPlay logo"> | **PanPlay** (`apps/panvk-launcher`) | Windows game launcher (Wine + DXVK + built-in X server) with the PanVK driver bundled | [PanPlay 1.2.0](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panplay-v1.2.0) · [all releases](https://github.com/zenithblue-oss/panvk-kbase-android/releases?q=panplay&expanded=true) |
+| <img src="apps/panvk-test/docs/panprobe-logo-512.png" width="48" alt="PanProbe logo"> | **PanProbe** (`apps/panvk-test`) | Vulkan feature/extension info and on-device driver tests | [PanProbe 1.2.0](https://github.com/zenithblue-oss/panvk-kbase-android/releases/tag/panprobe-v1.2.0) · [all releases](https://github.com/zenithblue-oss/panvk-kbase-android/releases?q=panprobe&expanded=true) |
 
 Both apps are tested on the Mali-G615 only. See [apps/panvk-launcher/docs](apps/panvk-launcher/docs) for launcher usage.
 
