@@ -84,64 +84,87 @@ async function main() {
         sha256,
       }),
     });
-    assert.strictEqual(
-      postRes.status,
-      200,
-      `Expected 200 from POST /upload-url, got ${postRes.status}`
-    );
 
-    const postData = await postRes.json();
-    assert.ok(postData.uploadUrl, "Expected uploadUrl in response");
-    assert.strictEqual(postData.method, "PUT", "Expected method PUT");
-    assert.ok(postData.headers, "Expected headers in response");
-    assert.ok(postData.downloadUrl, "Expected downloadUrl in response");
-    assert.strictEqual(postData.expiresIn, 900, "Expected expiresIn 900");
-    console.log("PASS: POST /upload-url returned valid uploadUrl and downloadUrl");
+    if (postRes.status === 503) {
+      const postData = await postRes.json();
+      if (postData.error === "storage not configured") {
+        console.log("SKIP: R2 roundtrip skipped (storage not configured)");
+      } else {
+        assert.fail(
+          `Unexpected 503 response from POST /upload-url: ${JSON.stringify(postData)}`
+        );
+      }
+    } else {
+      assert.strictEqual(
+        postRes.status,
+        200,
+        `Expected 200 from POST /upload-url, got ${postRes.status}`
+      );
 
-    // PUT body with returned headers
-    const putRes = await fetch(postData.uploadUrl, {
-      method: "PUT",
-      headers: postData.headers,
-      body: buffer,
-    });
-    assert.strictEqual(
-      putRes.status,
-      200,
-      `Expected 200 from PUT upload, got ${putRes.status}`
-    );
-    console.log("PASS: PUT body with returned headers succeeded with 200");
+      const postData = await postRes.json();
+      assert.ok(postData.uploadUrl, "Expected uploadUrl in response");
+      assert.strictEqual(postData.method, "PUT", "Expected method PUT");
+      assert.ok(postData.headers, "Expected headers in response");
+      assert.ok(postData.downloadUrl, "Expected downloadUrl in response");
+      assert.strictEqual(postData.expiresIn, 900, "Expected expiresIn 900");
+      console.log(
+        "PASS: POST /upload-url returned valid uploadUrl and downloadUrl"
+      );
 
-    // GET downloadUrl and compare sha256
-    const getRes = await fetch(postData.downloadUrl);
-    assert.strictEqual(
-      getRes.status,
-      200,
-      `Expected 200 from GET downloadUrl, got ${getRes.status}`
-    );
+      // PUT body with returned headers
+      const putRes = await fetch(postData.uploadUrl, {
+        method: "PUT",
+        headers: postData.headers,
+        body: buffer,
+      });
+      assert.strictEqual(
+        putRes.status,
+        200,
+        `Expected 200 from PUT upload, got ${putRes.status}`
+      );
+      console.log("PASS: PUT body with returned headers succeeded with 200");
 
-    const downloadedBytes = Buffer.from(await getRes.arrayBuffer());
-    const downloadedSha = crypto
-      .createHash("sha256")
-      .update(downloadedBytes)
-      .digest("hex");
-    assert.strictEqual(
-      downloadedSha,
-      sha256,
-      `SHA256 mismatch: expected ${sha256}, got ${downloadedSha}`
-    );
-    console.log("PASS: GET downloadUrl returned matching sha256");
+      // GET downloadUrl and compare sha256
+      const getRes = await fetch(postData.downloadUrl);
+      assert.strictEqual(
+        getRes.status,
+        200,
+        `Expected 200 from GET downloadUrl, got ${getRes.status}`
+      );
+
+      const downloadedBytes = Buffer.from(await getRes.arrayBuffer());
+      const downloadedSha = crypto
+        .createHash("sha256")
+        .update(downloadedBytes)
+        .digest("hex");
+      assert.strictEqual(
+        downloadedSha,
+        sha256,
+        `SHA256 mismatch: expected ${sha256}, got ${downloadedSha}`
+      );
+      console.log("PASS: GET downloadUrl returned matching sha256");
+    }
   }
 
   // 5. 404 test: Non-existent file
   {
     const randomUuid = crypto.randomUUID();
     const res = await fetch(`${BASE}/f/2026-01-01/${randomUuid}`);
-    assert.strictEqual(
-      res.status,
-      404,
-      `Expected 404 for non-existent file, got ${res.status}`
-    );
-    console.log("PASS: GET /f/2026-01-01/<random-uuid> returned 404");
+    if (res.status === 503) {
+      const data = await res.json();
+      if (data.error === "storage not configured") {
+        console.log("PASS: GET /f/ returned 503 storage not configured (R2 not bound)");
+      } else {
+        assert.fail(`Unexpected 503: ${JSON.stringify(data)}`);
+      }
+    } else {
+      assert.strictEqual(
+        res.status,
+        404,
+        `Expected 404 for non-existent file, got ${res.status}`
+      );
+      console.log("PASS: GET /f/2026-01-01/<random-uuid> returned 404");
+    }
   }
 
   // 6. 404 test: Root route

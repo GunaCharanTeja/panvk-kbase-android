@@ -2,14 +2,21 @@ name = "panvk-upload"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
 
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "panvk-logs"
+# R2 needs a card; optional. Uncomment after creating the bucket:
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "panvk-logs"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "panvk-uploads"
+database_id = "00000000-0000-0000-0000-000000000000" # replace with id from `wrangler d1 create`
 
 [vars]
 BUCKET_NAME = "panvk-logs"
 ACCOUNT_ID = "" # User fills with their Cloudflare Account ID
 DEV_DIRECT = "0"
+DAILY_RECORD_CAP = "2000"
 
 # Rate limiting binding
 # Note: Cloudflare rate limiting binding only supports periods of 10 or 60 seconds;
@@ -18,3 +25,8 @@ DEV_DIRECT = "0"
 name = "UPLOAD_LIMIT"
 namespace_id = "1001"
 simple = { limit = 2, period = 60 }
+
+[[ratelimits]]
+name = "RECORD_LIMIT"
+namespace_id = "1002"
+simple = { limit = 10, period = 60 }
