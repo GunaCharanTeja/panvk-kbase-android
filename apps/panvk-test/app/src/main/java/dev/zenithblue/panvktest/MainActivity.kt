@@ -49,6 +49,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.URL
 import java.text.SimpleDateFormat
+import java.util.ArrayDeque
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.CancellationException
@@ -632,7 +633,7 @@ class MainActivity : ComponentActivity() {
         val jsonFile = File(cacheDir, "vkinfo.json").apply { delete() }
         val res = Native.run(libPath, arrayOf(driverPath, jsonFile.absolutePath), env, logFile.absolutePath, 30000)
 
-        val logContent = if (logFile.exists()) logFile.readText() else ""
+        val logContent = if (logFile.exists()) readLogCapped(logFile) else ""
         refreshLogsList()
 
         val jsonText = if (jsonFile.exists()) jsonFile.readText() else ""
@@ -655,9 +656,20 @@ class MainActivity : ComponentActivity() {
         val res = Native.run(libPath, args, env, logFile.absolutePath, 60000)
         val durationMs = System.currentTimeMillis() - t0
 
-        val logContent = if (logFile.exists()) logFile.readText() else ""
-        val lines = logContent.lines()
-        val hasFail = lines.any { it.trimStart().startsWith("FAIL") }
+        var hasFail = false
+        var mismatchSum = 0L
+        var fps: String? = null
+        val mismatchRegex = Regex("""mismatch=(\d+)""")
+        val fpsRegex = Regex("""FPS ([0-9.]+)""")
+        val last40 = ArrayDeque<String>(40)
+        if (logFile.exists()) scanLog(logFile) { line ->
+            if (line.trimStart().startsWith("FAIL")) hasFail = true
+            mismatchSum += mismatchRegex.findAll(line)
+                .sumOf { it.groupValues[1].toLongOrNull() ?: 0L }
+            if (fps == null) fps = fpsRegex.find(line)?.groupValues?.get(1)
+            if (last40.size == 40) last40.removeFirst()
+            last40.addLast(line)
+        }
 
         val status = when {
             res == "timeout" -> "TIMEOUT"
@@ -672,11 +684,6 @@ class MainActivity : ComponentActivity() {
             else -> "FAIL"
         }
 
-        val mismatchSum = Regex("""mismatch=(\d+)""").findAll(logContent)
-            .sumOf { it.groupValues[1].toLongOrNull() ?: 0L }
-        val fps = Regex("""FPS ([0-9.]+)""").find(logContent)?.groupValues?.get(1)
-        val last40 = lines.takeLast(40)
-
         refreshLogsList()
 
         TestResult(
@@ -686,7 +693,7 @@ class MainActivity : ComponentActivity() {
             fps = fps,
             durationMs = durationMs,
             logFile = logFile,
-            lastLines = last40
+            lastLines = last40.toList()
         )
     }
 
@@ -753,17 +760,27 @@ class MainActivity : ComponentActivity() {
         if (hangPhase == null) thread.join()
 
         val result = holder.result ?: ""
-        val logContent = if (logFile.exists()) logFile.readText() else ""
-        val lines = logContent.lines()
-        val hasFail = lines.any { it.trimStart().startsWith("FAIL") }
+        var hasFail = false
+        var fps: String? = null
+        var resized: String? = null
+        val fpsRegex = Regex("""FPS ([0-9.]+)""")
+        val resizedRegex = Regex("""FPS_RESIZED ([0-9.]+)""")
+        val phaseRegex = Regex("""PHASE (\S+) ms=(\d+)""")
+        val phases = mutableListOf<String>()
+        val last40 = ArrayDeque<String>(40)
+        if (logFile.exists()) scanLog(logFile) { line ->
+            if (line.trimStart().startsWith("FAIL")) hasFail = true
+            if (fps == null) fps = fpsRegex.find(line)?.groupValues?.get(1)
+            if (resized == null) resized = resizedRegex.find(line)?.groupValues?.get(1)
+            phaseRegex.findAll(line).forEach {
+                phases.add("${it.groupValues[1]} ${it.groupValues[2]}ms")
+            }
+            if (last40.size == 40) last40.removeFirst()
+            last40.addLast(line)
+        }
         val status = if (hangPhase == null && result == "exit:0" && !hasFail) "PASS" else "FAIL"
-        val fps = Regex("""FPS ([0-9.]+)""").find(logContent)?.groupValues?.get(1)
-        val resized = Regex("""FPS_RESIZED ([0-9.]+)""").find(logContent)?.groupValues?.get(1) ?: ""
-        val phases = Regex("""PHASE (\S+) ms=(\d+)""")
-            .findAll(logContent)
-            .joinToString(", ") { "${it.groupValues[1]} ${it.groupValues[2]}ms" }
         val extra = (if (hangPhase != null) "hang in $hangPhase | " else "") +
-            "resized FPS $resized | $phases"
+            "resized FPS ${resized ?: ""} | ${phases.joinToString(", ")}"
 
         refreshLogsList()
         TestResult(
@@ -772,7 +789,7 @@ class MainActivity : ComponentActivity() {
             fps = fps,
             durationMs = System.currentTimeMillis() - t0,
             logFile = logFile,
-            lastLines = lines.takeLast(40),
+            lastLines = last40.toList(),
             extra = extra
         )
     }
@@ -1469,7 +1486,7 @@ class MainActivity : ComponentActivity() {
                                     if (e is R2StorageNotConfiguredException) {
                                         pathBState = pathBState.copy(status = "Skipped (not configured)", error = "Skipped (not configured)")
                                     } else if (e is ProjectStorageTooBigException) {
-                                        pathBState = pathBState.copy(status = "Too big for project storage", error = null)
+                                        pathBState = pathBState.copy(status = "Too big for PanVK storage (zip over 25 MiB) - use the other link", error = null)
                                     } else {
                                         val msg = friendlyUploadError(e)
                                         pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
@@ -2055,7 +2072,15 @@ class MainActivity : ComponentActivity() {
                                     .fillMaxWidth()
                                     .clickable {
                                         selectedLogFileState.value = file
-                                        selectedLogTextState.value = if (file.exists()) file.readText() else ""
+                                        selectedLogTextState.value = null
+                                        coroutineScope.launch {
+                                            val text = withContext(Dispatchers.IO) {
+                                                if (file.exists()) readLogCapped(file) else ""
+                                            }
+                                            if (selectedLogFileState.value == file) {
+                                                selectedLogTextState.value = text
+                                            }
+                                        }
                                     },
                                 colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
                             ) {

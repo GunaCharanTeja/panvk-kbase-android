@@ -13,6 +13,7 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.InterruptedIOException
+import java.io.RandomAccessFile
 import java.net.ConnectException
 import java.net.HttpURLConnection
 import java.net.NoRouteToHostException
@@ -28,6 +29,32 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 import javax.net.ssl.SSLException
+
+fun readLogCapped(file: File, head: Int = 64 * 1024, tail: Int = 256 * 1024): String {
+    require(head >= 0 && tail >= 0)
+    return RandomAccessFile(file, "r").use { log ->
+        val size = log.length()
+        if (size <= head.toLong() + tail) {
+            val bytes = ByteArray(size.toInt())
+            log.readFully(bytes)
+            bytes.toString(Charsets.UTF_8)
+        } else {
+            val headBytes = ByteArray(head)
+            log.readFully(headBytes)
+            val tailBytes = ByteArray(tail)
+            log.seek(size - tail)
+            log.readFully(tailBytes)
+            val skippedMb = (size - head - tail) / (1024 * 1024)
+            headBytes.toString(Charsets.UTF_8) +
+                "\n...[log truncated, $skippedMb MB skipped, full log in zip]...\n" +
+                tailBytes.toString(Charsets.UTF_8)
+        }
+    }
+}
+
+fun scanLog(file: File, onLine: (String) -> Unit) {
+    file.bufferedReader().useLines { lines -> lines.forEach(onLine) }
+}
 
 fun shareFile(ctx: Context, f: File, mime: String, title: String) {
     val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", f)
