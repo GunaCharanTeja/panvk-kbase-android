@@ -33,6 +33,10 @@ JNIEXPORT jstring JNICALL Java_dev_zenithblue_panvktest_Native_run(
     if (raw_logPath) {
         (*env)->ReleaseStringUTFChars(env, jLogPath, raw_logPath);
     }
+    /* Compute the log directory before fork; child only calls chdir(). */
+    const char *log_slash = strrchr(c_logPath, '/');
+    size_t log_dir_len = log_slash ? (size_t)(log_slash - c_logPath) : 0;
+    char *c_logDir = log_slash ? strndup(c_logPath, log_dir_len ? log_dir_len : 1) : strdup(".");
 
     int args_count = jArgs ? (*env)->GetArrayLength(env, jArgs) : 0;
     int argc = 1 + args_count;
@@ -103,6 +107,7 @@ JNIEXPORT jstring JNICALL Java_dev_zenithblue_panvktest_Native_run(
         free(new_argv);
         free(c_libPath);
         free(c_logPath);
+        free(c_logDir);
         for (int i = 0; i < argc; i++) free(argv[i]);
         free(argv);
         for (int i = 0; i < env_count; i++) free(env_entries[i]);
@@ -133,6 +138,7 @@ JNIEXPORT jstring JNICALL Java_dev_zenithblue_panvktest_Native_run(
         free(new_argv);
         free(c_libPath);
         free(c_logPath);
+        free(c_logDir);
         for (int i = 0; i < argc; i++) free(argv[i]);
         free(argv);
         for (int i = 0; i < env_count; i++) free(env_entries[i]);
@@ -150,6 +156,7 @@ JNIEXPORT jstring JNICALL Java_dev_zenithblue_panvktest_Native_run(
                 close(fd);
             }
         }
+        if (c_logDir) (void)chdir(c_logDir);
         execve(runner_path, new_argv, envp);
 
         write(STDERR_FILENO, exec_fail, sizeof(exec_fail) - 1);
@@ -162,6 +169,7 @@ JNIEXPORT jstring JNICALL Java_dev_zenithblue_panvktest_Native_run(
     free(new_argv);
     free(c_libPath);
     free(c_logPath);
+    free(c_logDir);
     for (int i = 0; i < argc; i++) free(argv[i]);
     free(argv);
     for (int i = 0; i < env_count; i++) free(env_entries[i]);

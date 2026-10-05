@@ -37,8 +37,8 @@ android {
         applicationId = "dev.zenithblue.panvktest"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.0"
+        versionCode = 4
+        versionName = "1.2.0"
 
         ndk {
             abiFilters.add("arm64-v8a")

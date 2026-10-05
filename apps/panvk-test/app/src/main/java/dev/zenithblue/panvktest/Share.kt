@@ -303,6 +303,97 @@ private fun sameSchemeHostPort(u1: URL, u2: URL): Boolean {
         port1 == port2
 }
 
+fun buildUploadRecord(
+    zip: File,
+    zipSha256: String,
+    endpoint: String,
+    pathA: UploadPathState,
+    pathB: UploadPathState
+): JSONObject {
+    val manifest = runCatching {
+        ZipFile(zip).use { zf ->
+            zf.getInputStream(zf.getEntry("manifest.json")).bufferedReader().use { JSONObject(it.readText()) }
+        }
+    }.getOrElse { JSONObject() }
+    val record = JSONObject().apply {
+        put("app", "panprobe")
+        put("sha256", zipSha256.lowercase(Locale.US))
+        put("size", zip.length())
+        put("verified_a", pathA.verifyStatus == "✓")
+        put("verified_b", pathB.verifyStatus == "✓")
+    }
+    fun putText(key: String, value: Any?, limit: Int = 128) {
+        if (value == null || value == JSONObject.NULL) return
+        record.put(key, value.toString().filterNot { Character.isISOControl(it) }.take(limit))
+    }
+    val app = manifest.optJSONObject("app")
+    putText("version", app?.opt("versionName"), 32)
+    (app?.opt("versionCode") as? Number)?.let { record.put("version_code", it.toLong()) }
+    val device = manifest.optJSONObject("device")
+    putText("device_model", device?.opt("model"))
+    putText("soc", device?.opt("socModel")?.takeUnless { it == JSONObject.NULL } ?: device?.opt("hardware"))
+    val gpu = manifest.optJSONObject("gpu")
+    putText("gpu_model", gpu?.opt("gpuModel"))
+    putText("gpu_id", gpu?.opt("gpuId"))
+    putText("arch", gpu?.opt("arch"))
+    val driver = manifest.optJSONObject("driver")
+    putText("driver_name", driver?.opt("driverName"))
+    putText("driver_version", driver?.opt("driverVersion"))
+    putText("android_version", manifest.optJSONObject("android")?.opt("release"))
+    val driverSha = (driver?.opt("soSha256") as? String)?.lowercase(Locale.US)
+    if (driverSha != null && driverSha.matches(Regex("[0-9a-f]{64}"))) record.put("driver_so_sha256", driverSha)
+    pathA.url?.let {
+        when {
+            it.startsWith("https://files.catbox.moe/") -> record.put("catbox_url", it)
+            it.startsWith("https://gofile.io/") -> record.put("gofile_url", it)
+        }
+    }
+    pathB.url?.let {
+        if (sameSchemeHostPort(URL(it), URL(endpoint))) record.put("r2_url", it)
+    }
+    // Bound UTF-8 bytes as well as character counts; preserve the hash and links.
+    for (key in listOf("driver_name", "driver_version", "device_model", "soc", "gpu_model", "gpu_id", "arch", "android_version")) {
+        if (record.toString().toByteArray(Charsets.UTF_8).size <= 4096) break
+        record.remove(key)
+    }
+    return record
+}
+
+fun postRecord(endpoint: String, json: JSONObject): Boolean {
+    return try {
+        if (endpoint.isEmpty()) return false
+        val body = json.toString().toByteArray(Charsets.UTF_8)
+        if (body.size > 4096) return false
+        repeat(3) { attempt ->
+            if (attempt > 0) Thread.sleep(if (attempt == 1) 1_000L else 3_000L)
+            var conn: HttpURLConnection? = null
+            try {
+                conn = (URL("${endpoint.trimEnd('/')}/record").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 10_000
+                    readTimeout = 10_000
+                    instanceFollowRedirects = false
+                    setRequestProperty("Content-Type", "application/json")
+                    setFixedLengthStreamingMode(body.size)
+                }
+                conn.outputStream.use { it.write(body) }
+                val code = conn.responseCode
+                if (code == 204 || code == 200) return true
+            } catch (_: Exception) {
+                // Recording is best effort and must not affect upload results.
+            } finally {
+                conn?.disconnect()
+            }
+        }
+        false
+    } catch (_: Exception) {
+        false
+    }
+}
+
+class R2StorageNotConfiguredException : IOException("Skipped (not configured)")
+
 fun uploadToR2(
     endpoint: String,
     f: File,
@@ -339,6 +430,7 @@ fun uploadToR2(
             throw CancellationException("Upload cancelled")
         }
         val code = conn.responseCode
+        if (code == 503) throw R2StorageNotConfiguredException()
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val responseBody = stream?.bufferedReader()?.use { it.readText() } ?: ""
         if (code !in 200..299) {

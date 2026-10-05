@@ -578,6 +578,9 @@ class MainActivity : ComponentActivity() {
             mesaDebugStrState.value.trim().split(Regex("\\s+"))
                 .filter { it.isNotEmpty() && it.contains("=") }
                 .forEach { envList.add(it) }
+            if (envList.none { it.startsWith("PANDECODE_DUMP_FILE=") }) {
+                envList.add("PANDECODE_DUMP_FILE=stderr")
+            }
         }
         if (isDraw) {
             envList.add("PT_FPS_MS=1000")
@@ -1216,6 +1219,7 @@ class MainActivity : ComponentActivity() {
         var showErrorDialog by remember { mutableStateOf(false) }
         var uploadZipFile by remember { mutableStateOf<File?>(null) }
         var uploadSha256 by remember { mutableStateOf<String?>(null) }
+        var recordStatus by remember { mutableStateOf<String?>(null) }
         var pathAState by remember { mutableStateOf(UploadPathState(name = "catbox / gofile")) }
         var pathBState by remember { mutableStateOf(UploadPathState(name = "PanVK storage (R2)")) }
         var isRetryingA by remember { mutableStateOf(false) }
@@ -1243,6 +1247,7 @@ class MainActivity : ComponentActivity() {
             }
             uploadZipFile = zip
             uploadSha256 = localSha
+            recordStatus = null
             coroutineScope.launch {
                 if (flag.get() || uploadGeneration.get() != gen) return@launch
                 val endpoint = uploadEndpoint
@@ -1409,8 +1414,12 @@ class MainActivity : ComponentActivity() {
                                     throw CancellationException("Upload cancelled")
                                 }
                                 if (!flag.get() && uploadGeneration.get() == gen) {
-                                    val msg = friendlyUploadError(e)
-                                    pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
+                                    if (e is R2StorageNotConfiguredException) {
+                                        pathBState = pathBState.copy(status = "Skipped (not configured)", error = "Skipped (not configured)")
+                                    } else {
+                                        val msg = friendlyUploadError(e)
+                                        pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
+                                    }
                                 }
                             }
                         }
@@ -1425,6 +1434,21 @@ class MainActivity : ComponentActivity() {
                         showLinkDialog = true
                     } else {
                         showErrorDialog = true
+                    }
+                    if (endpoint.isNotEmpty() && (localSha.isNotEmpty() || pathAState.url != null || pathBState.url != null)) {
+                        val recordedA = pathAState
+                        val recordedB = pathBState
+                        recordStatus = "Recording…"
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val recorded = runCatching {
+                                postRecord(endpoint, buildUploadRecord(zip, localSha, endpoint, recordedA, recordedB))
+                            }.getOrDefault(false)
+                            withContext(Dispatchers.Main) {
+                                if (uploadGeneration.get() == gen) {
+                                    recordStatus = if (recorded) "Recorded ✓" else "Record failed"
+                                }
+                            }
+                        }
                     }
                 } catch (_: CancellationException) {
                     if (flag.get() || uploadGeneration.get() != gen) return@launch
@@ -1449,7 +1473,7 @@ class MainActivity : ComponentActivity() {
                 title = { Text("Send to cloud?") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Anyone with a link can download it. It may contain your device model, GPU info, Android version, app and package names and file paths. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
+                        Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Anyone with a link can download it. It may contain your device model, GPU info, Android version, app and package names and file paths. Upload details (device, GPU, driver, links) are also saved to the PanVK project database. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
                         if (uploadEndpoint != PANVK_UPLOAD_ENDPOINT) {
                             Text(
                                 text = "Test upload endpoint override active: $uploadEndpoint",
@@ -1705,6 +1729,9 @@ class MainActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = FontFamily.Monospace
                             )
+                        }
+                        recordStatus?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 },
