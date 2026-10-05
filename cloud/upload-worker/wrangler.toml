@@ -9,16 +9,16 @@ compatibility_date = "2026-09-01"
 
 [[kv_namespaces]]
 binding = "BLOBS"
-id = "00000000000000000000000000000000" # replace with `wrangler kv namespace create BLOBS` id
+id = "dd69801f9dc24e639f04060c00e77ae2"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "panvk-uploads"
-database_id = "00000000-0000-0000-0000-000000000000" # replace with id from `wrangler d1 create`
+database_id = "6a536808-0f63-48c3-956a-a7a592354e77"
 
 [vars]
 BUCKET_NAME = "panvk-logs"
-ACCOUNT_ID = "" # User fills with their Cloudflare Account ID
+ACCOUNT_ID = "c21969dcea549f539aca8be12ac8e48e"
 DEV_DIRECT = "0"
 DAILY_RECORD_CAP = "2000"
 DAILY_BLOB_CAP = "900" # KV free tier: 1000 writes/day
