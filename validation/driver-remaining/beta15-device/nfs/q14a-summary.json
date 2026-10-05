@@ -1,0 +1,16 @@
+{
+ "id": "q14a",
+ "frames": 3318,
+ "fps_avg": 24.3,
+ "frametime_p50_ms": 33,
+ "frametime_p99_ms": 102,
+ "stutters_gt50ms": 634,
+ "hitches_gt100ms": 34,
+ "peak_pss_mb": 990,
+ "last_pss_mb": 686,
+ "peak_gpumem_mb": 2015,
+ "min_memavail_mb": 1113,
+ "gpu_busy_pct": 94.7,
+ "gpu_mhz": 858,
+ "layer": "SurfaceView[dev.zenithblue.panvklauncher/dev.zenithblue.panvklauncher.XServerActivity](BLAST)#7350"
+}

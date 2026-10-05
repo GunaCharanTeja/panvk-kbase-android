@@ -1,0 +1,16 @@
+{
+ "id": "qrcb",
+ "frames": 4954,
+ "fps_avg": 35.5,
+ "frametime_p50_ms": 24,
+ "frametime_p99_ms": 66,
+ "stutters_gt50ms": 105,
+ "hitches_gt100ms": 2,
+ "peak_pss_mb": 1067,
+ "last_pss_mb": 929,
+ "peak_gpumem_mb": 1555,
+ "min_memavail_mb": 1604,
+ "gpu_busy_pct": 96.9,
+ "gpu_mhz": 1268,
+ "layer": "SurfaceView[dev.zenithblue.panvklauncher/dev.zenithblue.panvklauncher.XServerActivity](BLAST)#7918"
+}

@@ -1,0 +1,19 @@
+INFO devices=1 exts=170 formats=179
+RESULT gpu_prerast_slice FAIL mismatch=0 fps=0 ms=4165
+RESULT clip_cull FAIL mismatch=0 fps=0 ms=2054
+RESULT multi_viewport FAIL mismatch=0 fps=0 ms=2052
+RESULT fill_mode FAIL mismatch=0 fps=0 ms=2062
+RESULT bc_decode FAIL mismatch=0 fps=0 ms=2072
+RESULT geometry FAIL mismatch=0 fps=0 ms=2053
+RESULT tessellation FAIL mismatch=0 fps=0 ms=4066
+RESULT xfb FAIL mismatch=0 fps=0 ms=4061
+RESULT pipeline_stats FAIL mismatch=0 fps=0 ms=2059
+RESULT vertex_stores PASS mismatch=0 fps=0 ms=2045
+RESULT gs_viewport_depth FAIL mismatch=0 fps=0 ms=2051
+RESULT vs_viewport_index FAIL mismatch=0 fps=0 ms=2056
+RESULT depth_bounds FAIL mismatch=0 fps=0 ms=2082
+RESULT large_draw FAIL mismatch=0 fps=0 ms=4071
+RESULT vmr_secondary FAIL mismatch=0 fps=0 ms=4152
+RESULT tess_cond_state FAIL mismatch=0 fps=0 ms=2059
+RESULT swapchain_lifecycle FAIL mismatch=0 fps=0 ms=4063 extra=resized FPS  | 
+AUTORUN DONE pass=1 total=17

@@ -1,0 +1,16 @@
+{
+ "id": "ir3a",
+ "frames": 5351,
+ "fps_avg": 38.3,
+ "frametime_p50_ms": 22,
+ "frametime_p99_ms": 58,
+ "stutters_gt50ms": 77,
+ "hitches_gt100ms": 1,
+ "peak_pss_mb": 1077,
+ "last_pss_mb": 944,
+ "peak_gpumem_mb": 2036,
+ "min_memavail_mb": 1123,
+ "gpu_busy_pct": 97.6,
+ "gpu_mhz": 1317,
+ "layer": "SurfaceView[dev.zenithblue.panvklauncher/dev.zenithblue.panvklauncher.XServerActivity](BLAST)#8863"
+}

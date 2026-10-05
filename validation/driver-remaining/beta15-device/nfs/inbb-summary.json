@@ -1,0 +1,16 @@
+{
+ "id": "inbb",
+ "frames": 5018,
+ "fps_avg": 36.1,
+ "frametime_p50_ms": 24,
+ "frametime_p99_ms": 66,
+ "stutters_gt50ms": 95,
+ "hitches_gt100ms": 0,
+ "peak_pss_mb": 1066,
+ "last_pss_mb": 928,
+ "peak_gpumem_mb": 2008,
+ "min_memavail_mb": 1072,
+ "gpu_busy_pct": 96.6,
+ "gpu_mhz": 1306,
+ "layer": "SurfaceView[dev.zenithblue.panvklauncher/dev.zenithblue.panvklauncher.XServerActivity](BLAST)#9004"
+}

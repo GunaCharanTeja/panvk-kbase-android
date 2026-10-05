@@ -1,0 +1,6 @@
+PanProbe on Poco X6 Pro (Mali-G615 MC6), imported rc4 libvulkan_panfrost.so sha256 1a6fb5923b71a73b65b55516b37edefc792cf75018e51255dba88f61f1ddffe7
+Mesa debug env OFF (autorun all): AUTORUN DONE pass=17 total=17
+Mesa debug env ON (MESA_DEBUG=1 PANVK_DEBUG=trace, "Run all" in UI): every test log ends in PASS/mismatch=0
+(gpu_prerast_slice .. large_draw, swapchain_lifecycle PASS, tess_cond_state, vmr_secondary run singly).
+Before 105 the trace log of gpu_prerast_slice alone grew to 700 MB (traces re-decoded every submit).
+PanProbe app still OOMs reading large trace logs into memory (MainActivity.kt executeTest readText(); large_draw log 148 MB): app bug.
