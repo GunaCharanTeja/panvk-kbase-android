@@ -67,8 +67,10 @@ int main(int argc, char **argv) {
     }
 
     PFN_vkGetInstanceProcAddr gipa = (PFN_vkGetInstanceProcAddr)dlsym(h, "vk_icdGetInstanceProcAddr");
+    /* The system Vulkan loader exports the public entry point, not the ICD one. */
+    if (!gipa) gipa = (PFN_vkGetInstanceProcAddr)dlsym(h, "vkGetInstanceProcAddr");
     if (!gipa) {
-        fprintf(stderr, "FAIL dlsym vk_icdGetInstanceProcAddr: %s\n", dlerror());
+        fprintf(stderr, "FAIL dlsym vkGetInstanceProcAddr: %s\n", dlerror());
         return 1;
     }
 

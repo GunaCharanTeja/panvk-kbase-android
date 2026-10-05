@@ -433,22 +433,12 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (_: Exception) {}
 
-            var roHardware: String? = null
             try {
                 val proc = Runtime.getRuntime().exec(arrayOf("getprop"))
                 val lines = proc.inputStream.bufferedReader().use { it.readLines() }
                 val keys = listOf("ro.product.", "ro.board.", "ro.soc.", "ro.hardware", "ro.build.version.", "ro.build.fingerprint")
                 val filtered = lines.filter { line -> keys.any { line.contains(it) } }
                 File(systemDir, "props.txt").writeText(filtered.joinToString("\n"))
-
-                val roHwRegex = Regex("""\[ro\.hardware\]:\s*\[(.*?)\]""")
-                for (line in lines) {
-                    val m = roHwRegex.find(line)
-                    if (m != null) {
-                        roHardware = m.groupValues[1].trim().takeIf { it.isNotEmpty() }
-                        break
-                    }
-                }
             } catch (_: Exception) {}
 
             // 5. Driver resolution: read summary.json driverType if present; fall back to current driverTypeState
@@ -462,7 +452,7 @@ class MainActivity : ComponentActivity() {
             val driverPath = getDriverPath(resolvedDriverType)
             val driverFile = File(driverPath)
             val driverReadable = driverFile.exists() && driverFile.canRead()
-            val driverSoSha256 = if (driverReadable) sha256(driverFile) else null
+            val runtimeDriverSha256 = driverSoSha256(driverPath)
             val driverBuildId = if (driverReadable) extractGnuBuildId(driverFile) else null
 
             // 6. Parse vulkan JSON for properties
@@ -472,6 +462,17 @@ class MainActivity : ComponentActivity() {
                 val v = firstDevProps?.opt(key)
                 return if (v == null || v == JSONObject.NULL || v == "null") JSONObject.NULL else v
             }
+
+            // A failed PanVK probe must not turn the SoC's hardware name into a GPU model.
+            // Keep the selected driver's properties separate from the system GPU fallback.
+            val gpuProps = if (gpuName(firstDevProps?.opt("deviceName")) != null) {
+                firstDevProps
+            } else if (resolvedDriverType != DriverType.SYSTEM) {
+                runInfo(DriverType.SYSTEM).first?.optJSONArray("devices")
+                    ?.optJSONObject(0)?.optJSONObject("properties")
+            } else null
+            fun gpuVal(key: String): Any = gpuProps?.opt(key)
+                ?.takeUnless { it == JSONObject.NULL || it == "null" } ?: JSONObject.NULL
 
             // 7. Files array of all staged files (excluding manifest.json)
             val filesArray = JSONArray()
@@ -497,7 +498,7 @@ class MainActivity : ComponentActivity() {
                     put("type", resolvedDriverType.label)
                     put("bundled", resolvedDriverType == DriverType.BUNDLED)
                     put("path", driverPath)
-                    put("soSha256", driverSoSha256 ?: JSONObject.NULL)
+                    put("soSha256", runtimeDriverSha256 ?: JSONObject.NULL)
                     put("buildId", driverBuildId ?: JSONObject.NULL)
                     put("driverName", optVal("driverName"))
                     put("driverInfo", optVal("driverInfo"))
@@ -517,23 +518,22 @@ class MainActivity : ComponentActivity() {
                     }
                 })
                 put("gpu", JSONObject().apply {
-                    val vkDeviceName = (optVal("deviceName") as? String)?.takeIf { it.isNotBlank() && it != "null" }
+                    val vkDeviceName = gpuName(gpuVal("deviceName"))
                     val gpuinfoModel = if (gpuinfoRaw != null) Regex("""Mali-[A-Za-z0-9]+""").find(gpuinfoRaw)?.value else null
-                    val hwFallback = (android.os.Build.HARDWARE.takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) } ?: roHardware)?.let { "hardware: $it" }
-                    val gpuModel = vkDeviceName ?: gpuinfoModel ?: hwFallback
+                    val gpuModel = vkDeviceName ?: gpuinfoModel
 
-                    put("deviceName", optVal("deviceName"))
-                    put("deviceID", optVal("deviceID"))
-                    put("vendorID", optVal("vendorID"))
-                    put("apiVersion", optVal("apiVersion"))
+                    put("deviceName", vkDeviceName ?: JSONObject.NULL)
+                    put("deviceID", gpuVal("deviceID"))
+                    put("vendorID", gpuVal("vendorID"))
+                    put("apiVersion", gpuVal("apiVersion"))
                     put("gpuinfo", gpuinfoRaw ?: JSONObject.NULL)
                     if (gpuinfoRaw == null) {
                         put("gpuinfo_unavailable_reason", gpuinfoUnavailableReason ?: "not readable (SELinux/permissions)")
                     }
                     // gpuinfo sysfs is usually SELinux-blocked; fall back to the Vulkan deviceID,
                     // which is the Mali gpu_id on ARM (vendor 0x13B5). Arch major = gpu_id[31:28].
-                    val vkId = (optVal("deviceID") as? Number)?.toLong()
-                    val isArm = (optVal("vendorID") as? Number)?.toLong() == 0x13B5L
+                    val vkId = (gpuVal("deviceID") as? Number)?.toLong()
+                    val isArm = (gpuVal("vendorID") as? Number)?.toLong() == 0x13B5L
                     val gpuId = (if (gpuinfoRaw != null) Regex("""0x[0-9a-fA-F]+""").find(gpuinfoRaw)?.value else null)
                         ?: if (isArm && vkId != null) "0x%08x".format(vkId) else null
                     put("gpuId", gpuId ?: JSONObject.NULL)
@@ -565,7 +565,7 @@ class MainActivity : ComponentActivity() {
     private fun getDriverPath(type: DriverType): String {
         return when (type) {
             DriverType.BUNDLED -> File(applicationInfo.nativeLibraryDir, "libvulkan_panfrost.so").absolutePath
-            DriverType.SYSTEM -> "libvulkan.so"
+            DriverType.SYSTEM -> "/system/lib64/libvulkan.so"
             DriverType.IMPORTED -> File(filesDir, "imported/libimported.so").absolutePath
         }
     }
@@ -594,10 +594,10 @@ class MainActivity : ComponentActivity() {
         return File(logsDir, "$timestamp-$name.log")
     }
 
-    private suspend fun runInfo(): Pair<JSONObject?, String> = withContext(Dispatchers.IO) {
+    private suspend fun runInfo(type: DriverType = driverTypeState.value): Pair<JSONObject?, String> = withContext(Dispatchers.IO) {
         val logFile = createLogFile("vkinfo")
         val libPath = File(applicationInfo.nativeLibraryDir, "libt_vkinfo.so").absolutePath
-        val driverPath = getDriverPath(driverTypeState.value)
+        val driverPath = getDriverPath(type)
         val env = buildEnv(isDraw = false)
         val jsonFile = File(cacheDir, "vkinfo.json").apply { delete() }
         val res = Native.run(libPath, arrayOf(driverPath, jsonFile.absolutePath), env, logFile.absolutePath, 30000)

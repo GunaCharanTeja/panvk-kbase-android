@@ -347,7 +347,7 @@ object SessionLogs {
         gameName: String? = null
     ): JSONObject = try {
         val drivers = DriverManager.getDrivers(ctx)
-        val d = sc?.driver?.takeIf { it.isNotEmpty() }?.let { id -> drivers.firstOrNull { it.id == id } }
+        val d = sc?.driver?.takeIf { it.isNotEmpty() }?.let { id -> DriverManager.find(ctx, drivers, id) }
             ?: DriverManager.getSelectedDriver(ctx, drivers)
         val lib = File(d.libPath)
         val wineVer = getWineVersion(ctx)
@@ -368,7 +368,7 @@ object SessionLogs {
                 put("version", d.version)
                 put("bundled", d.bundled)
                 put("libPath", d.libPath)
-                put("soSha256", if (lib.exists() && lib.canRead()) sha256(lib) else JSONObject.NULL)
+                put("soSha256", driverSoSha256(d.libPath) ?: JSONObject.NULL)
                 put("buildId", elfBuildId(lib) ?: JSONObject.NULL)
             })
             put("wine", JSONObject().apply {
@@ -488,8 +488,8 @@ object SessionLogs {
         return result
     }
 
-    fun findGpuModel(ctx: Context, sc: Shortcut? = null, dir: File? = null, probedDevName: String? = null): String {
-        if (!probedDevName.isNullOrEmpty()) return probedDevName
+    fun findGpuModel(ctx: Context, sc: Shortcut? = null, dir: File? = null, probedDevName: String? = null): String? {
+        gpuName(probedDevName)?.let { return it }
         // 1. Search cached vkinfo (JSON / txt in session dir, cacheDir, or filesDir)
         val jsonCandidates = listOfNotNull(
             dir?.let { File(it, "vkinfo.json") },
@@ -501,10 +501,10 @@ object SessionLogs {
             if (f.isFile && f.canRead()) {
                 try {
                     val j = JSONObject(f.readText())
-                    val devName = j.optJSONArray("devices")?.optJSONObject(0)
-                        ?.optJSONObject("properties")?.optString("deviceName")
-                        ?: j.optString("deviceName")
-                    if (devName.isNotEmpty()) return devName
+                    val devName = gpuName(j.optJSONArray("devices")?.optJSONObject(0)
+                        ?.optJSONObject("properties")?.opt("deviceName"))
+                        ?: gpuName(j.opt("deviceName"))
+                    if (devName != null) return devName
                 } catch (_: Exception) {}
             }
         }
@@ -521,8 +521,7 @@ object SessionLogs {
                     val match = Regex("""(?i)device\s*name\s*[:=]\s*([^\r\n]+)""").find(text)
                         ?: Regex("""^([A-Za-z0-9_-]+)\s+api=""", RegexOption.MULTILINE).find(text)
                     if (match != null) {
-                        val name = match.groupValues[1].trim()
-                        if (name.isNotEmpty()) return name
+                        gpuName(match.groupValues[1])?.let { return it }
                     }
                 } catch (_: Exception) {}
             }
@@ -534,8 +533,7 @@ object SessionLogs {
                 try {
                     val match = Regex("""(?i)Device\s+name:\s*([^\r\n]+)""").find(f.readText())
                     if (match != null) {
-                        val name = match.groupValues[1].trim()
-                        if (name.isNotEmpty()) return name
+                        gpuName(match.groupValues[1])?.let { return it }
                     }
                 } catch (_: Exception) {}
             }
@@ -544,7 +542,7 @@ object SessionLogs {
         // 2. Search DriverManager (selected or shortcut driver metadata, bundled-driver.json)
         try {
             val drivers = DriverManager.getDrivers(ctx)
-            val d = sc?.driver?.takeIf { it.isNotEmpty() }?.let { id -> drivers.firstOrNull { it.id == id } }
+            val d = sc?.driver?.takeIf { it.isNotEmpty() }?.let { id -> DriverManager.find(ctx, drivers, id) }
                 ?: DriverManager.getSelectedDriver(ctx, drivers)
 
             val driverDir = File(d.libPath).parentFile
@@ -552,8 +550,8 @@ object SessionLogs {
             if (metaFile != null && metaFile.isFile) {
                 try {
                     val j = JSONObject(metaFile.readText())
-                    val dev = j.optString("deviceName").ifEmpty { j.optString("gpuModel") }.ifEmpty { j.optString("gpu") }
-                    if (dev.isNotEmpty()) return dev
+                    val dev = gpuName(j.opt("deviceName")) ?: gpuName(j.opt("gpuModel")) ?: gpuName(j.opt("gpu"))
+                    if (dev != null) return dev
                 } catch (_: Exception) {}
             }
 
@@ -561,14 +559,14 @@ object SessionLogs {
                 ctx.assets.open("bundled-driver.json").bufferedReader().use { JSONObject(it.readText()) }
             } catch (_: Exception) { null }
             if (bundledMeta != null) {
-                val dev = bundledMeta.optString("deviceName").ifEmpty { bundledMeta.optString("gpuModel") }
-                if (dev.isNotEmpty()) return dev
+                val dev = gpuName(bundledMeta.opt("deviceName")) ?: gpuName(bundledMeta.opt("gpuModel"))
+                if (dev != null) return dev
             }
 
             // Driver names describe the driver's target GPU (e.g. "G615"), not this device: never guess from them.
         } catch (_: Exception) {}
 
-        return "hardware: " + Build.HARDWARE
+        return null
     }
 
     fun zipDir(ctx: Context) = File(ctx.cacheDir, "session-zips").apply { mkdirs() }
@@ -656,7 +654,7 @@ object SessionLogs {
                 } else null
 
             val manifestInfo: JSONObject
-            if (rawManifestInfo != null) {
+            if (rawManifestInfo != null && rawManifestInfo.optJSONObject("driver") != null) {
                 manifestInfoSource = "recorded at session end"
                 manifestInfo = rawManifestInfo
             } else {
@@ -690,10 +688,30 @@ object SessionLogs {
             val pVersionName = pInfo?.versionName ?: "1.1.0"
             val pVersionCode = if (Build.VERSION.SDK_INT >= 28) (pInfo?.longVersionCode ?: 6L) else @Suppress("DEPRECATION") (pInfo?.versionCode?.toLong() ?: 6L)
 
-            val sessionDriverPath = manifestInfo.optJSONObject("driver")?.optString("libPath")?.takeIf { it.isNotEmpty() && File(it).isFile } // stale after reinstall
+            // Session metadata can outlive an APK update or an imported driver replacement.
+            // Resolve that driver's current load path, then hash its actual on-disk bytes.
+            val driverInfo = manifestInfo.optJSONObject("driver")
+            val drivers = DriverManager.getDrivers(ctx)
+            val sessionDriver = driverInfo?.optString("id")?.takeIf { it.isNotEmpty() }
+                ?.let { DriverManager.find(ctx, drivers, it) }
+                ?: if (driverInfo?.optBoolean("bundled") == true) DriverManager.bundledDriver(ctx) else null
+            val sessionDriverPath = sessionDriver?.libPath
+                ?: driverInfo?.optString("libPath")?.takeIf { it.isNotEmpty() && File(it).isFile }
+            val runtimeDriverInfo = driverInfo?.let { JSONObject(it.toString()) }?.apply {
+                sessionDriver?.let {
+                    put("name", it.name)
+                    put("id", it.id)
+                    put("version", it.version)
+                    put("bundled", it.bundled)
+                }
+                put("libPath", sessionDriverPath ?: JSONObject.NULL)
+                put("soSha256", sessionDriverPath?.let { driverSoSha256(it) } ?: JSONObject.NULL)
+                put("buildId", sessionDriverPath?.let { elfBuildId(File(it)) } ?: JSONObject.NULL)
+            }
             val probedGpu = probeGpu(ctx, sessionDriverPath)
             val probedDevName = probedGpu.optString("deviceName").takeIf { it.isNotEmpty() }
             val gpuModel = findGpuModel(ctx, matchedShortcut, dir, probedDevName)
+                ?: gpuinfoRaw?.let { Regex("""Mali-[A-Za-z0-9]+""").find(it)?.value }
 
             val manifestObj = JSONObject().apply {
                 put("timestamp", SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()))
@@ -706,6 +724,7 @@ object SessionLogs {
                 for (k in manifestInfo.keys()) {
                     put(k, manifestInfo.get(k))
                 }
+                runtimeDriverInfo?.let { put("driver", it) }
                 put("manifestInfoSource", manifestInfoSource)
 
                 // Keep game/exe/exitCode/reason/durationSec from session.json
@@ -746,7 +765,7 @@ object SessionLogs {
                     if (gpuinfoRaw == null) {
                         put("gpuinfo_unavailable_reason", gpuinfoUnavailableReason ?: "file missing")
                     }
-                    put("gpuModel", gpuModel)
+                    put("gpuModel", gpuModel ?: JSONObject.NULL)
                 })
 
                 put("files", filesArray)

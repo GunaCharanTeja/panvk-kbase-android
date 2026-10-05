@@ -82,6 +82,16 @@ fun sha256(stream: InputStream): String {
 
 fun sha256(file: File): String = file.inputStream().buffered().use { sha256(it) }
 
+// Hash the installed/extracted library (or imported override), after APK stripping.
+fun driverSoSha256(path: String): String? = runCatching {
+    File(path).takeIf { it.isAbsolute && it.isFile && it.canRead() }?.let { sha256(it) }
+}.getOrNull()
+
+fun gpuName(value: Any?): String? = (value as? String)?.trim()?.takeIf {
+    it.isNotEmpty() && !it.equals("null", ignoreCase = true) &&
+        !it.equals("unknown", ignoreCase = true) && !it.startsWith("hardware:", ignoreCase = true)
+}
+
 fun verifyZip(zip: File) {
     ZipFile(zip).use { zf ->
         val manifestEntry = zf.getEntry("manifest.json")
@@ -148,7 +158,7 @@ fun extractGnuBuildId(file: File): String? {
     return null
 }
 
-const val PANVK_UPLOAD_ENDPOINT = ""
+const val PANVK_UPLOAD_ENDPOINT = "https://panvk-upload.panvk.workers.dev"
 
 data class UploadResult(val url: String, val host: String, val directUrl: String?)
 
@@ -333,13 +343,14 @@ fun buildUploadRecord(
     putText("device_model", device?.opt("model"))
     putText("soc", device?.opt("socModel")?.takeUnless { it == JSONObject.NULL } ?: device?.opt("hardware"))
     val gpu = manifest.optJSONObject("gpu")
-    putText("gpu_model", gpu?.opt("gpuModel"))
+    putText("gpu_model", gpuName(gpu?.opt("gpuModel")) ?: gpuName(gpu?.opt("deviceName")))
     putText("gpu_id", gpu?.opt("gpuId"))
     putText("arch", gpu?.opt("arch"))
     val driver = manifest.optJSONObject("driver")
     putText("driver_name", driver?.opt("driverName"))
     putText("driver_version", driver?.opt("driverVersion"))
     putText("android_version", manifest.optJSONObject("android")?.opt("release"))
+    // Use the runtime hash captured in this ZIP's manifest so both describe the same file.
     val driverSha = (driver?.opt("soSha256") as? String)?.lowercase(Locale.US)
     if (driverSha != null && driverSha.matches(Regex("[0-9a-f]{64}"))) record.put("driver_so_sha256", driverSha)
     pathA.url?.let {

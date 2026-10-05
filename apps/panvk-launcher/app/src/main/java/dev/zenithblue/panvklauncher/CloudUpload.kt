@@ -27,7 +27,17 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 import javax.net.ssl.SSLException
 
-const val PANVK_UPLOAD_ENDPOINT = ""
+const val PANVK_UPLOAD_ENDPOINT = "https://panvk-upload.panvk.workers.dev"
+
+fun gpuName(value: Any?): String? = (value as? String)?.trim()?.takeIf {
+    it.isNotEmpty() && !it.equals("null", ignoreCase = true) &&
+        !it.equals("unknown", ignoreCase = true) && !it.startsWith("hardware:", ignoreCase = true)
+}
+
+// Hash the installed/extracted library (or imported override), after APK stripping.
+fun driverSoSha256(path: String): String? = runCatching {
+    File(path).takeIf { it.isAbsolute && it.isFile && it.canRead() }?.let { sha256(it) }
+}.getOrNull()
 
 object UploadPrefs {
     private const val PREFS_NAME = "panplay_upload"
@@ -159,13 +169,14 @@ fun buildUploadRecord(
     pathB.url?.let { putString("r2_url", it, it.length) }
     putString("device_model", text(device, "model") ?: Build.MODEL)
     putString("soc", text(device, "socModel") ?: if (Build.VERSION.SDK_INT >= 31) Build.SOC_MODEL else Build.HARDWARE)
-    putString("gpu_model", text(gpu, "gpuModel") ?: text(gpu, "deviceName"))
+    putString("gpu_model", gpuName(text(gpu, "gpuModel")) ?: gpuName(text(gpu, "deviceName")))
     putString("gpu_id", text(gpu, "gpuId"))
     putString("arch", text(gpu, "arch"))
     putString("driver_name", text(driver, "name"))
     putString("driver_version", text(driver, "version"))
     putString("android_version", text(manifest.optJSONObject("android"), "release") ?: Build.VERSION.RELEASE)
     putString("game", text(manifest, "game"))
+    // Use the runtime hash captured in this ZIP's manifest so both describe the same file.
     text(driver, "soSha256")?.lowercase(Locale.US)?.takeIf { it.matches(Regex("[0-9a-f]{64}")) }
         ?.let { putString("driver_so_sha256", it) }
     return record
