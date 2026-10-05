@@ -119,8 +119,8 @@ def pull_logs(sc, out):
     # DXVK writes <exe>_<dll>.log into the exe's working dir; app-private paths need run-as, others plain shell.
     d = os.path.dirname(sc['exe'].replace('\\', '/'))
     if d:
-        for f in runas('ls -t %s/*_d3d*.log %s/*_dxgi.log 2>/dev/null | head -4' % (shlex.quote(d), shlex.quote(d))).decode().split():
-            data = runas('cat %s' % shlex.quote(f)) or adb('exec-out', 'cat', f).stdout
+        for f in runas('ls -t %s/*_d3d*.log %s/*_dxgi.log 2>/dev/null | head -4' % (shlex.quote(d), shlex.quote(d))).decode().splitlines():
+            data = runas('cat %s' % shlex.quote(f)) or adb('exec-out', 'cat ' + shlex.quote(f)).stdout
             (out / os.path.basename(f)).write_bytes(data)
             print('dxvk log -> %s/%s (%d bytes)' % (out, os.path.basename(f), len(data)))
     pid = adb('shell', 'pidof', APP).stdout.decode().split()
