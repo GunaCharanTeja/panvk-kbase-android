@@ -89,6 +89,10 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
   - Phase 3 (1-1.5 days): tessellation (currently stubbed), xfb, pipeline stats, depth bounds, tess cond state.
   - Phase 4 (0.5 day): Vulkan version honesty (v9 reports 1.1 for now), full PanProbe 17/17 gate.
   - Risks: JM has no command stream for indirect draws (GPU-side patching needed); fork maturity; single test device.
+13. **Upload zip log gaps (apps, next app release).** Status: TODO (found 2026-10-05 by checking upload ids 28/29, 1.2.2).
+  - PanProbe `logcat.txt` is only ~1.6 KB (probably filtered to PanProbe lines). It misses system/driver/lowmemorykiller lines around crashes. Capture a wider logcat window (all tags, time-bounded to the run, size-capped). PanPlay's is ~67 KB for comparison.
+  - The PanPlay zip has no separate DXVK logs (`d3d9.log`, `d3d11.log`, `dxgi.log`); DXVK output is maybe only in `wine-run.log`. Set `DXVK_LOG_PATH` to the session folder and include those files in the zip and manifest.
+  - Keep zips under the 25 MiB own-storage cap where possible: cap and truncate large logs, and keep the full ones only when they fit.
 
 ## Open problems
 
