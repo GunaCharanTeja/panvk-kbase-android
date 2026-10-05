@@ -24,8 +24,27 @@ val copyPanvkSo = tasks.register<Copy>("copyPanvkSo") {
     rename { "libvulkan_panfrost.so" }
 }
 
+val bundledDriverJsonFile = File(rootDir.parentFile.parentFile, "apps/panvk-launcher/app/src/main/assets/bundled-driver.json")
+
+val checkBundledDriverJson = tasks.register("checkBundledDriverJson") {
+    inputs.property("bundledDriverJsonPath", bundledDriverJsonFile.absolutePath)
+    outputs.upToDateWhen { bundledDriverJsonFile.exists() }
+    doLast {
+        if (!bundledDriverJsonFile.exists()) {
+            throw GradleException("Bundled driver JSON not found at: ${bundledDriverJsonFile.absolutePath}")
+        }
+    }
+}
+
+val copyBundledDriverJson = tasks.register<Copy>("copyBundledDriverJson") {
+    dependsOn(checkBundledDriverJson)
+    from(bundledDriverJsonFile)
+    into(file("build/generated/panvkAssets"))
+}
+
 tasks.named("preBuild") {
     dependsOn(copyPanvkSo)
+    dependsOn(copyBundledDriverJson)
 }
 
 android {
@@ -37,8 +56,8 @@ android {
         applicationId = "dev.zenithblue.panvktest"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2.0"
+        versionCode = 5
+        versionName = "1.2.1"
 
         ndk {
             abiFilters.add("arm64-v8a")
@@ -69,6 +88,7 @@ android {
 
     sourceSets.getByName("main") {
         jniLibs.directories.add("build/generated/panvkJni")
+        assets.directories.add("build/generated/panvkAssets")
     }
 
     packaging {

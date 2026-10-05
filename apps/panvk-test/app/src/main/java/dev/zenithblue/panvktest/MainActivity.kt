@@ -284,6 +284,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun loadBundledDriverJson(): JSONObject? {
+        return try {
+            assets.open("bundled-driver.json").bufferedReader().use { JSONObject(it.readText()) }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private suspend fun saveRun(results: List<TestResult>) {
         try { writeRun(results) } catch (e: Exception) { Log.e("PanVKTest", "saveRun failed", e) }
     }
@@ -494,15 +502,24 @@ class MainActivity : ComponentActivity() {
                     put("versionName", pInfo?.versionName ?: getAppVersion())
                     put("versionCode", pInfo?.longVersionCode ?: 0L)
                 })
+                val bundledDriverMeta = if (resolvedDriverType == DriverType.BUNDLED) loadBundledDriverJson() else null
+                // Bundled driver: always the pinned release metadata, so the record names it even when enumeration fails.
+                val driverNameVal: Any = bundledDriverMeta?.optString("name")?.takeIf { it.isNotEmpty() }
+                    ?: optVal("driverName").takeUnless { it == JSONObject.NULL }
+                    ?: resolvedDriverType.label
+                val driverVersionVal: Any = bundledDriverMeta?.let {
+                    it.optString("displayVersion").takeIf { v -> v.isNotEmpty() } ?: it.optString("packageVersion").takeIf { v -> v.isNotEmpty() }
+                } ?: optVal("driverVersion")
+
                 put("driver", JSONObject().apply {
                     put("type", resolvedDriverType.label)
                     put("bundled", resolvedDriverType == DriverType.BUNDLED)
                     put("path", driverPath)
                     put("soSha256", runtimeDriverSha256 ?: JSONObject.NULL)
                     put("buildId", driverBuildId ?: JSONObject.NULL)
-                    put("driverName", optVal("driverName"))
+                    put("driverName", driverNameVal)
                     put("driverInfo", optVal("driverInfo"))
-                    put("driverVersion", optVal("driverVersion"))
+                    put("driverVersion", driverVersionVal)
                 })
                 put("device", JSONObject().apply {
                     put("manufacturer", android.os.Build.MANUFACTURER)
