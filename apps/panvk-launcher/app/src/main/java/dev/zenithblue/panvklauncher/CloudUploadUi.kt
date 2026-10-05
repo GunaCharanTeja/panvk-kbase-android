@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -59,6 +60,7 @@ class CloudUploadState(
     var showLinkDialog by mutableStateOf(false)
     var showErrorDialog by mutableStateOf(false)
     var uploadSha256 by mutableStateOf<String?>(null)
+    var recordStatus by mutableStateOf<String?>(null)
     var currentZip by mutableStateOf<File?>(null)
     var pathAState by mutableStateOf(UploadPathState(name = "catbox / gofile"))
     var pathBState by mutableStateOf(UploadPathState(name = "PanVK storage (R2)"))
@@ -146,6 +148,7 @@ fun CloudUploadFlow(state: CloudUploadState) {
         state.isUploading = true
         state.showLinkDialog = false
         state.showErrorDialog = false
+        state.recordStatus = null
         state.isRetryingA = false
         state.isRetryingB = false
 
@@ -310,6 +313,14 @@ fun CloudUploadFlow(state: CloudUploadState) {
                         } catch (e: CancellationException) {
                             logCancelB()
                             throw e
+                        } catch (_: R2StorageNotConfiguredException) {
+                            if (!flag.get() && state.uploadGeneration.get() == gen) {
+                                state.pathBState = state.pathBState.copy(
+                                    status = "Skipped (not configured)",
+                                    error = "Skipped (not configured)",
+                                    totalBytes = 0L
+                                )
+                            }
                         } catch (e: Exception) {
                             if (state.uploadGeneration.get() != gen) return@async
                             if (flag.get()) {
@@ -333,6 +344,24 @@ fun CloudUploadFlow(state: CloudUploadState) {
                 }
                 state.isUploading = false
                 state.isBusy = false
+                if (endpoint.isNotEmpty()) {
+                    state.recordStatus = "Recording…"
+                    val pathA = state.pathAState
+                    val pathB = state.pathBState
+                    val recordContext = context.applicationContext
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val recorded = try {
+                            postRecord(endpoint, buildUploadRecord(recordContext, zip, localSha, pathA, pathB))
+                        } catch (_: Exception) {
+                            false
+                        }
+                        withContext(Dispatchers.Main) {
+                            if (state.uploadGeneration.get() == gen) {
+                                state.recordStatus = if (recorded) "Recorded ✓" else "Record failed"
+                            }
+                        }
+                    }
+                }
                 if (state.pathAState.url != null || state.pathBState.url != null) {
                     state.showLinkDialog = true
                 } else {
@@ -364,7 +393,7 @@ fun CloudUploadFlow(state: CloudUploadState) {
             title = { Text("Send to cloud?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Anyone with a link can download it. It may contain your device model, GPU info, Android version, game and app names, package names and file paths. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
+                    Text("This uploads a ZIP of logs to a public file host (catbox.moe, or gofile.io as fallback) and to the PanVK project's own storage (deleted after 30 days). Upload details (device, GPU, driver and links) are also saved to the PanVK project database. Anyone with a link can download it. It may contain your device model, GPU info, Android version, game and app names, package names and file paths. It does not include accounts, contacts or personal files. Share the links only in the PanVK Telegram group. Files on catbox/gofile may not be deletable.")
                     if (state.endpoint != PANVK_UPLOAD_ENDPOINT) {
                         Text(
                             text = "Test upload endpoint override active: ${state.endpoint}",
@@ -646,6 +675,9 @@ fun CloudUploadFlow(state: CloudUploadState) {
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace
                         )
+                    }
+                    state.recordStatus?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             },

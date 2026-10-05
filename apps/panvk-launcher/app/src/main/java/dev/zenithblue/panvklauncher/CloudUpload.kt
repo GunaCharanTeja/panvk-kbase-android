@@ -108,6 +108,102 @@ data class UploadPathState(
     val error: String? = null
 )
 
+class R2StorageNotConfiguredException : IOException("Skipped (not configured)")
+
+fun buildUploadRecord(
+    ctx: Context,
+    zip: File,
+    zipSha256: String,
+    pathA: UploadPathState,
+    pathB: UploadPathState
+): JSONObject {
+    val manifest = try {
+        ZipFile(zip).use { zf ->
+            zf.getInputStream(zf.getEntry("manifest.json")).bufferedReader().use {
+                JSONObject(it.readText())
+            }
+        }
+    } catch (_: Exception) {
+        JSONObject()
+    }
+    val app = manifest.optJSONObject("app")
+    val device = manifest.optJSONObject("device")
+    val gpu = manifest.optJSONObject("gpu")
+    val driver = manifest.optJSONObject("driver")
+    val record = JSONObject().apply {
+        put("app", "panplay")
+        put("sha256", zipSha256)
+        put("size", zip.length())
+        put("version_code", if (app != null && !app.isNull("versionCode")) app.getLong("versionCode") else getAppVersionCode(ctx))
+        put("verified_a", pathA.verifyStatus == "✓")
+        put("verified_b", pathB.verifyStatus == "✓")
+        val exit = manifest.opt("exitCode")
+        if (exit is Int || exit is Long) put("exit_code", exit)
+    }
+    fun text(obj: JSONObject?, key: String): String? = obj?.opt(key) as? String
+    fun putString(key: String, value: String?, limit: Int = 128) {
+        val clean = value?.filterNot { Character.isISOControl(it) }?.take(limit)
+            ?.takeIf { it.isNotEmpty() } ?: return
+        record.put(key, clean)
+        // UTF-8 metadata and links must fit the Worker's total request limit.
+        if (record.toString().toByteArray(Charsets.UTF_8).size > 4096) record.remove(key)
+    }
+    putString("version", text(app, "versionName") ?: getAppVersion(ctx), 32)
+    pathA.url?.let { url ->
+        when {
+            url.startsWith("https://files.catbox.moe/") -> putString("catbox_url", url, url.length)
+            url.startsWith("https://gofile.io/") -> putString("gofile_url", url, url.length)
+        }
+    }
+    pathB.url?.let { putString("r2_url", it, it.length) }
+    putString("device_model", text(device, "model") ?: Build.MODEL)
+    putString("soc", text(device, "socModel") ?: if (Build.VERSION.SDK_INT >= 31) Build.SOC_MODEL else Build.HARDWARE)
+    putString("gpu_model", text(gpu, "gpuModel") ?: text(gpu, "deviceName"))
+    putString("gpu_id", text(gpu, "gpuId"))
+    putString("arch", text(gpu, "arch"))
+    putString("driver_name", text(driver, "name"))
+    putString("driver_version", text(driver, "version"))
+    putString("android_version", text(manifest.optJSONObject("android"), "release") ?: Build.VERSION.RELEASE)
+    putString("game", text(manifest, "game"))
+    text(driver, "soSha256")?.lowercase(Locale.US)?.takeIf { it.matches(Regex("[0-9a-f]{64}")) }
+        ?.let { putString("driver_so_sha256", it) }
+    return record
+}
+
+fun postRecord(endpoint: String, json: JSONObject): Boolean {
+    return try {
+        if (endpoint.isEmpty()) return false
+        val body = json.toString().toByteArray(Charsets.UTF_8)
+        if (body.size > 4096) return false
+        for (attempt in 0 until 3) {
+            if (attempt > 0) Thread.sleep(if (attempt == 1) 1_000L else 3_000L)
+            var conn: HttpURLConnection? = null
+            try {
+                conn = (URL("${endpoint.trimEnd('/')}/record").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    useCaches = false
+                    instanceFollowRedirects = false
+                    connectTimeout = 10_000
+                    readTimeout = 10_000
+                    setRequestProperty("Content-Type", "application/json")
+                    setFixedLengthStreamingMode(body.size)
+                }
+                conn.outputStream.use { it.write(body) }
+                val code = conn.responseCode
+                if (code == 204 || code == 200) return true
+            } catch (_: Exception) {
+                // Recording is best effort and must never fail an upload.
+            } finally {
+                try { conn?.disconnect() } catch (_: Exception) { }
+            }
+        }
+        false
+    } catch (_: Exception) {
+        false
+    }
+}
+
 fun sha256(stream: InputStream): String {
     val md = MessageDigest.getInstance("SHA-256")
     val buffer = ByteArray(64 * 1024)
@@ -354,6 +450,7 @@ fun uploadToR2(
             throw CancellationException("Upload cancelled")
         }
         val code = conn.responseCode
+        if (code == 503) throw R2StorageNotConfiguredException()
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val responseBody = stream?.bufferedReader()?.use { it.readText() } ?: ""
         if (code !in 200..299) {
