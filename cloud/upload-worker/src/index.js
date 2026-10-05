@@ -5,8 +5,10 @@ const SHA256_REGEX = /^[0-9a-f]{64}$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const R2_PATH_REGEX = /^\/f\/\d{4}-\d{2}-\d{2}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const BLOB_PATH_REGEX = /^\/blob\/[0-9a-f]{64}$/;
 const SINCE_REGEX = /^\d{4}-\d{2}-\d{2}(T[\d:]{8}Z)?$/;
 const MAX_UPLOAD_SIZE = 200 * 1024 * 1024; // 200 MB
+const MAX_BLOB_SIZE = 25 * 1024 * 1024;
 const devKeys = new Map();
 
 const UPLOAD_COLUMNS = [
@@ -842,9 +844,9 @@ export default {
               400
             );
           }
-          if (!R2_PATH_REGEX.test(parsed.pathname)) {
+          if (!R2_PATH_REGEX.test(parsed.pathname) && !BLOB_PATH_REGEX.test(parsed.pathname)) {
             return jsonResponse(
-              { error: "r2_url pathname must match /f/<date>/<uuid>" },
+              { error: "r2_url pathname must match /f/<date>/<uuid> or /blob/<sha256>" },
               400
             );
           }
@@ -1027,6 +1029,24 @@ export default {
           );
         }
 
+        const r2Configured = env.BUCKET && (
+          env.DEV_DIRECT === "1" ||
+          (env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.ACCOUNT_ID)
+        );
+        if (!r2Configured && env.BLOBS) {
+          if (size > MAX_BLOB_SIZE) {
+            return jsonResponse({ error: "too big for project storage" }, 413);
+          }
+          const blobUrl = `${origin}/blob/${sha256}`;
+          return jsonResponse({
+            uploadUrl: blobUrl,
+            method: "PUT",
+            headers: { "content-type": "application/zip" },
+            downloadUrl: blobUrl,
+            expiresIn: 900,
+          });
+        }
+
         const id = crypto.randomUUID();
         const date = new Date().toISOString().slice(0, 10);
         const key = `uploads/${date}/${id}.zip`;
@@ -1094,6 +1114,108 @@ export default {
           downloadUrl,
           expiresIn: 900,
         });
+      }
+
+      // PUT /blob/<sha256> and GET /blob/<sha256>
+      if (BLOB_PATH_REGEX.test(pathname)) {
+        const sha = pathname.slice("/blob/".length);
+        const key = `blob/${sha}`;
+        if (request.method === "PUT") {
+          if (!env.BLOBS) {
+            return jsonResponse({ error: "storage not configured" }, 503);
+          }
+          const devLocal = env.DEV_DIRECT === "1" &&
+            (url.hostname === "127.0.0.1" || url.hostname === "localhost");
+          if (env.UPLOAD_LIMIT && !devLocal) {
+            const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+            const { success } = await env.UPLOAD_LIMIT.limit({ key: clientIp });
+            if (!success) {
+              return jsonResponse({ error: "Rate limit exceeded" }, 429);
+            }
+          }
+
+          const lengthHeader = request.headers.get("content-length");
+          if (lengthHeader === null) {
+            return jsonResponse({ error: "Missing Content-Length" }, 411);
+          }
+          const size = Number(lengthHeader);
+          if (!/^\d+$/.test(lengthHeader) || !Number.isSafeInteger(size) ||
+              size < 1 || size > MAX_BLOB_SIZE) {
+            return jsonResponse({ error: "too big for project storage" }, 413);
+          }
+
+          const bytes = new Uint8Array(size);
+          let byteLength = 0;
+          const reader = request.body?.getReader();
+          if (reader) {
+            try {
+              while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (byteLength + value.byteLength > size) {
+                  reader.cancel().catch(() => {});
+                  return jsonResponse({ error: "Payload size mismatch" }, 413);
+                }
+                bytes.set(value, byteLength);
+                byteLength += value.byteLength;
+              }
+            } finally {
+              reader.releaseLock();
+            }
+          }
+          if (byteLength !== size) {
+            return jsonResponse({ error: "Payload size mismatch" }, 413);
+          }
+          const body = bytes.buffer;
+          const hash = await crypto.subtle.digest("SHA-256", body);
+          const bodySha = Array.from(new Uint8Array(hash))
+            .map((b) => b.toString(16).padStart(2, "0")).join("");
+          if (bodySha !== sha) {
+            return jsonResponse({ error: "sha256 mismatch" }, 400);
+          }
+
+          const existing = await env.BLOBS.get(key, { type: "stream" });
+          if (existing) {
+            await existing.cancel();
+            return jsonResponse({ ok: true, existing: true });
+          }
+          if (env.DB) {
+            const cap = Number(env.DAILY_BLOB_CAP ?? "900");
+            if (!Number.isSafeInteger(cap) || cap < 0) {
+              return jsonResponse({ error: "invalid daily cap configuration" }, 503);
+            }
+            if (cap === 0) {
+              return jsonResponse({ error: "daily cap reached" }, 429);
+            }
+            const counter = await env.DB.prepare(
+              "INSERT INTO counters(day,n) VALUES(?,1) ON CONFLICT(day) DO UPDATE SET n=n+1 WHERE n < ? RETURNING n"
+            ).bind(new Date().toISOString().slice(0, 10), cap).first();
+            if (!counter) {
+              return jsonResponse({ error: "daily cap reached" }, 429);
+            }
+          } else if (!devLocal) {
+            return jsonResponse({ error: "database not configured" }, 503);
+          }
+          await env.BLOBS.put(key, body, {
+            expirationTtl: 30 * 24 * 3600,
+            metadata: { size, ct: "application/zip" },
+          });
+          return jsonResponse({ ok: true, size });
+        }
+        if (request.method === "GET" && env.BLOBS) {
+          const body = await env.BLOBS.get(key, { type: "stream" });
+          if (body) {
+            return new Response(body, {
+              headers: {
+                "content-type": "application/zip",
+                "content-disposition": `attachment; filename="panvk-${sha.slice(0, 12)}.zip"`,
+                "cache-control": "private",
+                "x-content-type-options": "nosniff",
+              },
+            });
+          }
+        }
+        return jsonResponse({ error: "Not found" }, 404);
       }
 
       // PUT /dev-put/<date>/<id> (only available when DEV_DIRECT === "1")

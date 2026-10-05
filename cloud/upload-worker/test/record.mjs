@@ -254,33 +254,76 @@ async function main() {
     console.log("PASS: CSV download returned header line and the sha");
   }
 
-  // 11. /upload-url returns 503 storage not configured when R2 not bound
+  // 11. /upload-url uses KV when R2 is absent, or returns 503 without storage
   {
-    const testSha = crypto.randomBytes(32).toString("hex");
+    const buffer = crypto.randomBytes(1024);
+    const testSha = crypto.createHash("sha256").update(buffer).digest("hex");
     const res = await fetch(`${BASE}/upload-url`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         app: "panprobe",
         version: "1.0.0",
-        size: 1024,
+        size: buffer.length,
         sha256: testSha,
       }),
     });
-    assert.strictEqual(
-      res.status,
-      503,
-      `Expected status 503 from /upload-url when R2 not bound, got ${res.status}`
-    );
     const data = await res.json();
-    assert.strictEqual(
-      data.error,
-      "storage not configured",
-      `Expected error 'storage not configured', got '${data.error}'`
-    );
-    console.log(
-      "PASS: /upload-url returned 503 'storage not configured' when R2 not bound"
-    );
+    if (res.status === 503) {
+      assert.strictEqual(data.error, "storage not configured");
+      console.log("PASS: /upload-url returned 503 without storage");
+    } else {
+      assert.strictEqual(res.status, 200, `Expected 200/503, got ${res.status}`);
+      assert.strictEqual(data.method, "PUT");
+      assert.strictEqual(data.expiresIn, 900);
+      if (new URL(data.uploadUrl).pathname.startsWith("/blob/")) {
+        assert.strictEqual(data.uploadUrl, `${new URL(BASE).origin}/blob/${testSha}`);
+        assert.strictEqual(data.downloadUrl, data.uploadUrl);
+        assert.deepStrictEqual(data.headers, { "content-type": "application/zip" });
+        const put = await fetch(data.uploadUrl, {
+          method: data.method, headers: data.headers, body: buffer,
+        });
+        assert.strictEqual(put.status, 200);
+        assert.deepStrictEqual(await put.json(), { ok: true, size: buffer.length });
+        const get = await fetch(data.downloadUrl);
+        assert.strictEqual(get.status, 200);
+        assert.strictEqual(get.headers.get("content-type"), "application/zip");
+        assert.strictEqual(get.headers.get("cache-control"), "private");
+        assert.strictEqual(get.headers.get("x-content-type-options"), "nosniff");
+        assert.strictEqual(get.headers.get("content-disposition"),
+          `attachment; filename="panvk-${testSha.slice(0, 12)}.zip"`);
+        const downloaded = Buffer.from(await get.arrayBuffer());
+        assert.strictEqual(crypto.createHash("sha256").update(downloaded).digest("hex"), testSha);
+        const duplicate = await fetch(data.uploadUrl, {
+          method: "PUT", headers: data.headers, body: buffer,
+        });
+        assert.strictEqual(duplicate.status, 200);
+        assert.deepStrictEqual(await duplicate.json(), { ok: true, existing: true });
+        const wrong = Buffer.from(buffer);
+        wrong[0] ^= 1;
+        const mismatch = await fetch(data.uploadUrl, {
+          method: "PUT", headers: data.headers, body: wrong,
+        });
+        assert.strictEqual(mismatch.status, 400);
+        assert.deepStrictEqual(await mismatch.json(), { error: "sha256 mismatch" });
+        const tooBig = await fetch(`${BASE}/upload-url`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ app: "panprobe", version: "1.0.0", size: 26 * 1024 * 1024, sha256: testSha }),
+        });
+        assert.strictEqual(tooBig.status, 413);
+        assert.deepStrictEqual(await tooBig.json(), { error: "too big for project storage" });
+        const record = await fetch(`${BASE}/record`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ app: "panprobe", sha256: testSha, size: buffer.length, r2_url: data.downloadUrl }),
+        });
+        assert.strictEqual(record.status, 204);
+        console.log("PASS: KV roundtrip, duplicate, sha mismatch, size limit and record URL");
+      } else {
+        console.log("SKIP: KV test (R2 configured)");
+      }
+    }
   }
 
   // 12. Daily cap test (if CAP_TEST=1)

@@ -393,6 +393,7 @@ fun postRecord(endpoint: String, json: JSONObject): Boolean {
 }
 
 class R2StorageNotConfiguredException : IOException("Skipped (not configured)")
+class ProjectStorageTooBigException : IOException("Too big for project storage")
 
 fun uploadToR2(
     endpoint: String,
@@ -431,6 +432,7 @@ fun uploadToR2(
         }
         val code = conn.responseCode
         if (code == 503) throw R2StorageNotConfiguredException()
+        if (code == 413) throw ProjectStorageTooBigException()
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val responseBody = stream?.bufferedReader()?.use { it.readText() } ?: ""
         if (code !in 200..299) {

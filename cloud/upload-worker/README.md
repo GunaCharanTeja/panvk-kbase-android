@@ -7,6 +7,7 @@ Minimal Cloudflare Worker providing presigned upload URLs, download endpoints, a
 - **D1 Upload Metadata Log**: Stores diagnostic records and mirror links (Catbox, Gofile, R2) with daily ingestion caps, per-IP rate limiting, and upsert deduplication keyed on SHA-256.
 - **Admin Dashboard & Export**: Provides `/admin` web UI, authenticated JSON query endpoint, and formula-safe CSV export (`/admin/uploads.csv`).
 - **Optional Direct R2 Storage**: Generates short-lived presigned R2 PUT URLs so client apps can upload diagnostic ZIP archives directly to Cloudflare R2 without bundling storage credentials.
+- **Card-free KV Storage**: Path B prefers configured R2, then Workers KV. The same upload/download contract works with either backend.
 - **Local Development Support**: Supports local D1 SQLite database and direct upload mode (`DEV_DIRECT=1`) for testing without Cloudflare credentials.
 
 ---
@@ -52,7 +53,7 @@ Record or update diagnostic upload metadata in Cloudflare D1.
 - `size` (optional): Integer byte size between `1` and `209715200` (200 MB).
 - `catbox_url` (optional): HTTPS URL up to 256 chars; hostname must be exactly `files.catbox.moe`.
 - `gofile_url` (optional): HTTPS URL up to 256 chars; hostname must be `gofile.io` or `*.gofile.io`.
-- `r2_url` (optional): URL up to 256 chars whose origin matches the worker request origin and pathname matches `^/f/\d{4}-\d{2}-\d{2}/<uuid>$`.
+- `r2_url` (optional): URL up to 256 chars whose origin matches the worker request origin and pathname matches `^/f/\d{4}-\d{2}-\d{2}/<uuid>$` or `^/blob/[0-9a-f]{64}$`.
 - `device_model`, `soc`, `gpu_model`, `gpu_id`, `arch`, `driver_name`, `driver_version`, `android_version`, `game` (optional): Strings up to 128 characters, no control characters.
 - `driver_so_sha256` (optional): 64-character lowercase hex string.
 - `exit_code` (optional): Integer in `-2^31..2^31`.
@@ -83,8 +84,8 @@ All admin endpoints require `ADMIN_TOKEN` configured. The token is checked using
 
 ---
 
-### 3. `POST /upload-url` (Optional R2 Storage)
-Request a presigned R2 upload URL.
+### 3. `POST /upload-url` (Path B: R2 > KV)
+Request a presigned R2 upload URL, or a same-origin KV upload URL when R2 is not configured. KV returns `/blob/<sha256>` for both `uploadUrl` and `downloadUrl`, `method: "PUT"`, `headers: { "content-type": "application/zip" }`, and `expiresIn: 900`.
 - **Request Body (JSON):**
   ```json
   {
@@ -109,11 +110,14 @@ Request a presigned R2 upload URL.
   ```
 - **Error Codes:**
   - `400 Bad Request`: Validation failure.
+  - `413 Payload Too Large`: KV archive exceeds 25 MiB (`too big for project storage`).
   - `429 Too Many Requests`: Rate limit exceeded.
-  - `503 Service Unavailable`: Returns `{ "error": "storage not configured" }` if R2 binding is not configured.
+  - `503 Service Unavailable`: Returns `{ "error": "storage not configured" }` if neither R2 nor KV is configured; apps show "Skipped".
 
 ### 4. `PUT <uploadUrl>`
-Upload the ZIP payload directly to R2 (or to `/dev-put/:date/:id` in local dev mode).
+Upload the ZIP payload directly to R2 (or to `/dev-put/:date/:id` in local dev mode), or to `/blob/<sha256>` for KV. KV requires Content-Length (1..25 MiB), verifies the actual size and SHA-256, and avoids rewriting existing blobs. The D1 counter enforces `DAILY_BLOB_CAP` (default 900) writes per UTC day; exhaustion returns `429` (`daily cap reached`). D1 is required except in local direct mode.
+
+`GET /blob/<sha256>` streams the ZIP as a private attachment, or returns `404` for invalid/missing blobs.
 
 ### 5. `GET /f/<yyyy-mm-dd>/<uuid>`
 Download the uploaded archive from R2.
@@ -158,7 +162,13 @@ Download the uploaded archive from R2.
    npx wrangler secret put ADMIN_TOKEN
    npx wrangler secret put IP_SALT
    ```
-6. **(Optional) Configure R2 Storage**:
+6. **Configure Card-free KV Storage (Path B fallback)**:
+   ```bash
+   npx wrangler kv namespace create BLOBS
+   ```
+   Put the returned namespace id in the `[[kv_namespaces]]` entry for `BLOBS` in `wrangler.toml`. KV free tier allows [1 GB storage, 1000 writes/day, and 25 MiB/value](https://developers.cloudflare.com/kv/platform/limits/). Blobs expire after 30 days; `DAILY_BLOB_CAP="900"` leaves write headroom. Apply `schema.sql` to create the daily `counters` table, including on existing deployments.
+
+   **(Optional) Configure R2 Storage (preferred over KV)**:
    R2 requires a card on file with Cloudflare. If you want R2 direct uploads:
    - Create bucket:
      ```bash

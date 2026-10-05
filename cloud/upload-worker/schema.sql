@@ -28,3 +28,5 @@ CREATE TABLE IF NOT EXISTS uploads(
 
 CREATE INDEX IF NOT EXISTS idx_uploads_created_at ON uploads(created_at);
 CREATE INDEX IF NOT EXISTS idx_uploads_app ON uploads(app);
+
+CREATE TABLE IF NOT EXISTS counters(day TEXT PRIMARY KEY, n INTEGER NOT NULL);

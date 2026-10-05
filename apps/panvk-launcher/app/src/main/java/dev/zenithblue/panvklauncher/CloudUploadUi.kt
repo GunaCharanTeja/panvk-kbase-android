@@ -63,7 +63,7 @@ class CloudUploadState(
     var recordStatus by mutableStateOf<String?>(null)
     var currentZip by mutableStateOf<File?>(null)
     var pathAState by mutableStateOf(UploadPathState(name = "catbox / gofile"))
-    var pathBState by mutableStateOf(UploadPathState(name = "PanVK storage (R2)"))
+    var pathBState by mutableStateOf(UploadPathState(name = "PanVK storage"))
     var isRetryingA by mutableStateOf(false)
     var isRetryingB by mutableStateOf(false)
     val currentCancelFlag = mutableStateOf(AtomicBoolean(false))
@@ -163,7 +163,7 @@ fun CloudUploadFlow(state: CloudUploadState) {
             val bInitialStatus = if (endpoint.isEmpty()) "Skipped (not configured)" else "Uploading"
             val bInitialError = if (endpoint.isEmpty()) "Skipped (not configured)" else null
             state.pathAState = UploadPathState(name = "catbox / gofile", status = "Uploading", totalBytes = zip.length())
-            state.pathBState = UploadPathState(name = "PanVK storage (R2)", status = bInitialStatus, error = bInitialError, totalBytes = if (endpoint.isNotEmpty()) zip.length() else 0L)
+            state.pathBState = UploadPathState(name = "PanVK storage", status = bInitialStatus, error = bInitialError, totalBytes = if (endpoint.isNotEmpty()) zip.length() else 0L)
 
             val appVersion = getAppVersion(context)
 
@@ -313,6 +313,10 @@ fun CloudUploadFlow(state: CloudUploadState) {
                         } catch (e: CancellationException) {
                             logCancelB()
                             throw e
+                        } catch (_: ProjectStorageTooBigException) {
+                            if (!flag.get() && state.uploadGeneration.get() == gen) {
+                                state.pathBState = state.pathBState.copy(status = "Too big for project storage", error = null)
+                            }
                         } catch (_: R2StorageNotConfiguredException) {
                             if (!flag.get() && state.uploadGeneration.get() == gen) {
                                 state.pathBState = state.pathBState.copy(
@@ -662,7 +666,8 @@ fun CloudUploadFlow(state: CloudUploadState) {
                                     Text(
                                         text = p.error ?: p.status,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error
+                                        color = if (p.status == "Too big for project storage")
+                                            MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
                                     )
                                 }
                             }

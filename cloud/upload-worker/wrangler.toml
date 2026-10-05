@@ -7,6 +7,10 @@ compatibility_date = "2026-09-01"
 # binding = "BUCKET"
 # bucket_name = "panvk-logs"
 
+[[kv_namespaces]]
+binding = "BLOBS"
+id = "00000000000000000000000000000000" # replace with `wrangler kv namespace create BLOBS` id
+
 [[d1_databases]]
 binding = "DB"
 database_name = "panvk-uploads"
@@ -17,6 +21,7 @@ BUCKET_NAME = "panvk-logs"
 ACCOUNT_ID = "" # User fills with their Cloudflare Account ID
 DEV_DIRECT = "0"
 DAILY_RECORD_CAP = "2000"
+DAILY_BLOB_CAP = "900" # KV free tier: 1000 writes/day
 
 # Rate limiting binding
 # Note: Cloudflare rate limiting binding only supports periods of 10 or 60 seconds;

@@ -1221,7 +1221,7 @@ class MainActivity : ComponentActivity() {
         var uploadSha256 by remember { mutableStateOf<String?>(null) }
         var recordStatus by remember { mutableStateOf<String?>(null) }
         var pathAState by remember { mutableStateOf(UploadPathState(name = "catbox / gofile")) }
-        var pathBState by remember { mutableStateOf(UploadPathState(name = "PanVK storage (R2)")) }
+        var pathBState by remember { mutableStateOf(UploadPathState(name = "PanVK storage")) }
         var isRetryingA by remember { mutableStateOf(false) }
         var isRetryingB by remember { mutableStateOf(false) }
         val currentCancelFlag = remember { mutableStateOf(AtomicBoolean(false)) }
@@ -1254,7 +1254,7 @@ class MainActivity : ComponentActivity() {
                 val bInitialStatus = if (endpoint.isEmpty()) "Skipped (not configured)" else "Uploading"
                 val bInitialError = if (endpoint.isEmpty()) "Skipped (not configured)" else null
                 pathAState = UploadPathState(name = "catbox / gofile", status = "Uploading")
-                pathBState = UploadPathState(name = "PanVK storage (R2)", status = bInitialStatus, error = bInitialError)
+                pathBState = UploadPathState(name = "PanVK storage", status = bInitialStatus, error = bInitialError)
                 isUploading = true
                 showLinkDialog = false
                 showErrorDialog = false
@@ -1416,6 +1416,8 @@ class MainActivity : ComponentActivity() {
                                 if (!flag.get() && uploadGeneration.get() == gen) {
                                     if (e is R2StorageNotConfiguredException) {
                                         pathBState = pathBState.copy(status = "Skipped (not configured)", error = "Skipped (not configured)")
+                                    } else if (e is ProjectStorageTooBigException) {
+                                        pathBState = pathBState.copy(status = "Too big for project storage", error = null)
                                     } else {
                                         val msg = friendlyUploadError(e)
                                         pathBState = pathBState.copy(status = "Failed: $msg", error = msg)
@@ -1505,7 +1507,7 @@ class MainActivity : ComponentActivity() {
                                 val bZipStatus = if (endpoint.isEmpty()) "Skipped (not configured)" else "Preparing ZIP..."
                                 val bZipError = if (endpoint.isEmpty()) "Skipped (not configured)" else null
                                 pathAState = UploadPathState(name = "catbox / gofile", status = "Preparing ZIP...")
-                                pathBState = UploadPathState(name = "PanVK storage (R2)", status = bZipStatus, error = bZipError)
+                                pathBState = UploadPathState(name = "PanVK storage", status = bZipStatus, error = bZipError)
                                 isUploading = true
                                 showLinkDialog = false
                                 showErrorDialog = false
@@ -1716,7 +1718,8 @@ class MainActivity : ComponentActivity() {
                                         Text(
                                             text = p.error ?: p.status,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error
+                                            color = if (p.status == "Too big for project storage")
+                                                MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
                                         )
                                     }
                                 }
