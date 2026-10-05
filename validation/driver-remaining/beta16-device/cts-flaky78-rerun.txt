@@ -1,0 +1,2 @@
+Fail=36 Pass=42 total=78
+beta.15 rerun: Fail=50 Pass=28 total=78

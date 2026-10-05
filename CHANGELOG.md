@@ -1,5 +1,52 @@
 # Changelog
 
+## g615-v11-csf-v0.1.0-beta.16 (prerelease)
+
+Mesa `5a07217f034b` + the series up to 107. Tested on Poco X6 Pro, Mali-G615 MC6 (v11),
+mali_kbase CSF UAPI 1.21. Mali v9 stays experimental (unchanged).
+
+### Performance (Need for Speed: Most Wanted in PanPlay, race window, DXVK HUD full)
+
+The beta.15 save now finishes the prologue race, so the beta.15 numbers below were re-measured on
+the same race window with the released beta.15 `.so`. Builds were run interleaved, 2 runs each.
+
+| Build | DXVK HUD fps (4 samples x 2 runs) | mean | p99 frame time | peak GPU memory |
+|---|---|---|---|---|
+| beta.15 | 81.7 91.9 82.7 91.4 / 81.5 78.7 85.6 90.4 | 85.5 | 22 / 22 ms | 640 / 643 MB |
+| beta.16 | 85.3 95.8 91.7 93.4 / 88.4 93.1 81.5 95.2 | 90.6 | 16 / 22 ms | 652 / 666 MB |
+
+Driver-counted presents (instrumented builds): 88.7 -> ~92 fps. The submit thread was blocked
+47% of the time on beta.15 and is now blocked 0.2%.
+
+### Fixed
+
+- Software WSI present (no dma-buf/DRI3, the launcher's X server) no longer blocks
+  `vkQueuePresentKHR` until the frame's GPU work finishes (106). The X11 present thread
+  waits for the image fence instead. Before, DXVK's submit thread could not queue the next
+  frame, so CPU and GPU never overlapped.
+- Up to three retired tiler heaps can be in flight (107). With only one, heap renewal
+  often fell back to a full graphics drain inside `vkQueueSubmit` (35-55 ms stalls). If
+  backpressure is still reached, the wait is only for the oldest retired heap.
+- `driverInfo` reads `PanVK-kbase beta.16`.
+
+### Notes
+
+- GPU busy: the MediaTek GED node (`/sys/kernel/ged/hal/gpu_utilization`, ~96%) counts the
+  time a CSG is resident, including waits. The engine split in `/proc/mtk_mali/gpu_utilization`
+  and the DXVK HUD (`GPU: 57-66%`) show the real load. GPU timestamps per ring entry show the
+  GPU idle ~32% of the frame, almost all with no work submitted.
+- NFS is now limited by the game's main thread and wineserver round trips (~48% of its time in
+  `pipe_read`). More fps here needs work on the Wine side, not on the GPU.
+
+### Validation
+
+- CTS (glibc build, same series): the 11331-case sync + memory gate set has the same 56 failures
+  as beta.15. The wider 66,796-case sync/memory/query run has 52 new and 26 fixed failures vs beta.15,
+  all `write_*_geometry_*` op tests. A rerun of those 78 cases fails 36 on beta.16 and 50 on beta.15, so
+  they are flaky on both builds, not a regression.
+- PanProbe on the Poco: 17/17 (Mesa debug env off).
+- v9 tablet (Mali-G57 MC2): PanProbe 1/17, unchanged.
+
 ## g615-v11-csf-v0.1.0-beta.15 (prerelease)
 
 Mesa `5a07217f034b` + the series up to 105. Tested on Poco X6 Pro, Mali-G615 MC6 (v11),

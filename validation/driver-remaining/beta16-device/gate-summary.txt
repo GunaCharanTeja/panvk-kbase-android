@@ -1,0 +1,6 @@
+beta.16 gate summary (Android .so sha256 c0e54909059182938ed823df1640848ecd40d75f6885cdf3b9d04530dc93e60c)
+CTS 11331-case gate subset: fails=56 (beta.15 rc2: 56), new=0
+CTS 66796-case sync/memory/query: Fail=2079 NotSupported=14302 Pass=50415 total=66796; vs beta.15: new=52 fixed=26, all write_*_geometry_* op tests, flaky on both (rerun: beta.16 36/78 fail, beta.15 50/78 fail)
+PanProbe Poco (imported .so, debug env off): AUTORUN DONE pass=17 total=17
+PanProbe tablet HNY07QHT v9: AUTORUN DONE pass=1 total=17 (unchanged)
+NFS MW race, HUD fps mean of 8 samples: beta.15 85.5, beta.16 90.6; p99 22/22 -> 16/22 ms
