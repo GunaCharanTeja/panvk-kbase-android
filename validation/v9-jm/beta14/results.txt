@@ -1,0 +1,17 @@
+10-04 11:24:22.777  9677  9731 I PanVKTest: RESULT gpu_prerast_slice FAIL mismatch=0 fps=0 ms=4178
+10-04 11:24:24.840  9677  9743 I PanVKTest: RESULT clip_cull FAIL mismatch=0 fps=0 ms=2046
+10-04 11:24:26.915  9677  9743 I PanVKTest: RESULT multi_viewport FAIL mismatch=0 fps=0 ms=2033
+10-04 11:24:29.000  9677  9743 I PanVKTest: RESULT fill_mode FAIL mismatch=0 fps=0 ms=2067
+10-04 11:24:31.065  9677  9743 I PanVKTest: RESULT bc_decode FAIL mismatch=0 fps=0 ms=2044
+10-04 11:24:33.111  9677  9743 I PanVKTest: RESULT geometry FAIL mismatch=0 fps=0 ms=2037
+10-04 11:24:37.180  9677  9743 I PanVKTest: RESULT tessellation FAIL mismatch=0 fps=0 ms=4053
+10-04 11:24:41.259  9677  9743 I PanVKTest: RESULT xfb FAIL mismatch=0 fps=0 ms=4061
+10-04 11:24:43.333  9677  9743 I PanVKTest: RESULT pipeline_stats FAIL mismatch=0 fps=0 ms=2055
+10-04 11:24:45.397  9677  9743 I PanVKTest: RESULT vertex_stores PASS mismatch=0 fps=0 ms=2047
+10-04 11:24:47.450  9677  9743 I PanVKTest: RESULT gs_viewport_depth FAIL mismatch=0 fps=0 ms=2045
+10-04 11:24:49.527  9677  9743 I PanVKTest: RESULT vs_viewport_index FAIL mismatch=0 fps=0 ms=2037
+10-04 11:24:51.632  9677  9743 I PanVKTest: RESULT depth_bounds FAIL mismatch=0 fps=0 ms=2057
+10-04 11:24:55.731  9677  9743 I PanVKTest: RESULT large_draw FAIL mismatch=0 fps=0 ms=4069
+10-04 11:24:59.850  9677  9743 I PanVKTest: RESULT vmr_secondary FAIL mismatch=0 fps=0 ms=4098
+10-04 11:25:01.938  9677  9743 I PanVKTest: RESULT tess_cond_state FAIL mismatch=0 fps=0 ms=2060
+10-04 11:25:06.052  9677  9743 I PanVKTest: RESULT swapchain_lifecycle FAIL mismatch=0 fps=0 ms=4094 extra=resized FPS  | 

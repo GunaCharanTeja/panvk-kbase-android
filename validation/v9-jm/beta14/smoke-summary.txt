@@ -1,0 +1,5 @@
+beta.14 v9 tablet smoke (HNY07QHT Mali-G57 MC2 gpu_id 0x90930010), deqp-vk via shim
+so sha256 (android) 8a2849f9b21a75ea0b241c6f02df74b165ccf645ed413a2ebfc7764f777377ed (== device copy)
+apiVersion 1.1.363, driverInfo PanVK-kbase beta.14 (Mesa 26.3.0-devel (git-fb1eaadcce))
+api.smoke 4/6 ; draw.renderpass.simple_draw 4/4 ; synchronization.basic 21 pass / 8 NotSupported ; info.device_properties pass
+PanProbe 1/17 (vertex_stores only); DXVK cube (Winlator) failed on tablet: no libGL / DXGI factory init fail

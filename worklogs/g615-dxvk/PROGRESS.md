@@ -82,6 +82,13 @@ Details: `validation/g615-v11-csf/dxvk/DX9-TRANSFORM-FEEDBACK.md`, `DX10-TESSELL
 9. X11 present: DRI3 / MIT-SHM path instead of CPU `PutImage`; FIFO is not vsync-paced.
 10. Optional cleanups: v10-v12 gating for 085/087/088, and no `DEVICE_LOST` return from `SetEvent`/`ResetEvent`.
 11. **Asynchronous kbase queue submission.** STATUS: Not started (deferred by the user 2026-10-03). Problem: `panvk_vX_gpu_queue.c` submits synchronously; each `vkQueueSubmit` blocks until the GPU finishes, so CPU and GPU never overlap. Effect: the MTK GED DVFS governor keeps the GPU at 265 MHz (lowest OPP), GPU busy 0-11%. NFS MW evidence: dxvk-submit sits in `do_sys_poll`; 30-50 fps with FEX Extreme while the GPU idles. Fix: return from submit after the kick; signal fences/timelines from CS sync objects or a completion thread. Keep sync_file export (075) and the dma-heap placed maps (091) correct. Gate: CTS synchronization subsets, plus NFS FPS and GPU busy before/after.
+12. **Mali v9 (Valhall JM, G57/G68/G77/G78) — experimental in beta.14, finish to PanProbe 17/17.**
+  - Current state: jm-v9 patches (JM kbase atom submission + v9 JM backend ported from FristOneRR-Panvk-Source, MIT) shipped experimental in the universal ICD from beta.14. Tested Lenovo TB336FU (Mali-G57 MC2, kbase JM 11.0, gpu_id 0x90930010). PanProbe 1/17 (only vertex_stores, a SKIP). CTS on tablet: api.smoke 4/6 (asm_triangle, unused_resolve_attachment image compare), memory.mapping.suballocation.full 102/102, synchronization.basic 21 pass / 8 NotSupported, draw.renderpass.simple_draw 4/4. Details: worklogs/driver-remaining/101-v9-jm-test-driver.md, validation/v9-jm/.
+  - Phase 1 (4-6 h): swapchain AHB import (vkCreateSwapchainKHR INVALID_EXTERNAL_HANDLE), gpu_prerast_slice device lost on replay, vmr_secondary sample count (v9_cmd_draw nr_samples / evaluate_per_sample), timestamps (timestampPeriod/ValidBits 0), driverInfo, enable BC decode.
+  - Phase 2 (1-2 days): compute pre-raster path on JM job chains; enables GS, vertex stores, multi-viewport, clip/cull, fill mode, viewport index, large draw.
+  - Phase 3 (1-1.5 days): tessellation (currently stubbed), xfb, pipeline stats, depth bounds, tess cond state.
+  - Phase 4 (0.5 day): Vulkan version honesty (v9 reports 1.1 for now), full PanProbe 17/17 gate.
+  - Risks: JM has no command stream for indirect draws (GPU-side patching needed); fork maturity; single test device.
 
 ## Open problems
 

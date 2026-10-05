@@ -1,0 +1,101 @@
+Writing test log into synchronization.qpa
+dEQP Core vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce (0xf6a29701) starting..
+  target implementation = 'Android'
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+
+Test case 'dEQP-VK.synchronization.basic.event.host_set_reset'..
+  Pass (Tests set and reset event on host pass)
+
+Test case 'dEQP-VK.synchronization.basic.event.device_set_reset'..
+  Pass (Device set and reset event tests pass)
+
+Test case 'dEQP-VK.synchronization.basic.event.single_submit_multi_command_buffer'..
+  Pass (Wait and set even on device single submission tests pass)
+
+Test case 'dEQP-VK.synchronization.basic.event.multi_submit_multi_command_buffer'..
+  Pass (Wait and set even on device multi submission tests pass)
+
+Test case 'dEQP-VK.synchronization.basic.event.multi_secondary_command_buffer'..
+  Pass (Wait and set even on device using secondary command buffers tests pass)
+
+Test case 'dEQP-VK.synchronization.basic.event.host_set_reset_cq'..
+  NotSupported (Exclusive compute queue not supported. at vktTestCase.cpp:980)
+
+Test case 'dEQP-VK.synchronization.basic.event.device_set_reset_cq'..
+  NotSupported (Exclusive compute queue not supported. at vktTestCase.cpp:980)
+
+Test case 'dEQP-VK.synchronization.basic.event.single_submit_multi_command_buffer_cq'..
+  NotSupported (Exclusive compute queue not supported. at vktTestCase.cpp:980)
+
+Test case 'dEQP-VK.synchronization.basic.event.multi_submit_multi_command_buffer_cq'..
+  NotSupported (Exclusive compute queue not supported. at vktTestCase.cpp:980)
+
+Test case 'dEQP-VK.synchronization.basic.event.multi_secondary_command_buffer_cq'..
+  NotSupported (Exclusive compute queue not supported. at vktTestCase.cpp:980)
+
+Test case 'dEQP-VK.synchronization.basic.fence.one'..
+  Pass (Basic one fence tests passed)
+
+Test case 'dEQP-VK.synchronization.basic.fence.multi'..
+  Pass (Basic multi fence tests passed)
+
+Test case 'dEQP-VK.synchronization.basic.fence.empty_submit'..
+  Pass (OK)
+
+Test case 'dEQP-VK.synchronization.basic.fence.multi_waitall_false'..
+  Pass (Basic multi fence test without waitAll passed)
+
+Test case 'dEQP-VK.synchronization.basic.fence.one_signaled'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.synchronization.basic.fence.multiple_signaled'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.synchronization.basic.binary_semaphore.one_queue'..
+  Pass (Basic semaphore tests with one queue passed)
+
+Test case 'dEQP-VK.synchronization.basic.binary_semaphore.multi_queue'..
+  NotSupported (Queues couldn't be created at vktSynchronizationBasicSemaphoreTests.cpp:929)
+
+Test case 'dEQP-VK.synchronization.basic.binary_semaphore.one_queue_typed'..
+  Pass (Basic semaphore tests with one queue passed)
+
+Test case 'dEQP-VK.synchronization.basic.binary_semaphore.multi_queue_typed'..
+  NotSupported (Queues couldn't be created at vktSynchronizationBasicSemaphoreTests.cpp:929)
+
+Test case 'dEQP-VK.synchronization.basic.binary_semaphore.chain'..
+  Pass (Basic semaphore chain test passed)
+
+Test case 'dEQP-VK.synchronization.basic.timeline_semaphore.one_queue'..
+  Pass (Basic semaphore tests with one queue passed)
+
+Test case 'dEQP-VK.synchronization.basic.timeline_semaphore.multi_queue'..
+  NotSupported (Queues couldn't be created at vktSynchronizationBasicSemaphoreTests.cpp:929)
+
+Test case 'dEQP-VK.synchronization.basic.timeline_semaphore.chain'..
+  Pass (Basic semaphore chain test passed)
+
+Test case 'dEQP-VK.synchronization.basic.timeline_semaphore.two_threads'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.synchronization.basic.timeline_semaphore.wait_for_any_current_value'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.synchronization.basic.timeline_semaphore.wait_for_any_lesser_value'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.synchronization.basic.timeline_semaphore.wait_for_all_current_value'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.synchronization.basic.timeline_semaphore.wait_for_all_lesser_value'..
+  Pass (Pass)
+
+DONE!
+
+Test run totals:
+  Passed:        21/29 (72.4%)
+  Failed:        0/29 (0.0%)
+  Not supported: 8/29 (27.6%)
+  Warnings:      0/29 (0.0%)
+  Waived:        0/29 (0.0%)

@@ -1,0 +1,26 @@
+Writing test log into simple_draw.qpa
+dEQP Core vulkan-cts-1.4.6.2-0-gf6a29701220f34dd1407513bfe80d74ca7b392ce (0xf6a29701) starting..
+  target implementation = 'Android'
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+WARNING: panvk is not a conformant Vulkan implementation, testing use only.
+
+Test case 'dEQP-VK.draw.renderpass.simple_draw.simple_draw_triangle_list'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.draw.renderpass.simple_draw.simple_draw_triangle_strip'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.draw.renderpass.simple_draw.simple_draw_instanced_triangle_list'..
+  Pass (Pass)
+
+Test case 'dEQP-VK.draw.renderpass.simple_draw.simple_draw_instanced_triangle_strip'..
+  Pass (Pass)
+
+DONE!
+
+Test run totals:
+  Passed:        4/4 (100.0%)
+  Failed:        0/4 (0.0%)
+  Not supported: 0/4 (0.0%)
+  Warnings:      0/4 (0.0%)
+  Waived:        0/4 (0.0%)

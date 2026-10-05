@@ -14,6 +14,8 @@ ARCH="$(python3 -c "import json;print(json.load(open('$ROOT/profiles/$PROFILE.js
 FRONTEND="$(python3 -c "import json;print(json.load(open('$ROOT/profiles/$PROFILE.json'))['frontend'])")"
 SERIES="common android kbase-common app-loader wsi"
 if [ "$FRONTEND" = "CSF" ]; then SERIES="$SERIES csf csf-v$ARCH"; else SERIES="$SERIES jm-v$ARCH"; fi
+# Universal ICD: jm-v9 sits on top of the csf-v11 series (v9 JM + v10-v14 CSF).
+if [ "$PROFILE" = "g615-v11-csf" ]; then SERIES="$SERIES jm-v9"; fi
 echo "profile=$PROFILE arch=$ARCH frontend=$FRONTEND series: $SERIES"
 git -C "$MESA" status --porcelain | head -n 5
 APPLIED=0

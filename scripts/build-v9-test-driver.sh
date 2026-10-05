@@ -18,19 +18,6 @@ fi
 
 "$ROOT/scripts/apply-patches.sh" --profile g615-v11-csf --mesa "$MESA"
 
-for p in "$ROOT"/patches/jm-v9/*.patch; do
-  [ -e "$p" ] || continue
-  echo "APPLY [jm-v9] $(basename "$p")"
-  if git -C "$MESA" apply --check "$p" 2>/dev/null; then
-    git -C "$MESA" apply "$p"
-  elif git -C "$MESA" apply --recount --check "$p"; then
-    git -C "$MESA" apply --recount "$p"
-  else
-    echo "PATCH-DRIFT: $p does not apply" >&2
-    exit 1
-  fi
-done
-
 export LD_LIBRARY_PATH=/var/tmp/panvk/llvm22/usr/lib
 export HOST_TOOLS="$ROOT/tmp/rel9/src/build/host-tools/bin"
 export MESA BDIR="$V/build-$TAG" DDIR="$V/dist-$TAG"
