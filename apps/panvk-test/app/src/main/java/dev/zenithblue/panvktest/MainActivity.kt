@@ -918,6 +918,8 @@ class MainActivity : ComponentActivity() {
         ) {
             SectionTitle("Vulkan Driver Selection")
 
+            val bundledJson = remember { loadBundledDriverJson() }
+
             DriverType.entries.forEach { type ->
                 val isSelected = driverTypeState.value == type
                 OutlinedCard(
@@ -952,6 +954,25 @@ class MainActivity : ComponentActivity() {
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            if (type == DriverType.BUNDLED && bundledJson != null && bundledJson.length() > 0) {
+                                val name = bundledJson.optString("name").takeIf { it.isNotEmpty() }
+                                val version = bundledJson.optString("displayVersion").takeIf { it.isNotEmpty() }
+                                    ?: bundledJson.optString("packageVersion").takeIf { it.isNotEmpty() }
+                                val text = when {
+                                    name != null && version != null -> "$name  $version"
+                                    name != null -> name
+                                    version != null -> version
+                                    else -> null
+                                }
+                                if (text != null) {
+                                    Text(
+                                        text = text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
