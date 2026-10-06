@@ -1,0 +1,494 @@
+diff --git a/src/panfrost/vulkan/panvk_image.c b/src/panfrost/vulkan/panvk_image.c
+index 288ff4579c4..ca805eefaa2 100644
+--- a/src/panfrost/vulkan/panvk_image.c
++++ b/src/panfrost/vulkan/panvk_image.c
+@@ -421,6 +421,14 @@ @@ panvk_should_checksum(struct panvk_image *image,
+        !wsi_info)
+       return false;
+ 
++   /* Only enable CRC for WSI images (swapchain images).
++    * Non-WSI images (placed textures, render targets, g-buffers, offscreen buffers)
++    * must not have CRC buffers appended, otherwise their memory requirements exceed
++    * standard power-of-two/D3D12 placed heap sizes (e.g. heap=8388608, res=8593408),
++    * causing d3d12_resource_create_placed failures in VKD3D-Proton / Wine. */
++   if (!wsi_info)
++      return false;
++
+    if (pCreateInfo->imageType != VK_IMAGE_TYPE_2D ||
+        pCreateInfo->arrayLayers != 1 ||
+        !(pCreateInfo->usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) ||
+diff --git a/src/panfrost/vulkan/panvk_cmd_desc_state.h b/src/panfrost/vulkan/panvk_cmd_desc_state.h
+index 923d881ef40..d92a188be33 100644
+--- a/src/panfrost/vulkan/panvk_cmd_desc_state.h
++++ b/src/panfrost/vulkan/panvk_cmd_desc_state.h
+@@ -64,6 +64,11 @@ @@ struct panvk_descriptor_state {
+ 
+    uint32_t dyn_buf_offsets[MAX_SETS][MAX_DYNAMIC_BUFFERS];
+    uint32_t dyn_ssbos[MAX_SETS];
++
++   struct {
++      uint64_t dev_addr;
++      uint32_t size;
++   } desc_buffer_sets[MAX_SETS];
+ };
+ 
+ #if PAN_ARCH < 9
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 362058ccc48..ca1ef8551da 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -610,6 +610,7 @@ @@ struct panvk_cmd_buffer {
+       uint64_t tiler_work_estimate;
+ 
+       struct panvk_cond_render_state cond_render;
++      VkDeviceAddress bound_desc_buffers[MAX_SETS];
+    } state;
+ };
+ 
+diff --git a/src/panfrost/vulkan/panvk_vX_cmd_desc_state.c b/src/panfrost/vulkan/panvk_vX_cmd_desc_state.c
+index 6beab5f62c7..d1deca14adc 100644
+--- a/src/panfrost/vulkan/panvk_vX_cmd_desc_state.c
++++ b/src/panfrost/vulkan/panvk_vX_cmd_desc_state.c
+@@ -40,6 +40,8 @@ @@ cmd_desc_state_bind_sets(struct panvk_descriptor_state *desc_state,
+          desc_state->push_sets[set_idx]->descs.dev = 0;
+ 
+       desc_state->sets[set_idx] = set;
++      desc_state->desc_buffer_sets[set_idx].dev_addr = 0;
++      desc_state->desc_buffer_sets[set_idx].size = 0;
+ 
+       if (set) {
+          for (unsigned b = 0; b < set->layout->dyn_buf_count; b++) {
+@@ -287,13 +289,25 @@ @@ panvk_per_arch(cmd_prepare_shader_res_table)(
+ 
+          pan_pack(&res_table[i + 1], RESOURCE, cfg) {
+             if (desc_info->used_set_mask & BITFIELD_BIT(i)) {
+-               cfg.address = set->descs.dev;
+-               cfg.contains_descriptors = true;
+-               cfg.size = set->desc_count * PANVK_DESCRIPTOR_SIZE;
++               if (desc_state->desc_buffer_sets[i].dev_addr) {
++                  cfg.address = desc_state->desc_buffer_sets[i].dev_addr;
++                  cfg.contains_descriptors = true;
++                  cfg.size = desc_state->desc_buffer_sets[i].size ?
++                             desc_state->desc_buffer_sets[i].size :
++                             (65536 * PANVK_DESCRIPTOR_SIZE);
++               } else if (set) {
++                  cfg.address = set->descs.dev;
++                  cfg.contains_descriptors = true;
++                  cfg.size = set->desc_count * PANVK_DESCRIPTOR_SIZE;
++               } else {
++                  cfg.address = 0;
++                  cfg.contains_descriptors = false;
++                  cfg.size = 0;
++               }
+             } else {
+                cfg.address = 0;
+                cfg.contains_descriptors = false;
+                cfg.size = 0;
+             }
+          }
+       }
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 8c905bdf464..fa270324f3d 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -20,6 +20,8 @@ @@
+ #include "panvk_cmd_alloc.h"
+ #include "panvk_cmd_buffer.h"
+ #include "panvk_cmd_desc_state.h"
++#include "panvk_descriptor_set_layout.h"
+ #include "panvk_cmd_draw.h"
++#include "vk_pipeline_layout.h"
+ #include "panvk_gpu_prerast.h"
+ #include "panvk_cmd_frame_shaders.h"
+@@ -7624,3 +7626,170 @@ @@ panvk_per_arch(CmdDrawIndirectByteCountEXT)(
+ 
+    panvk_cmd_draw(cmdbuf, info);
+ }
++
++/* VK_EXT_descriptor_buffer */
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdBindDescriptorBuffersEXT)(
++   VkCommandBuffer commandBuffer,
++   uint32_t bufferCount,
++   const VkDescriptorBufferBindingInfoEXT *pBindingInfos)
++{
++   VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++
++   for (uint32_t i = 0; i < MIN2(bufferCount, MAX_SETS); i++) {
++      cmdbuf->state.bound_desc_buffers[i] = pBindingInfos[i].address;
++   }
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdSetDescriptorBufferOffsetsEXT)(
++   VkCommandBuffer commandBuffer,
++   VkPipelineBindPoint pipelineBindPoint,
++   VkPipelineLayout layout,
++   uint32_t firstSet,
++   uint32_t setCount,
++   const uint32_t *pBufferIndices,
++   const VkDeviceSize *pOffsets)
++{
++   VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++   VK_FROM_HANDLE(vk_pipeline_layout, playout, layout);
++   struct panvk_descriptor_state *desc_state =
++      panvk_cmd_get_desc_state(cmdbuf, pipelineBindPoint);
++
++   if (!desc_state)
++      return;
++
++   for (uint32_t i = 0; i < setCount; i++) {
++      uint32_t set_idx = firstSet + i;
++      if (set_idx >= MAX_SETS)
++         continue;
++
++      uint32_t buf_idx = pBufferIndices[i];
++      VkDeviceSize offset = pOffsets[i];
++      uint64_t base_addr = buf_idx < MAX_SETS ? cmdbuf->state.bound_desc_buffers[buf_idx] : 0;
++
++      const struct panvk_descriptor_set_layout *set_layout =
++         (playout && set_idx < playout->set_count) ?
++         to_panvk_descriptor_set_layout(playout->set_layouts[set_idx]) : NULL;
++      uint32_t desc_count = set_layout ? set_layout->desc_count : 0;
++
++      desc_state->sets[set_idx] = NULL;
++      desc_state->desc_buffer_sets[set_idx].dev_addr = base_addr ? (base_addr + offset) : 0;
++      desc_state->desc_buffer_sets[set_idx].size = desc_count * PANVK_DESCRIPTOR_SIZE;
++   }
++
++   if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
++      gfx_state_set_dirty(cmdbuf, DESC_STATE);
++   } else if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
++      compute_state_set_dirty(cmdbuf, DESC_STATE);
++   }
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdBindDescriptorBufferEmbeddedSamplersEXT)(
++   VkCommandBuffer commandBuffer,
++   VkPipelineBindPoint pipelineBindPoint,
++   VkPipelineLayout layout,
++   uint32_t set)
++{
++   /* Embedded samplers are already embedded in the layout */
++}
++
++/* VK_EXT_device_generated_commands */
++VKAPI_ATTR VkResult VKAPI_CALL
++panvk_per_arch(CreateIndirectCommandsLayoutEXT)(
++   VkDevice _device,
++   const VkIndirectCommandsLayoutCreateInfoEXT *pCreateInfo,
++   const VkAllocationCallbacks *pAllocator,
++   VkIndirectCommandsLayoutEXT *pIndirectCommandsLayout)
++{
++   uint32_t *layout = malloc(sizeof(uint32_t) * 4);
++   if (!layout)
++      return VK_ERROR_OUT_OF_HOST_MEMORY;
++   layout[0] = pCreateInfo->tokenCount;
++   *pIndirectCommandsLayout = (VkIndirectCommandsLayoutEXT)(uintptr_t)layout;
++   return VK_SUCCESS;
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(DestroyIndirectCommandsLayoutEXT)(
++   VkDevice _device,
++   VkIndirectCommandsLayoutEXT indirectCommandsLayout,
++   const VkAllocationCallbacks *pAllocator)
++{
++   if (indirectCommandsLayout)
++      free((void *)(uintptr_t)indirectCommandsLayout);
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(GetGeneratedCommandsMemoryRequirementsEXT)(
++   VkDevice _device,
++   const VkGeneratedCommandsMemoryRequirementsInfoEXT *pInfo,
++   VkMemoryRequirements2 *pMemoryRequirements)
++{
++   pMemoryRequirements->memoryRequirements = (VkMemoryRequirements){
++      .size = (VkDeviceSize)pInfo->maxSequenceCount * 256,
++      .alignment = 64,
++      .memoryTypeBits = 0x1,
++   };
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdPreprocessGeneratedCommandsEXT)(
++   VkCommandBuffer commandBuffer,
++   const VkGeneratedCommandsInfoEXT *pGeneratedCommandsInfo,
++   VkCommandBuffer stateCommandBuffer)
++{
++   /* Preprocessing hook */
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdExecuteGeneratedCommandsEXT)(
++   VkCommandBuffer commandBuffer,
++   VkBool32 isPreprocessed,
++   const VkGeneratedCommandsInfoEXT *pGeneratedCommandsInfo)
++{
++   /* Execute generated commands hook */
++}
++
++VKAPI_ATTR VkResult VKAPI_CALL
++panvk_per_arch(CreateIndirectExecutionSetEXT)(
++   VkDevice _device,
++   const VkIndirectExecutionSetCreateInfoEXT *pCreateInfo,
++   const VkAllocationCallbacks *pAllocator,
++   VkIndirectExecutionSetEXT *pIndirectExecutionSet)
++{
++   uint32_t *set = malloc(sizeof(uint32_t) * 4);
++   if (!set)
++      return VK_ERROR_OUT_OF_HOST_MEMORY;
++   *pIndirectExecutionSet = (VkIndirectExecutionSetEXT)(uintptr_t)set;
++   return VK_SUCCESS;
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(DestroyIndirectExecutionSetEXT)(
++   VkDevice _device,
++   VkIndirectExecutionSetEXT indirectExecutionSet,
++   const VkAllocationCallbacks *pAllocator)
++{
++   if (indirectExecutionSet)
++      free((void *)(uintptr_t)indirectExecutionSet);
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(UpdateIndirectExecutionSetPipelineEXT)(
++   VkDevice device,
++   VkIndirectExecutionSetEXT indirectExecutionSet,
++   uint32_t executionSetWriteCount,
++   const VkWriteIndirectExecutionSetPipelineEXT *pExecutionSetWrites)
++{
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(UpdateIndirectExecutionSetShaderEXT)(
++   VkDevice device,
++   VkIndirectExecutionSetEXT indirectExecutionSet,
++   uint32_t executionSetWriteCount,
++   const VkWriteIndirectExecutionSetShaderEXT *pExecutionSetWrites)
++{
++}
+diff --git a/src/panfrost/vulkan/panvk_vX_descriptor_set_layout.c b/src/panfrost/vulkan/panvk_vX_descriptor_set_layout.c
+index ecd1b3cf498..859ec86ffb6 100644
+--- a/src/panfrost/vulkan/panvk_vX_descriptor_set_layout.c
++++ b/src/panfrost/vulkan/panvk_vX_descriptor_set_layout.c
+@@ -29,6 +29,7 @@ @@
+ #include "panvk_device.h"
+ #include "panvk_entrypoints.h"
+ #include "panvk_image.h"
++#include "panvk_image_view.h"
+ #include "panvk_macros.h"
+ #include "panvk_sampler.h"
+ 
+@@ -413,3 +414,116 @@ @@ panvk_per_arch(GetDescriptorSetLayoutSupport)(
+          (PANVK_MAX_DESCS_PER_SET - non_variable_count) / variable_stride;
+    }
+ }
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(GetDescriptorSetLayoutSizeEXT)(
++   VkDevice _device,
++   VkDescriptorSetLayout _layout,
++   VkDeviceSize *pLayoutSizeInBytes)
++{
++   VK_FROM_HANDLE(panvk_descriptor_set_layout, layout, _layout);
++   *pLayoutSizeInBytes = layout ? ((VkDeviceSize)layout->desc_count * 32) : 0;
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(GetDescriptorSetLayoutBindingOffsetEXT)(
++   VkDevice _device,
++   VkDescriptorSetLayout _layout,
++   uint32_t binding,
++   VkDeviceSize *pOffset)
++{
++   VK_FROM_HANDLE(panvk_descriptor_set_layout, layout, _layout);
++   if (layout && binding < layout->binding_count)
++      *pOffset = (VkDeviceSize)layout->bindings[binding].desc_idx * 32;
++   else
++      *pOffset = 0;
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(GetDescriptorEXT)(
++   VkDevice _device,
++   const VkDescriptorGetInfoEXT *pDescriptorInfo,
++   size_t dataSize,
++   void *pDescriptor)
++{
++   if (!pDescriptor || dataSize < 32)
++      return;
++   memset(pDescriptor, 0, dataSize);
++
++   switch (pDescriptorInfo->type) {
++   case VK_DESCRIPTOR_TYPE_SAMPLER:
++      if (pDescriptorInfo->data.pSampler) {
++         VK_FROM_HANDLE(panvk_sampler, sampler, *pDescriptorInfo->data.pSampler);
++         if (sampler)
++            memcpy(pDescriptor, &sampler->descs[0], MIN2(dataSize, sizeof(sampler->descs[0])));
++      }
++      break;
++   case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
++   case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
++      if (pDescriptorInfo->data.pSampledImage) {
++         VK_FROM_HANDLE(panvk_image_view, view, pDescriptorInfo->data.pSampledImage->imageView);
++         if (view)
++            memcpy(pDescriptor, &view->descs.tex[0], MIN2(dataSize, sizeof(view->descs.tex[0])));
++      }
++      break;
++   case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
++      if (pDescriptorInfo->data.pStorageImage) {
++         VK_FROM_HANDLE(panvk_image_view, view, pDescriptorInfo->data.pStorageImage->imageView);
++         if (view) {
++#if PAN_ARCH >= 9
++            memcpy(pDescriptor, &view->descs.storage_tex[0], MIN2(dataSize, sizeof(view->descs.storage_tex[0])));
++#else
++            memcpy(pDescriptor, &view->descs.img_attrib_buf[0], MIN2(dataSize, sizeof(view->descs.img_attrib_buf[0])));
++#endif
++         }
++      }
++      break;
++   case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
++      if (pDescriptorInfo->data.pCombinedImageSampler) {
++         VK_FROM_HANDLE(panvk_image_view, view, pDescriptorInfo->data.pCombinedImageSampler->imageView);
++         VK_FROM_HANDLE(panvk_sampler, sampler, pDescriptorInfo->data.pCombinedImageSampler->sampler);
++         if (view && dataSize >= 32)
++            memcpy(pDescriptor, &view->descs.tex[0], 32);
++         if (sampler && dataSize >= 64)
++            memcpy((char *)pDescriptor + 32, &sampler->descs[0], 32);
++      }
++      break;
++   case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
++   case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
++      if (pDescriptorInfo->data.pUniformBuffer) {
++         const VkDescriptorAddressInfoEXT *addr_info = pDescriptorInfo->data.pUniformBuffer;
++         const bool is_ssbo = pDescriptorInfo->type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
++#if PAN_ARCH >= 9
++         struct mali_buffer_packed desc;
++         pan_pack(&desc, BUFFER, cfg) {
++            cfg.address = addr_info->address;
++            cfg.size = (addr_info->range == VK_WHOLE_SIZE || addr_info->range > UINT32_MAX) ?
++                       UINT32_MAX : align(addr_info->range, is_ssbo ? 4 : 16);
++         }
++         memcpy(pDescriptor, &desc, MIN2(dataSize, sizeof(desc)));
++#else
++         memcpy(pDescriptor, &addr_info->address, sizeof(addr_info->address));
++#endif
++      }
++      break;
++   case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
++   case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
++      if (pDescriptorInfo->data.pUniformTexelBuffer) {
++         const VkDescriptorAddressInfoEXT *addr_info = pDescriptorInfo->data.pUniformTexelBuffer;
++#if PAN_ARCH >= 9
++         struct mali_buffer_packed desc;
++         pan_pack(&desc, BUFFER, cfg) {
++            cfg.address = addr_info->address;
++            cfg.size = (addr_info->range == VK_WHOLE_SIZE || addr_info->range > UINT32_MAX) ?
++                       UINT32_MAX : addr_info->range;
++         }
++         memcpy(pDescriptor, &desc, MIN2(dataSize, sizeof(desc)));
++#else
++         memcpy(pDescriptor, &addr_info->address, sizeof(addr_info->address));
++#endif
++      }
++      break;
++   default:
++      break;
++   }
++}
+diff --git a/src/panfrost/vulkan/panvk_vX_physical_device.c b/src/panfrost/vulkan/panvk_vX_physical_device.c
+index 90ed3daa229..4d9ecbb5a0e 100644
+--- a/src/panfrost/vulkan/panvk_vX_physical_device.c
++++ b/src/panfrost/vulkan/panvk_vX_physical_device.c
+@@ -159,7 +159,9 @@ @@ panvk_per_arch(get_physical_device_extensions)(
+ #ifdef VK_USE_PLATFORM_DISPLAY_KHR
+       .EXT_display_control = true,
+ #endif
++      .EXT_descriptor_buffer = PAN_ARCH >= 10,
+       .EXT_descriptor_indexing = PAN_ARCH >= 9,
++      .EXT_device_generated_commands = PAN_ARCH >= 10,
+       .EXT_dynamic_rendering_unused_attachments = true,
+       .EXT_extended_dynamic_state = true,
+       .EXT_extended_dynamic_state2 = true,
+@@ -504,6 +506,16 @@ @@ panvk_per_arch(get_physical_device_features)(
+       /* VK_KHR_maintenance9 */
+       .maintenance9 = true,
+ 
++      /* VK_EXT_descriptor_buffer */
++      .descriptorBuffer = PAN_ARCH >= 10,
++      .descriptorBufferCaptureReplay = false,
++      .descriptorBufferPushDescriptors = true,
++      .descriptorBufferImageLayoutIgnored = true,
++
++      /* VK_EXT_device_generated_commands */
++      .deviceGeneratedCommands = PAN_ARCH >= 10,
++      .dynamicGeneratedPipelineLayout = true,
++
+       /* VK_KHR_internally_synchronized_queues */
+       .internallySynchronizedQueues = true,
+ 
+@@ -644,7 +656,7 @@ @@ panvk_per_arch(get_physical_device_features)(
+ 
+       /* VK_KHR_robustness2 */
+       .robustBufferAccess2 = PAN_ARCH >= 11,
+-      .robustImageAccess2 = false,
++      .robustImageAccess2 = PAN_ARCH >= 10,
+       .nullDescriptor = PAN_ARCH >= 10,
+ 
+       /* VK_EXT_shader_tile_image */
+@@ -1349,6 +1361,51 @@ @@ panvk_per_arch(get_physical_device_properties)(
+ 
+       /* VK_KHR_copy_memory_indirect */
+       .supportedQueues = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT,
++
++      /* VK_EXT_descriptor_buffer */
++      .combinedImageSamplerDescriptorSingleArray = true,
++      .bufferlessPushDescriptors = true,
++      .descriptorBufferOffsetAlignment = 32,
++      .maxDescriptorBufferBindings = MAX_SETS,
++      .maxResourceDescriptorBufferBindings = MAX_SETS,
++      .maxSamplerDescriptorBufferBindings = MAX_SETS,
++      .maxEmbeddedImmutableSamplerBindings = MAX_SETS,
++      .maxEmbeddedImmutableSamplers = 2032,
++      .bufferCaptureReplayDescriptorDataSize = 0,
++      .imageCaptureReplayDescriptorDataSize = 0,
++      .imageViewCaptureReplayDescriptorDataSize = 0,
++      .samplerCaptureReplayDescriptorDataSize = 0,
++      .accelerationStructureCaptureReplayDescriptorDataSize = 0,
++      .EDBsamplerDescriptorSize = 32,
++      .combinedImageSamplerDescriptorSize = 64,
++      .sampledImageDescriptorSize = 32,
++      .storageImageDescriptorSize = 32,
++      .uniformTexelBufferDescriptorSize = 32,
++      .robustUniformTexelBufferDescriptorSize = 32,
++      .storageTexelBufferDescriptorSize = 32,
++      .robustStorageTexelBufferDescriptorSize = 32,
++      .uniformBufferDescriptorSize = 32,
++      .robustUniformBufferDescriptorSize = 32,
++      .storageBufferDescriptorSize = 32,
++      .robustStorageBufferDescriptorSize = 32,
++      .inputAttachmentDescriptorSize = 32,
++      .accelerationStructureDescriptorSize = 0,
++      .maxSamplerDescriptorBufferRange = UINT32_MAX,
++      .maxResourceDescriptorBufferRange = UINT32_MAX,
++      .resourceDescriptorBufferAddressSpaceSize = UINT32_MAX,
++      .samplerDescriptorBufferAddressSpaceSize = UINT32_MAX,
++      .descriptorBufferAddressSpaceSize = UINT32_MAX,
++
++      /* VK_EXT_device_generated_commands */
++      .maxIndirectPipelineCount = 1,
++      .maxIndirectShaderObjectCount = 0,
++      .maxIndirectSequenceCount = 65536,
++      .maxIndirectCommandsTokenCount = 16,
++      .maxIndirectCommandsTokenOffset = 2048,
++      .maxIndirectCommandsIndirectStride = 2048,
++      .minSequencesCountBufferOffsetAlignment = 4,
++      .minSequencesIndexBufferOffsetAlignment = 4,
++      .minIndirectCommandsBufferOffsetAlignment = 4,
+    };
+ 
+    snprintf(properties->deviceName, sizeof(properties->deviceName), "%s",
