@@ -1,3 +1,0 @@
-DXDRAW: d3d11 create hr=0x00000000 fl=0xb000
-DXDRAW: FAIL VB tri hr=0x80070057
-exit=1

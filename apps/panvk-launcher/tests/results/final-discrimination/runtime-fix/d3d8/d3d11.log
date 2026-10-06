@@ -1,6 +1,0 @@
-DXSMOKE: window hwnd=000000000001005A visible=1 client=320x240 hold_ms=12000
-DXSMOKE: api=d3d8 CreateDevice hr=0x00000000
-DXSMOKE: api=d3d8 adapter hr=0x00000000 desc="AMD Radeon RX 6700 XT" vendor=0x1002 device=0x73df
-DXSMOKE: api=d3d8 Clear hr=0x00000000
-DXSMOKE: api=d3d8 Present hr=0x00000000
-DXSMOKE: PASS api=d3d8

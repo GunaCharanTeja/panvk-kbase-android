@@ -1,7 +1,0 @@
-build/
-.gradle/
-local.properties
-*.so
-.cxx/
-.kotlin/
-tests/build/

@@ -1,8 +1,0 @@
-diff --git a/src/dxvk/dxvk_context.cpp b/src/dxvk/dxvk_context.cpp
---- a/src/dxvk/dxvk_context.cpp
-+++ b/src/dxvk/dxvk_context.cpp
-@@ -205,3 +205,4 @@
-     // Flush and invalidate everything
-+    endCurrentPass(false);
-     endCurrentCommands();
-     beginCurrentCommands();

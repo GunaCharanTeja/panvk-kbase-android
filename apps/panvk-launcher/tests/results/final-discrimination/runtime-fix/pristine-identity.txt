@@ -1,5 +1,0 @@
-e2ff05c9e30b10a53387895a90e2c61bf80a39615459046b1f379e7b7fbf9fe9  /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix/d3d10core.dll
-9557e648aa52e20799bd704b9885f1c3e4869ba7c2ca494ad5d153251737f926  /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix/d3d11.dll
-4dcfb7291180076a19587f9827d3ccb3a83c34a666046da79aacdb93609dd6a3  /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix/d3d8.dll
-1e69970c95537c3a4ab3fce43740fa4335f61be7d65bc7525eb8bdc9395ae2bd  /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix/d3d9.dll
-7d13461315d3d4e392b67861f3816b3f16519bbc972d5b5a8a0505a4f25056cb  /data/user/0/dev.zenithblue.panvklauncher/files/container/dxvk-pristine-before-clearfix/dxgi.dll

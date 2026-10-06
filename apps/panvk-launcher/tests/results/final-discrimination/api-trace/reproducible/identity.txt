@@ -1,5 +1,0 @@
-9d93e6ae03cbbf5a3e9809b4b65b1c5ec187f42166ed93b01ab534c38f4d4bc6  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/dxsmoke-synchronized.exe
-9557e648aa52e20799bd704b9885f1c3e4869ba7c2ca494ad5d153251737f926  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d11.dll
-7d13461315d3d4e392b67861f3816b3f16519bbc972d5b5a8a0505a4f25056cb  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/dxgi.dll
-44300ee413dc8f3df5e8f44323fa41de45b1ef62af00feebacc8eae8b6da8655  /data/user/0/dev.zenithblue.panvklauncher/files/m4wsi/libvulkan_panfrost.so
-65c241ebbcee343598c54905ff6c8a75eb418cfad4c55c4c480e02f97898b215  /data/user/0/dev.zenithblue.panvklauncher/files/contents/imagefs/bionic/usr/lib/libVkLayer_api_dump.so

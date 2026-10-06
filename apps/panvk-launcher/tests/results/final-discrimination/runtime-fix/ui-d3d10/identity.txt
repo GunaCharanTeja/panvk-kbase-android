@@ -1,8 +1,0 @@
-e3006bf95aa24d023015471028c68880e346dd950129342355d325060437176f  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d8.dll
-1875eeaedd11838b41ee390f99677a7868fc292bc0184a18b1f8705cdcdb0848  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d9.dll
-79309bb528075356e2912ac927f24601876efe1c4bc7015a73ff9b46c5c12638  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d10core.dll
-486cc3bb4ee49985cf7b303d56ec6ece7eacef37cb45a60414d009fadaac182e  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d11.dll
-77fb5f2e57646440422d53321a3186a41b7f80066b4082180ec9e7e7b750aab5  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/dxgi.dll
-44300ee413dc8f3df5e8f44323fa41de45b1ef62af00feebacc8eae8b6da8655  /data/user/0/dev.zenithblue.panvklauncher/files/m4wsi/libvulkan_panfrost.so
-44300ee413dc8f3df5e8f44323fa41de45b1ef62af00feebacc8eae8b6da8655  /data/user/0/dev.zenithblue.panvklauncher/files/drivers/PanVK_Kbase_G615/libvulkan_panfrost.so
-b81469399a07a99fe2ba8fbaf7f51463bd8c5b1bc4e381858db2a7318640a9e0  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/dxsmoke-d3d10-arm64ec-w64-mingw32.exe

@@ -1,7 +1,0 @@
-cc0d19b09f41d0c5f6addb8a7a127868aeace74e35095e2772f48b10b62908ae  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d8.dll
-44a8413a00ffa4c3f8a191a371ee0aa996b6f9f4f22988c5d7939219ee9846af  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d9.dll
-79309bb528075356e2912ac927f24601876efe1c4bc7015a73ff9b46c5c12638  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d10core.dll
-fd0a36a79c519adeac3d29c69a21780ee0d1a5aad4720fd581527bf77a024903  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/d3d11.dll
-bc5f3f766197322154114b84ad03495aefd6be8b95c45071780423ae70546d66  /data/user/0/dev.zenithblue.panvklauncher/files/container/.wine/drive_c/windows/system32/dxgi.dll
-44300ee413dc8f3df5e8f44323fa41de45b1ef62af00feebacc8eae8b6da8655  /data/user/0/dev.zenithblue.panvklauncher/files/m4wsi/libvulkan_panfrost.so
-{"file_format_version":"1.0.0","ICD":{"library_path":"/data/user/0/dev.zenithblue.panvklauncher/files/m4wsi/libvulkan_panfrost.so","api_version":"1.4.0"}}

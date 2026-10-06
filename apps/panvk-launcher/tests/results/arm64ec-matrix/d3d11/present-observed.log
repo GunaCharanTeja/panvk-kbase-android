@@ -1,9 +1,0 @@
-DXSMOKE: window hwnd=000000000001005A visible=1 client=320x240 hold_ms=12000
-DXSMOKE: api=d3d11 D3D11CreateDeviceAndSwapChain hr=0x00000000 feature=0xb000
-DXSMOKE: api=d3d11 adapter hr=0x00000000 desc="Mali-G615 MC6" vendor=0x13b5 device=0x1030
-DXSMOKE: api=d3d11 Clear issued frame=0
-DXSMOKE: api=d3d11 pre0 removed=0x00000000
-DXSMOKE: api=d3d11 pre0 bb 320x240 fmt=87 bind=0x20 usage=0 samples=1 mips=1 support_hr=0x00000000 support=0x32fef3f3
-DXSMOKE: api=d3d11 pre0 Map hr=0x00000000 pitch=1280
-DXSMOKE: api=d3d11 pre0 center RGBA=ff 80 40 ff (raw=40 80 ff ff fmt=87) orange=76800 zero=0 other=0 alpha_bad=0 need=76800
-DXSMOKE: api=d3d11 Present frame=0 hr=0x00000000 (S_OK positive)

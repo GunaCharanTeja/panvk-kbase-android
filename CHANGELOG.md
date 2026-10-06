@@ -1,5 +1,17 @@
 # Changelog
 
+## Mali-G615 CSF PanVK Driver with VKD3D DX12 Support (Patch 108)
+
+Mesa `5a07217f034b` + series up to Patch 108 (`108-vkd3d-dx12-essentials.patch`).
+Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
+
+### Highlights & Changes:
+- **`VK_EXT_descriptor_buffer`**: Implemented direct hardware descriptor buffers, eliminating descriptor pool allocation overhead for D3D12 root signatures and descriptor tables (CBV, SRV, UAV, samplers). Packed descriptors emitted straight into Mali Valhall hardware resource tables.
+- **`VK_EXT_device_generated_commands`**: Vulkan DGC hooks for GPU-driven drawing batches (`ExecuteIndirect`).
+- **D3D12 Placed Resource Memory Isolation**: Restricted CRC tile checksum metadata buffers strictly to WSI swapchain images (`panvk_image.c`). Non-WSI images (render targets, placed textures, G-buffers) strictly preserve power-of-two memory sizes, eliminating `d3d12_resource_create_placed` out-of-memory crashes in VKD3D-Proton.
+- **`VK_KHR_robustness2`**: Exposed `robustImageAccess2 = true`, completing full robustness coverage (`robustBufferAccess2`, `nullDescriptor`).
+- **Clean Tree Rebase**: Synchronized with latest Mesa upstream and cleaned out legacy launcher APK artifacts.
+
 ## g615-v11-csf-v0.1.0-beta.16 (prerelease)
 
 Mesa `5a07217f034b` + the series up to 107. Tested on Poco X6 Pro, Mali-G615 MC6 (v11),
