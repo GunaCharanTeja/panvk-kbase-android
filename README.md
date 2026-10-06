@@ -121,6 +121,22 @@ Our tree includes **Patch 108** (`108-vkd3d-dx12-essentials.patch`), which unloc
 
 ---
 
+## Credits & Acknowledgements
+
+* **[Mesa 3D](https://www.mesa3d.org/) & [Panfrost](https://gitlab.freedesktop.org/mesa/mesa/-/tree/main/src/panfrost):**
+  * **Alyssa Rosenzweig** & **Boris Brezillon** – Authors of Panfrost and the PanVK Command Stream Frontend (CSF) driver.
+  * The Collabora graphics team and broader Mesa community.
+* **PanVK Kbase Android Base:**
+  * **[ZenithBlue](https://github.com/zenithblue-oss)** – Author of the original `panvk-kbase-android` driver foundation and CSF kbase UAPI interface.
+* **DirectX Translation Layer Projects:**
+  * **[DXVK](https://github.com/doitsujin/dxvk)** – **Philip Rebohle (doitsujin)** & **Joshua Ashton** for Direct3D 9/10/11 translation to Vulkan.
+  * **[VKD3D-Proton](https://github.com/HansKristian-Work/vkd3d-proton)** – **Hans-Kristian Arntzen** and contributors for Direct3D 12 translation to Vulkan.
+* **Mali-G615 Maintenance & DirectX 12 Patch 108:**
+  * **GunaCharanTeja** – Silicon verification on physical Mali-G615 (OPPO CPH2763, MT6878), author of **Patch 108** (`108-vkd3d-dx12-essentials.patch`), `VK_EXT_descriptor_buffer` hardware packing, placed heap memory isolation, and driver maintenance.
+
+---
+
 ## License
 
 This project is licensed under the same MIT / X11 license terms as upstream Mesa. See [LICENSES/](LICENSES/) for details.
+
