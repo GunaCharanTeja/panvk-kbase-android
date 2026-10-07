@@ -4,7 +4,7 @@
   "mesaVersion": "26.3.0-devel",
   "mesaBranch": "main",
   "pinnedOn": "2026-09-18",
-  "patchSeriesId": "sha256:844c018eeb668ae7626d8b71b436e44f8b6ca34091f988e438652351399f8519",
+  "patchSeriesId": "sha256:9ec65b6687e5a0e777b24e12274369e06f52d7189709300b00f8b2db9b1f16f5",
   "referenceRepos": {
     "g720-csf": {
       "url": "https://github.com/wonderkast02/panvk-g720-kbase-csf",
