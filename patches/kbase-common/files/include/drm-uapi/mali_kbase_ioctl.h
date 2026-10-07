@@ -585,6 +585,7 @@ union kbase_ioctl_cs_tiler_heap_init {
       __u16 target_in_flight;
       __u8 group_id;
       __u8 padding;
+      __u64 buf_desc_va;
    } in;
    struct {
       __u64 gpu_heap_va;
@@ -593,6 +594,23 @@ union kbase_ioctl_cs_tiler_heap_init {
 };
 #define KBASE_IOCTL_CS_TILER_HEAP_INIT \
    _IOWR(KBASE_IOCTL_TYPE, 48, union kbase_ioctl_cs_tiler_heap_init)
+
+union kbase_ioctl_cs_tiler_heap_init_1_13 {
+   struct {
+      __u32 chunk_size;
+      __u32 initial_chunks;
+      __u32 max_chunks;
+      __u16 target_in_flight;
+      __u8 group_id;
+      __u8 padding;
+   } in;
+   struct {
+      __u64 gpu_heap_va;
+      __u64 first_chunk_va;
+   } out;
+};
+#define KBASE_IOCTL_CS_TILER_HEAP_INIT_1_13 \
+   _IOWR(KBASE_IOCTL_TYPE, 48, union kbase_ioctl_cs_tiler_heap_init_1_13)
 
 struct kbase_ioctl_cs_tiler_heap_term {
    __u64 gpu_heap_va;

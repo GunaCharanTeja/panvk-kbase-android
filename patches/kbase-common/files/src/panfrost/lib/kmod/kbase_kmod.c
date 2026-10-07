@@ -510,6 +510,7 @@ int
 kbase_kmod_csf_group_create(struct pan_kmod_dev *dev, uint32_t cs_queue_count,
                             uint32_t *group_handle)
 {
+   STATIC_ASSERT(sizeof(union kbase_ioctl_cs_queue_group_create_1_6) == 32);
    STATIC_ASSERT(sizeof(union kbase_ioctl_cs_queue_group_create_1_18) == 40);
    STATIC_ASSERT(sizeof(union kbase_ioctl_cs_queue_group_create) == 112);
 
@@ -545,6 +546,34 @@ kbase_kmod_csf_group_create(struct pan_kmod_dev *dev, uint32_t cs_queue_count,
       }
 
       mesa_logw("kbase: current CS_QUEUE_GROUP_CREATE failed: %s; "
+                "falling back to the 1.18 ABI",
+                strerror(errno));
+   }
+
+   /* On uAPI 1.18-1.24 (e.g. MediaTek / Tensor CSF kernels), use the 1.18
+    * ABI to configure the queue group properly rather than degrading to 1.6. */
+   if (pan_kmod_driver_version_at_least(&dev->driver, 1, 18)) {
+      union kbase_ioctl_cs_queue_group_create_1_18 req_1_18 = {
+         .in = {
+            .tiler_mask = 1,
+            .fragment_mask = ~0ull,
+            .compute_mask = ~0ull,
+            .cs_min = cs_queue_count,
+            .priority = 0, /* BASE_QUEUE_GROUP_PRIORITY_HIGH */
+            .tiler_max = 1,
+            .fragment_max = 64,
+            .compute_max = 64,
+         },
+      };
+
+      if (ioctl(dev->fd, KBASE_IOCTL_CS_QUEUE_GROUP_CREATE_1_18, &req_1_18) == 0) {
+         *group_handle = req_1_18.out.group_handle;
+         mesa_logd("kbase: created CSF group %u using 1.18 ABI",
+                   *group_handle);
+         return 0;
+      }
+
+      mesa_logw("kbase: 1.18 CS_QUEUE_GROUP_CREATE failed: %s; "
                 "falling back to the 1.6 ABI",
                 strerror(errno));
    }
@@ -1006,9 +1035,36 @@ kbase_kmod_csf_tiler_heap_create(struct pan_kmod_dev *dev,
                                  uint64_t *heap_ctx_va,
                                  uint64_t *first_chunk_va)
 {
-   /* The uAPI group_id is the physical memory group used for allocations,
-    * not the CS queue group handle. */
-   union kbase_ioctl_cs_tiler_heap_init req = {
+   STATIC_ASSERT(sizeof(union kbase_ioctl_cs_tiler_heap_init) == 24);
+   STATIC_ASSERT(sizeof(union kbase_ioctl_cs_tiler_heap_init_1_13) == 16);
+
+   /* On uAPI 1.14+, the ioctl layout contains buf_desc_va, which enables the
+    * kernel's automated hardware tiler chunk reclamation scanner. */
+   if (pan_kmod_driver_version_at_least(&dev->driver, 1, 14)) {
+      union kbase_ioctl_cs_tiler_heap_init req = {
+         .in = {
+            .chunk_size = chunk_size,
+            .initial_chunks = initial_chunks,
+            .max_chunks = max_chunks,
+            .target_in_flight = MIN2(target_in_flight, UINT16_MAX),
+            .group_id = mem_group_id,
+            .buf_desc_va = 0,
+         },
+      };
+
+      if (ioctl(dev->fd, KBASE_IOCTL_CS_TILER_HEAP_INIT, &req) == 0) {
+         *heap_ctx_va = req.out.gpu_heap_va;
+         *first_chunk_va = req.out.first_chunk_va;
+         return 0;
+      }
+
+      mesa_logw("kbase: modern CS_TILER_HEAP_INIT failed: %s; "
+                "falling back to 1.13 legacy layout",
+                strerror(errno));
+   }
+
+   /* Legacy 1.13 request for older kernels */
+   union kbase_ioctl_cs_tiler_heap_init_1_13 req_legacy = {
       .in = {
          .chunk_size = chunk_size,
          .initial_chunks = initial_chunks,
@@ -1018,14 +1074,14 @@ kbase_kmod_csf_tiler_heap_create(struct pan_kmod_dev *dev,
       },
    };
 
-   if (ioctl(dev->fd, KBASE_IOCTL_CS_TILER_HEAP_INIT, &req)) {
+   if (ioctl(dev->fd, KBASE_IOCTL_CS_TILER_HEAP_INIT_1_13, &req_legacy)) {
       mesa_loge("kbase: KBASE_IOCTL_CS_TILER_HEAP_INIT failed: %s",
                 strerror(errno));
       return -1;
    }
 
-   *heap_ctx_va = req.out.gpu_heap_va;
-   *first_chunk_va = req.out.first_chunk_va;
+   *heap_ctx_va = req_legacy.out.gpu_heap_va;
+   *first_chunk_va = req_legacy.out.first_chunk_va;
    return 0;
 }
 

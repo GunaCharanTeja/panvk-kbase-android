@@ -236,6 +236,50 @@ union kbase_ioctl_cs_queue_group_create_1_6 {
 	_IOWR(KBASE_IOCTL_TYPE, 42, union kbase_ioctl_cs_queue_group_create_1_6)
 
 /**
+ * union kbase_ioctl_cs_queue_group_create_1_18 - Create a GPU command queue group
+ * @in:               Input parameters
+ * @in.tiler_mask:    Mask of tiler endpoints the group is allowed to use.
+ * @in.fragment_mask: Mask of fragment endpoints the group is allowed to use.
+ * @in.compute_mask:  Mask of compute endpoints the group is allowed to use.
+ * @in.cs_min:        Minimum number of CSs required.
+ * @in.priority:      Queue group's priority within a process.
+ * @in.tiler_max:     Maximum number of tiler endpoints the group is allowed to use.
+ * @in.fragment_max:  Maximum number of fragment endpoints the group is allowed to use.
+ * @in.compute_max:   Maximum number of compute endpoints the group is allowed to use.
+ * @in.csi_handlers:  Flags to signal that the application intends to use CSI
+ *                    exception handlers.
+ * @in.padding:       Currently unused, must be zero
+ * @in.dvs_buf:       DVS buffer GPU VA.
+ * @out:              Output parameters
+ * @out.group_handle: Handle of a newly created queue group.
+ * @out.padding:      Currently unused, must be zero
+ * @out.group_uid:    UID of the queue group available to base.
+ */
+union kbase_ioctl_cs_queue_group_create_1_18 {
+	struct {
+		__u64 tiler_mask;
+		__u64 fragment_mask;
+		__u64 compute_mask;
+		__u8 cs_min;
+		__u8 priority;
+		__u8 tiler_max;
+		__u8 fragment_max;
+		__u8 compute_max;
+		__u8 csi_handlers;
+		__u8 padding[2];
+		__u64 dvs_buf;
+	} in;
+	struct {
+		__u8 group_handle;
+		__u8 padding[3];
+		__u32 group_uid;
+	} out;
+};
+
+#define KBASE_IOCTL_CS_QUEUE_GROUP_CREATE_1_18                                 \
+	_IOWR(KBASE_IOCTL_TYPE, 58, union kbase_ioctl_cs_queue_group_create_1_18)
+
+/**
  * union kbase_ioctl_cs_queue_group_create - Create a GPU command queue group
  * @in:               Input parameters
  * @in.tiler_mask:    Mask of tiler endpoints the group is allowed to use.
@@ -376,6 +420,7 @@ union kbase_ioctl_cs_tiler_heap_init {
 		__u16 target_in_flight;
 		__u8 group_id;
 		__u8 padding;
+		__u64 buf_desc_va;
 	} in;
 	struct {
 		__u64 gpu_heap_va;
@@ -385,6 +430,28 @@ union kbase_ioctl_cs_tiler_heap_init {
 
 #define KBASE_IOCTL_CS_TILER_HEAP_INIT \
 	_IOWR(KBASE_IOCTL_TYPE, 48, union kbase_ioctl_cs_tiler_heap_init)
+
+/**
+ * union kbase_ioctl_cs_tiler_heap_init_1_13 - Initialize chunked tiler memory heap
+ *                                             (legacy uAPI <= 1.13)
+ */
+union kbase_ioctl_cs_tiler_heap_init_1_13 {
+	struct {
+		__u32 chunk_size;
+		__u32 initial_chunks;
+		__u32 max_chunks;
+		__u16 target_in_flight;
+		__u8 group_id;
+		__u8 padding;
+	} in;
+	struct {
+		__u64 gpu_heap_va;
+		__u64 first_chunk_va;
+	} out;
+};
+
+#define KBASE_IOCTL_CS_TILER_HEAP_INIT_1_13 \
+	_IOWR(KBASE_IOCTL_TYPE, 48, union kbase_ioctl_cs_tiler_heap_init_1_13)
 
 /**
  * struct kbase_ioctl_cs_tiler_heap_term - Terminate a chunked tiler heap
