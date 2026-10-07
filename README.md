@@ -58,6 +58,10 @@ Our tree includes **Patch 108** (`108-vkd3d-dx12-essentials.patch`), which unloc
 * Native vertex pipeline shader storage and atomics (`vertexPipelineStoresAndAtomics`).
 * Full 8-stage Subgroup WaveOps (`0xFF`).
 
+### 5. Kernel UAPI Architecture & Hardware Tiler Reclamation
+* **Native Queue Group ABI 1.18:** Adds direct support for CSF uAPI 1.18–1.24 (MediaTek MT6878 and Google Tensor CSF devices), eliminating fallback to the legacy 2020 1.6 ABI.
+* **Automated Hardware Tiler Reclamation:** Upgrades `union kbase_ioctl_cs_tiler_heap_init` to the 24-byte layout with `buf_desc_va` (uAPI 1.14+), activating the kernel's hardware chunk reclamation scanner to prevent tiler heap starvation without submit-thread CPU stalls.
+
 ---
 
 ## DirectX Translation Layer Compatibility

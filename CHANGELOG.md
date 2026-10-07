@@ -10,6 +10,8 @@ Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
 - **`VK_EXT_device_generated_commands`**: Vulkan DGC hooks for GPU-driven drawing batches (`ExecuteIndirect`).
 - **D3D12 Placed Resource Memory Isolation**: Restricted CRC tile checksum metadata buffers strictly to WSI swapchain images (`panvk_image.c`). Non-WSI images (render targets, placed textures, G-buffers) strictly preserve power-of-two memory sizes, eliminating `d3d12_resource_create_placed` out-of-memory crashes in VKD3D-Proton.
 - **`VK_KHR_robustness2`**: Exposed `robustImageAccess2 = true`, completing full robustness coverage (`robustBufferAccess2`, `nullDescriptor`).
+- **KBase CSF Queue Group ABI 1.18 Support**: Added intermediate `KBASE_IOCTL_CS_QUEUE_GROUP_CREATE_1_18` path for kernels with uAPI 1.18–1.24 (MediaTek MT6878 / Dimensity and Google Tensor CSF devices), eliminating fallback to the 2020 1.6 ABI.
+- **Automated Hardware Tiler Heap Reclamation (uAPI 1.14+)**: Upgraded `union kbase_ioctl_cs_tiler_heap_init` from legacy 16-byte (1.13) to 24-byte layout with `buf_desc_va`, enabling the kernel's hardware-assisted chunk reclamation scanner to prevent tiler heap starvation.
 - **Clean Tree Rebase**: Synchronized with latest Mesa upstream and cleaned out legacy launcher APK artifacts.
 
 ## g615-v11-csf-v0.1.0-beta.16 (prerelease)
