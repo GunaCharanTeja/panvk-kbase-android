@@ -69,10 +69,10 @@ ver = "$VERSION"
 
 if flavor == "adrenotools":
     name = "PanVK G615"
-    desc = "PanVK Mali-G615/Kbase-CSF driver 1.0.7-FC (Zenithblue Beta.16 base with on-demand prerast arenas, tiler backpressure elimination, 2-slot heap trim, 256KB ringbuf, FP16 dual-rate ALU, AHB direct scanout, DVFS boost) for Winlator and AdrenoTools."
+    desc = "PanVK Mali-G615/Kbase-CSF driver 1.0.8-FC (Zenithblue Beta.17 base + KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, Early Z/FPK restore, and VKD3D DX12 essentials) for Winlator and AdrenoTools."
 else:
     name = "PanVK G615 (X11)"
-    desc = "PanVK Mali-G615/Kbase-CSF driver 1.0.7-FC (Zenithblue Beta.16 base with on-demand prerast arenas, tiler backpressure elimination, 2-slot heap trim, 256KB ringbuf, FP16 dual-rate ALU, AHB direct scanout, DVFS boost) for Termux X11."
+    desc = "PanVK Mali-G615/Kbase-CSF driver 1.0.8-FC (Zenithblue Beta.17 base + KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, MIT-SHM AttachFd, and VKD3D DX12 essentials) for Termux X11."
 
 meta = {
     "schemaVersion": 1,

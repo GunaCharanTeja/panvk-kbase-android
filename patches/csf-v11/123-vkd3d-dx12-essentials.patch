@@ -37,13 +37,12 @@ diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/cs
 index 362058ccc48..ca1ef8551da 100644
 --- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
 +++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
-@@ -610,6 +610,7 @@ @@ struct panvk_cmd_buffer {
+@@ -610,5 +610,6 @@ @@ struct panvk_cmd_buffer {
        uint64_t tiler_work_estimate;
  
        struct panvk_cond_render_state cond_render;
 +      VkDeviceAddress bound_desc_buffers[MAX_SETS];
     } state;
- };
  
 diff --git a/src/panfrost/vulkan/panvk_vX_cmd_desc_state.c b/src/panfrost/vulkan/panvk_vX_cmd_desc_state.c
 index 6beab5f62c7..d1deca14adc 100644

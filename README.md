@@ -34,7 +34,7 @@ This repository provides an open-source Mesa PanVK driver layer specifically eng
 
 ## Key Enhancements & Patch 108
 
-Our tree includes **Patch 108** (`108-vkd3d-dx12-essentials.patch`), which unlocks full DirectX 12 compatibility on the Mali-G615:
+Our tree includes **Patch 123** (`123-vkd3d-dx12-essentials.patch`), which unlocks full DirectX 12 compatibility on the Mali-G615:
 
 ### 1. `VK_EXT_descriptor_buffer` (D3D12 Root Signatures & Descriptors)
 * **Direct GPU Pointer Binding:** Eliminates descriptor set allocation bottlenecks by packing CBV, SRV, UAV, and sampler descriptors into compact 32-byte hardware descriptors.
@@ -86,8 +86,8 @@ Our tree includes **Patch 108** (`108-vkd3d-dx12-essentials.patch`), which unloc
 │   ├── android/               # Android OS and Bionic integration
 │   ├── kbase-common/          # Shared mali_kbase kernel interface logic
 │   ├── csf/                   # CSF frontend job scheduling and queues
-│   ├── csf-v11/               # Valhall v11 specific patches (001-108)
-│   │   └── 108-vkd3d-dx12-essentials.patch # VKD3D D3D12 essentials
+│   ├── csf-v11/               # Valhall v11 specific patches (001-123)
+│   │   └── 123-vkd3d-dx12-essentials.patch # VKD3D D3D12 essentials
 │   └── wsi/                   # Window System Integration (Android AHB & X11)
 ├── scripts/
 │   ├── fetch-mesa.sh          # Fetches pinned Mesa upstream source
@@ -135,8 +135,8 @@ Our tree includes **Patch 108** (`108-vkd3d-dx12-essentials.patch`), which unloc
 * **DirectX Translation Layer Projects:**
   * **[DXVK](https://github.com/doitsujin/dxvk)** – **Philip Rebohle (doitsujin)** & **Joshua Ashton** for Direct3D 9/10/11 translation to Vulkan.
   * **[VKD3D-Proton](https://github.com/HansKristian-Work/vkd3d-proton)** – **Hans-Kristian Arntzen** and contributors for Direct3D 12 translation to Vulkan.
-* **Mali-G615 Maintenance & DirectX 12 Patch 108:**
-  * **GunaCharanTeja** – Silicon verification on physical Mali-G615 (OPPO CPH2763, MT6878), author of **Patch 108** (`108-vkd3d-dx12-essentials.patch`), `VK_EXT_descriptor_buffer` hardware packing, placed heap memory isolation, and driver maintenance.
+* **Mali-G615 Maintenance & DirectX 12 Patch 123:**
+  * **GunaCharanTeja** – Silicon verification on physical Mali-G615 (OPPO CPH2763, MT6878), author of **Patch 123** (`123-vkd3d-dx12-essentials.patch`), `VK_EXT_descriptor_buffer` hardware packing, placed heap memory isolation, and driver maintenance.
 
 ---
 

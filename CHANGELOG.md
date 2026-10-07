@@ -2,7 +2,7 @@
 
 ## Mali-G615 CSF PanVK Driver with VKD3D DX12 Support (Patch 108)
 
-Mesa `5a07217f034b` + series up to Patch 108 (`108-vkd3d-dx12-essentials.patch`).
+Mesa `5a07217f034b` + series up to Patch 123 (`123-vkd3d-dx12-essentials.patch`).
 Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
 
 ### Highlights & Changes:
