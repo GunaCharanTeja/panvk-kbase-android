@@ -1,5 +1,18 @@
 # Changelog
 
+## Mali-G615 CSF PanVK Driver with ASTC 4x4 BCn Transcoding (Patch 124)
+
+Mesa `5a07217f034b` + series up to Patch 124 (`124-panvk-astc-bcn-transcode.patch`).
+Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
+
+### Highlights & Changes:
+- **Native ASTC 4x4 BCn GPU Transcoder**: Directly transcodes DirectX BC1, BC2, BC3, and BC7 compressed textures into `VK_FORMAT_ASTC_4x4_UNORM_BLOCK` and `VK_FORMAT_ASTC_4x4_SRGB_BLOCK` instead of uncompressed RGBA8.
+- **75% VRAM Memory Footprint Reduction**: ASTC 4x4 consumes exactly 16 bytes per $4 \times 4$ block (identical to BC7), down from 64 bytes per block in RGBA8. A 1 GB texture pack now fits in 256 MB of VRAM.
+- **75% Texture Sampling Memory Bandwidth Savings**: Mali hardware texture samplers decompress ASTC silicon blocks on-the-fly, eliminating cache thrashing and memory bus saturation.
+- **Single-Pass Compute Pipelines**: Embedded `panvk_bc_s3tc_astc` and `panvk_bc_bc7_astc` compute shaders perform AABB line fitting and BISE trit packing without scratch staging buffers.
+- **Runtime Mode Selection (`PANVK_BC_MODE`)**: Defaults to `astc`, with `rgba8` fallback via `PANVK_BC_MODE=rgba8`.
+- **Preserved Precision**: BC4/BC5 retain 16-bit UNORM/SNORM precision; BC6H retains full 16-bit floating-point HDR precision without highlight clipping.
+
 ## Mali-G615 CSF PanVK Driver with VKD3D DX12 Support (Patch 108)
 
 Mesa `5a07217f034b` + series up to Patch 123 (`123-vkd3d-dx12-essentials.patch`).
