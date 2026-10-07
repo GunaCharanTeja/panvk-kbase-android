@@ -9814,7 +9814,6 @@ index 299b85e..3669547 100644
 @@ -1193,6 +1193,17 @@ panvk_physical_device_finish(struct panvk_physical_device *device)
  }
  
- VkResult
 +static void
 +init_bc_mode(struct panvk_physical_device *device)
 +{
@@ -9826,6 +9825,7 @@ index 299b85e..3669547 100644
 +   }
 +}
 +
+ VkResult
  panvk_physical_device_init(struct panvk_physical_device *device,
                             struct panvk_instance *instance,
                             drmDevicePtr drm_device)
