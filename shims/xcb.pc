@@ -1,0 +1,5 @@
+Name: xcb
+Description: xcb
+Version: 1.15
+Libs: -lxcb
+Cflags:

@@ -1,0 +1,5 @@
+Name: xcb-randr
+Description: xcb-randr
+Version: 1.15
+Libs: -lxcb-randr
+Cflags:

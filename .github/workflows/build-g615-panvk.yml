@@ -1,0 +1,147 @@
+name: Build PanVK Mali-G615 Driver
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build-panvk-android:
+    name: Build PanVK G615 (${{ matrix.flavor }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        flavor: [adrenotools, x11]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+              build-essential \
+              llvm-20-dev \
+              libclang-20-dev \
+              libclc-20-dev \
+              libllvmspirvlib-20-dev \
+              libelf-dev \
+              spirv-tools \
+              bison \
+              flex \
+              libdrm-dev \
+              pkg-config \
+              gettext
+          python -m pip install --upgrade pip
+          pip install mako PyYAML meson ninja packaging
+
+      - name: Verify sources.lock
+        run: |
+          python3 -c "import json; d=json.load(open('sources.lock')); assert len(d['mesaCommit'])==40, d"
+
+      - name: Fetch pinned Mesa
+        run: ./scripts/fetch-mesa.sh
+
+      - name: Apply PanVK G615 Patches (All qualified phases)
+        run: ./scripts/apply-patches.sh --profile g615-v11-csf
+
+      - name: Generate Host Tools
+        run: |
+          meson setup build-host work/mesa \
+              -Dbuildtype=release \
+              -Db_ndebug=true \
+              -Dplatforms=[] \
+              -Dgallium-drivers=[] \
+              -Dvulkan-drivers=[] \
+              -Dtools=panfrost \
+              -Dprecomp-compiler=enabled \
+              -Dinstall-precomp-compiler=true \
+              -Dllvm=enabled \
+              -Dmesa-clc=enabled -Dinstall-mesa-clc=true
+
+          ninja -C build-host src/compiler/clc/mesa_clc src/compiler/spirv/vtn_bindgen2 src/panfrost/clc/panfrost_compile
+
+          ln -sf "$GITHUB_WORKSPACE/build-host/src/compiler/clc/mesa_clc" "$GITHUB_WORKSPACE/build-host/src/compiler/clc/mesa-clc"
+          ln -sf "$GITHUB_WORKSPACE/build-host/src/compiler/spirv/vtn_bindgen2" "$GITHUB_WORKSPACE/build-host/src/compiler/spirv/vtn-bindgen2"
+          echo "$GITHUB_WORKSPACE/build-host/src/compiler/clc" >> $GITHUB_PATH
+          echo "$GITHUB_WORKSPACE/build-host/src/compiler/spirv" >> $GITHUB_PATH
+          echo "$GITHUB_WORKSPACE/build-host/src/panfrost/clc" >> $GITHUB_PATH
+
+      - name: Configure Meson for PanVK G615
+        env:
+          PKG_CONFIG_LIBDIR: ${{ github.workspace }}/shims
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          export MESON_WORKING_DIR="$GITHUB_WORKSPACE"
+          CLANG_DIR="$(ls -d $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/aarch64 2>/dev/null | tail -n1)"
+          if [ -z "$CLANG_DIR" ]; then
+            CLANG_DIR="$(ls -d $ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/*/lib/linux/aarch64 2>/dev/null | tail -n1)"
+          fi
+          export CLANG_LIB_DIR="${CLANG_DIR:-$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/18/lib/linux/aarch64}"
+          echo "CLANG_LIB_DIR=$CLANG_LIB_DIR"
+          envsubst < android.toml > android-cross.txt
+          cat android-cross.txt
+
+          PLATFORMS="android"
+          if [ "${{ matrix.flavor }}" = "x11" ]; then
+            PLATFORMS="android,x11"
+          fi
+
+          meson setup build work/mesa \
+              --cross-file android-cross.txt \
+              -Dbuildtype=release \
+              -Dplatforms=$PLATFORMS \
+              -Dandroid-stub=true \
+              -Dandroid-strict=false \
+              -Dandroid-libbacktrace=disabled \
+              -Dplatform-sdk-version=30 \
+              -Dglx=disabled \
+              -Dgbm=disabled \
+              -Degl=disabled \
+              -Dopengl=false \
+              -Dgles1=disabled \
+              -Dgles2=disabled \
+              -Dglvnd=disabled \
+              -Dvalgrind=disabled \
+              -Dgallium-drivers= \
+              -Dshared-glapi=disabled \
+              -Dzstd=disabled \
+              -Dmesa-clc=system \
+              -Dprecomp-compiler=system \
+              -Dvulkan-drivers=panfrost \
+              -Dllvm=disabled \
+              -Dpanfrost-kmds=kbase,panthor
+
+      - name: Compile PanVK Driver
+        run: |
+          meson compile -C build
+
+      - name: Package Driver
+        run: |
+          ./scripts/package-release-zip.sh --flavor "${{ matrix.flavor }}" --version "1.0.7-FC"
+
+      - name: Upload Packaged Driver ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PanVK-G615-${{ matrix.flavor }}-release
+          path: |
+            PanVK-G615-1.0.7-FC-${{ matrix.flavor }}.zip
+            PanVK-G615-1.0.7-FC-${{ matrix.flavor }}-MANIFEST.txt
+            SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Upload Raw Driver Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: libvulkan_panfrost-g615-aarch64-${{ matrix.flavor }}
+          path: build/src/panfrost/vulkan/libvulkan_panfrost.so
+          if-no-files-found: error

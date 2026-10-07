@@ -1,0 +1,44 @@
+[constants]
+ndk_home = '$ANDROID_NDK_HOME'
+working_dir = '$MESON_WORKING_DIR'
+ndk_bin = ndk_home / 'toolchains/llvm/prebuilt/linux-x86_64/bin'
+ndk_sysroot = ndk_home / 'toolchains/llvm/prebuilt/linux-x86_64/sysroot'
+
+[binaries]
+c = [ndk_bin / 'aarch64-linux-android30-clang', '-D__TERMUX__']
+cpp = [ndk_bin / 'aarch64-linux-android30-clang++',
+        '-fno-exceptions',
+        '-fno-unwind-tables',
+        '-fno-asynchronous-unwind-tables',
+        '--start-no-unused-arguments',
+        '-static-libstdc++',
+        '--end-no-unused-arguments',
+        '-D__TERMUX__']
+ar = ndk_bin / 'llvm-ar'
+strip = ndk_bin / 'llvm-strip'
+pkg-config = '/usr/bin/pkg-config'
+
+[host_machine]
+system = 'android'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+
+[properties]
+sys_root = ndk_sysroot
+needs_exe_wrapper = true
+pkg_config_libdir = working_dir / 'shims'
+
+[built-in options]
+c_args = ['-fno-emulated-tls', '-I' + working_dir / 'shims/include',
+        '-DHAVE_STRUCT_TIMESPEC', '-DHAVE_DLFCN_H', '-UHAVE_SECURE_GETENV', '-UHAVE_QSORT_S',
+        '-include', 'fcntl.h', '-include', 'time.h']
+cpp_args = ['-fno-emulated-tls', '-I' + working_dir / 'shims/include',
+            '-DHAVE_STRUCT_TIMESPEC', '-DHAVE_DLFCN_H', '-UHAVE_SECURE_GETENV', '-UHAVE_QSORT_S',
+            '-include', 'fcntl.h', '-include', 'time.h', '-include', 'dlfcn.h']
+c_link_args = ['-Wl,--allow-shlib-undefined',
+                '-L' + working_dir / 'shims',
+                '-L$CLANG_LIB_DIR']
+cpp_link_args = ['-Wl,--allow-shlib-undefined',
+                '-L' + working_dir / 'shims',
+                '-L$CLANG_LIB_DIR']

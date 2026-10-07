@@ -1,0 +1,5 @@
+Name: libx11-xcb
+Description: libx11-xcb
+Version: 2.5
+Libs: -lX11-xcb
+Cflags:

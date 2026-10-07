@@ -1,0 +1,5 @@
+Name: xcb-dri3
+Description: xcb-dri3
+Version: 1.15
+Libs: -lxcb-dri3
+Cflags:
