@@ -124,7 +124,7 @@ jobs:
               -Dprecomp-compiler=system \
               -Dvulkan-drivers=panfrost \
               -Dllvm=disabled \
-              -Dpanfrost-kmds=kbase,panthor
+              -Dpanfrost-kmds=kbase
 
       - name: Compile PanVK Driver
         run: |
