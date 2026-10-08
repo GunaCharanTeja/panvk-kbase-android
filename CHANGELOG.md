@@ -1,21 +1,19 @@
 # Changelog
 
-## Mali-G615 CSF PanVK Driver with Full ASTC 4x4 BC1–BC7 Transcoding (Patch 124)
+## Mali-G615 CSF PanVK Driver 1.0.9-FC with Pure ASTC 4x4 BC1–BC7 Transcoding (Patch 124)
 
 Mesa `5a07217f034b` + series up to Patch 124 (`124-panvk-astc-bcn-transcode.patch`).
 Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
 
 ### Highlights & Changes:
 - **Full-Suite ASTC 4x4 BCn Transcoding (All 14 Formats)**: Directly transcodes every DirectX BC format (BC1, BC2, BC3, BC4, BC5, BC6H, BC7) into native hardware `VK_FORMAT_ASTC_4x4_UNORM_BLOCK` and `VK_FORMAT_ASTC_4x4_SRGB_BLOCK`.
-- **Eliminated Uncompressed Decode Planes**: Completely removes raw uncompressed `RGBA8`, `R16G16`, and `RGBA16_SFLOAT` decode allocations by default.
+- **Legacy RGBA8 Decoding Completely Removed**: Removed all uncompressed RGBA8, R16G16, and RGBA16F fallback shaders and options (`PANVK_BC_MODE`, `enum panvk_bc_mode`). ASTC 4x4 transcoding is now the sole, unconditional mechanism.
 - **75% VRAM Memory Footprint Reduction**: ASTC 4x4 consumes strictly 16 bytes per $4 \times 4$ block across all formats (down from 64 bytes/block uncompressed). A 1 GB texture pack now fits in 256 MB of VRAM.
 - **75% Texture Sampling Memory Bandwidth Savings**: Mali Valhall hardware texture samplers decompress ASTC silicon blocks on-the-fly, eliminating cache thrashing and memory bus saturation.
 - **Single-Pass GPU Compute Transcoders**:
   * `panvk_bc_s3tc_astc`: Handles BC1, BC2, BC3, BC4 (UNORM/SNORM), and BC5 (UNORM/SNORM) directly to ASTC 4x4 in a single compute dispatch.
   * `panvk_bc_bc6_astc`: Handles BC6H (UFLOAT/SFLOAT) with fast FP16 range decoding directly to ASTC 4x4 in a single compute dispatch.
   * `panvk_bc_bc7_astc`: Handles BC7 (modes 0–7) directly to ASTC 4x4 in a single compute dispatch.
-- **Fixed Header Ordering**: Defined `enum panvk_bc_mode` in `panvk_image.h` to resolve compilation dependency order issues.
-- **Runtime Mode Selection (`PANVK_BC_MODE`)**: Defaults to `astc`, with `rgba8` fallback via `PANVK_BC_MODE=rgba8`.
 
 ## Mali-G615 CSF PanVK Driver with VKD3D DX12 Support (Patch 108)
 
