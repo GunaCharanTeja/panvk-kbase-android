@@ -132,15 +132,15 @@ jobs:
 
       - name: Package Driver
         run: |
-          ./scripts/package-release-zip.sh --flavor "${{ matrix.flavor }}" --version "1.0.9-FC"
+          ./scripts/package-release-zip.sh --flavor "${{ matrix.flavor }}" --version "1.1.0-FC"
 
       - name: Upload Packaged Driver ZIP
         uses: actions/upload-artifact@v4
         with:
           name: PanVK-G615-${{ matrix.flavor }}-release
           path: |
-            PanVK-G615-1.0.9-FC-${{ matrix.flavor }}.zip
-            PanVK-G615-1.0.9-FC-${{ matrix.flavor }}-MANIFEST.txt
+            PanVK-G615-1.1.0-FC-${{ matrix.flavor }}.zip
+            PanVK-G615-1.1.0-FC-${{ matrix.flavor }}-MANIFEST.txt
             SHA256SUMS.txt
           if-no-files-found: error
 

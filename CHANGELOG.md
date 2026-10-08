@@ -1,5 +1,30 @@
 # Changelog
 
+## Mali-G615 CSF PanVK Driver 1.1.0-FC (Upstream Compiler Optimizations, Shader Disk Cache & Pure ASTC 4x4)
+
+Mesa `5a07217f034b` + series up to Patch 171 (142 qualified patches).
+Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
+
+### Highlights & Changes:
+- **10x–12x Shader Compilation Speedup (Patches 152–154, 160–164)**:
+  * Overhauled Register Allocation (LCRA) spill loop to record all failed nodes and spill simultaneously in one pass rather than re-running liveness/interference per node.
+  * Added 8-register headroom reservation in SSA spiller to avoid spill parallel-copy conflicts.
+  * Replaced full LCRA constraint recomputations with incremental post-spill updates and cached 32/64-register constraints.
+  * Optimized SSA repair pass with flat definition maps and introduced stagnant-pass skipping in the NIR optimization loop.
+  * Multi-second shader compilation hitches in DXVK/VKD3D games dropped from 3.6–4.1s down to 28–249ms!
+- **Persistent Mesa Shader Disk Cache on Android (Patch 170)**:
+  * Re-enabled Mesa's persistent on-disk shader cache (`src/util/disk_cache_os.c`) on Android platforms (`DETECT_OS_ANDROID`), allowing warm game launches to hit precompiled binary cache files (compilation time drops from 783ms down to 0ms).
+- **Android Property Query Caching (Patch 171)**:
+  * Cached `os_get_option()` Android system property lookups, eliminating 128ms of stutter during texture creation.
+- **CSF Prerast Producer Scoreboard Synchronization (Patch 132)**:
+  * Added iterator scoreboard compute queue barrier before viewport runs, fixing race conditions causing blank/missing draws in multi-viewport scenes.
+- **GPU Core-Count Identification & Models (Patches 131, 140, jm-v9/006)**:
+  * Accurate device naming for Immortalis and small-core GPUs based on core count; added Mali-G710 and Mali-G77 model rows.
+- **Pure ASTC 4x4 BC1–BC7 Transcoding Maintained (Patch 124)**:
+  * All 14 DirectX BC texture formats unconditionally transcoded to ASTC 4x4 blocks with 75% VRAM and bandwidth savings.
+- **VKD3D D3D12 Essentials & Full Native Robustness 2 Maintained (Patch 123)**:
+  * Native silicon hardware bounds checking on Mali-G615 (`robustBufferAccess2` on v11, `robustImageAccess2` on v10+, `nullDescriptor`).
+
 ## Mali-G615 CSF PanVK Driver 1.0.9-FC with Pure ASTC 4x4 BC1–BC7 Transcoding (Patch 124)
 
 Mesa `5a07217f034b` + series up to Patch 124 (`124-panvk-astc-bcn-transcode.patch`).

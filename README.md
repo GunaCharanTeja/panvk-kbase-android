@@ -2,7 +2,7 @@
 
 Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_kbase` kernel interface (`/dev/mali0`) on Android, with native support for **DirectX 9, 10, 11 (DXVK)** and **DirectX 12 (VKD3D-Proton)**, featuring pure hardware-accelerated **ASTC 4x4 BC1–BC7 transcoding**.
 
-[![Release 1.0.9-FC](https://img.shields.io/badge/Release-1.0.9--FC-brightgreen)](#)
+[![Release 1.1.0-FC](https://img.shields.io/badge/Release-1.1.0--FC-brightgreen)](#)
 [![Vulkan 1.4](https://img.shields.io/badge/Vulkan-1.4-AC162C?logo=vulkan&logoColor=white)](#)
 [![GPU Mali-G615](https://img.shields.io/badge/GPU-Mali--G615%20(v11%20CSF)-0091BD?logo=arm&logoColor=white)](#)
 [![ASTC 4x4 Transcoding](https://img.shields.io/badge/ASTC%204x4-Hardware%20Transcoded-success)](#)
@@ -34,7 +34,14 @@ This repository provides an open-source Mesa PanVK driver layer specifically eng
 
 ---
 
-## Key Enhancements: Patches 123 & 124
+## Key Enhancements
+
+### Upstream RC2 / Beta.18 Performance Upgrades (Patches 131–171)
+* **10x–12x Shader Compilation Speedup (Patches 152–154, 160–164)**: Overhauled the Register Allocation (LCRA) spill loop to record all failing nodes and spill simultaneously in one pass, added 8-register headroom reservation for SSA spillers, and enabled incremental post-spill constraint updates. Cuts multi-second shader compile hitches in DXVK/VKD3D from 3.6–4.1s down to 28–249ms.
+* **Persistent Mesa Shader Disk Cache on Android (Patch 170)**: Unconditionally enables Mesa's on-disk shader cache on Android, allowing warm launches to hit precompiled binaries with instant 0ms compile overhead.
+* **Android Property Query Caching (Patch 171)**: Caches `os_get_option()` queries, eliminating 128ms of stutter during image creation.
+* **CSF Prerast Producer Scoreboard Synchronization (Patch 132)**: Adds missing iterator scoreboard barrier before viewport runs, fixing race conditions in multi-viewport scenes.
+* **GPU Model & Small-Core Identification (Patches 131, 140, jm-v9/006)**: Core-count device naming for Immortalis/small GPUs; adds Mali-G710 and Mali-G77 model rows.
 
 ### Patch 124: Pure ASTC 4x4 BC1–BC7 Transcoding (75% VRAM & Bandwidth Reduction)
 Directly transcodes every DirectX BC format into native hardware `VK_FORMAT_ASTC_4x4_UNORM_BLOCK` and `VK_FORMAT_ASTC_4x4_SRGB_BLOCK` using single-pass GPU compute transcoders:
