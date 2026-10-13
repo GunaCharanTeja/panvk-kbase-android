@@ -1,0 +1,131 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 125] panvk: bind descriptor-buffer embedded immutable samplers
+Generated-by: LLM
+
+vkCmdBindDescriptorBufferEmbeddedSamplersEXT was a no-op, so a set
+created with VK_DESCRIPTOR_SET_LAYOUT_CREATE_EMBEDDED_IMMUTABLE_SAMPLERS_BIT_EXT
+was never bound and its samplers read as null. VKD3D-Proton puts D3D12
+root-signature static samplers in such a set, so every Sample() through a
+static sampler returned 0 (black diffuse in e.g. Frank Luna's D3D12 samples).
+biblioklept
+
+Build the set's descriptor table in command-buffer memory with the same
+layout as a regular descriptor set and point the set's resource-table
+entry at it. Also implement the VK_KHR_maintenance6 variants
+vkCmdSetDescriptorBufferOffsets2EXT and
+vkCmdBindDescriptorBufferEmbeddedSamplers2EXT, which the common runtime
+does not provide in this direction.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/123
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 12d0a5e..3e2d17e 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -21,6 +21,7 @@
+ #include "panvk_cmd_buffer.h"
+ #include "panvk_cmd_desc_state.h"
+ #include "panvk_descriptor_set_layout.h"
++#include "panvk_sampler.h"
+ #include "panvk_cmd_draw.h"
+ #include "vk_pipeline_layout.h"
+ #include "panvk_gpu_prerast.h"
+@@ -7839,7 +7840,95 @@ panvk_per_arch(CmdBindDescriptorBufferEmbeddedSamplersEXT)(
+    VkPipelineLayout layout,
+    uint32_t set)
+ {
+-   /* Embedded samplers are already embedded in the layout */
++   VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++   VK_FROM_HANDLE(vk_pipeline_layout, playout, layout);
++   struct panvk_descriptor_state *desc_state =
++      panvk_cmd_get_desc_state(cmdbuf, pipelineBindPoint);
++
++   if (!desc_state || !playout || set >= playout->set_count || set >= MAX_SETS)
++      return;
++
++   const struct panvk_descriptor_set_layout *set_layout =
++      to_panvk_descriptor_set_layout(playout->set_layouts[set]);
++   if (!set_layout || !set_layout->desc_count)
++      return;
++
++   /* Embedded immutable samplers have no application descriptor buffer
++    * behind them: build the set's descriptor table in command buffer
++    * memory, laid out exactly like a regular descriptor set. */
++   const uint32_t size = set_layout->desc_count * PANVK_DESCRIPTOR_SIZE;
++   struct pan_ptr ptr =
++      panvk_cmd_alloc_dev_mem(cmdbuf, desc, size, PANVK_DESCRIPTOR_SIZE);
++   if (!ptr.gpu)
++      return;
++
++   memset(ptr.cpu, 0, size);
++   for (uint32_t b = 0; b < set_layout->binding_count; b++) {
++      const struct panvk_descriptor_set_binding_layout *bl =
++         &set_layout->bindings[b];
++
++      if (!bl->immutable_samplers)
++         continue;
++
++      for (uint32_t e = 0; e < bl->desc_count; e++) {
++         const struct panvk_sampler *sampler = bl->immutable_samplers[e];
++
++         if (!sampler)
++            continue;
++
++         for (uint8_t plane = 0; plane < sampler->desc_count; plane++) {
++            uint32_t idx = panvk_get_desc_index(
++               bl, e, get_sampler_subdesc_info(bl->type, plane));
++
++            assert(idx < set_layout->desc_count);
++            memcpy((uint8_t *)ptr.cpu + idx * PANVK_DESCRIPTOR_SIZE,
++                   &sampler->descs[plane], PANVK_DESCRIPTOR_SIZE);
++         }
++      }
++   }
++
++   desc_state->sets[set] = NULL;
++   desc_state->desc_buffer_sets[set].dev_addr = ptr.gpu;
++   desc_state->desc_buffer_sets[set].size = size;
++
++   if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
++      gfx_state_set_dirty(cmdbuf, DESC_STATE);
++   else if (pipelineBindPoint == VK_PIPELINE_BIND_POINT_COMPUTE)
++      compute_state_set_dirty(cmdbuf, DESC_STATE);
++}
++
++/* VK_KHR_maintenance6 variants: the common runtime only forwards the
++ * original entrypoints to these, not the other way round. */
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdSetDescriptorBufferOffsets2EXT)(
++   VkCommandBuffer commandBuffer,
++   const VkSetDescriptorBufferOffsetsInfoEXT *pInfo)
++{
++   if (pInfo->stageFlags & VK_SHADER_STAGE_ALL_GRAPHICS)
++      panvk_per_arch(CmdSetDescriptorBufferOffsetsEXT)(
++         commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pInfo->layout,
++         pInfo->firstSet, pInfo->setCount, pInfo->pBufferIndices,
++         pInfo->pOffsets);
++   if (pInfo->stageFlags & VK_SHADER_STAGE_COMPUTE_BIT)
++      panvk_per_arch(CmdSetDescriptorBufferOffsetsEXT)(
++         commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pInfo->layout,
++         pInfo->firstSet, pInfo->setCount, pInfo->pBufferIndices,
++         pInfo->pOffsets);
++}
++
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdBindDescriptorBufferEmbeddedSamplers2EXT)(
++   VkCommandBuffer commandBuffer,
++   const VkBindDescriptorBufferEmbeddedSamplersInfoEXT *pInfo)
++{
++   if (pInfo->stageFlags & VK_SHADER_STAGE_ALL_GRAPHICS)
++      panvk_per_arch(CmdBindDescriptorBufferEmbeddedSamplersEXT)(
++         commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pInfo->layout,
++         pInfo->set);
++   if (pInfo->stageFlags & VK_SHADER_STAGE_COMPUTE_BIT)
++      panvk_per_arch(CmdBindDescriptorBufferEmbeddedSamplersEXT)(
++         commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pInfo->layout,
++         pInfo->set);
+ }
+ 
+ /* VK_EXT_device_generated_commands */
