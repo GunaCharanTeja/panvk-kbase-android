@@ -1,5 +1,15 @@
 # BC1-BC7 compatibility
 
+## Current status (1.1.1-FC): in-driver transcoding
+
+BC1-BC7 are supported inside PanVK itself (patches 124-128), not through the
+layer described below. On upload the driver transcodes each BC block on the
+GPU: BC1/2/3/4/5/7 UNORM and SRGB to ASTC 4x4 LDR (sRGB kept), BC4/5 SNORM
+exactly to R8/R8G8 SNORM, BC6H UFLOAT/SFLOAT to ASTC 4x4 HDR (negative SFLOAT
+values read as 0, the only lossy semantic). ASTC is lossy: measured PSNR on
+realistic blocks is 34-54 dB depending on format (see CHANGELOG 1.1.1-FC).
+The rest of this file is the historical evaluation of the external layer.
+
 ## Status
 
 Experimental layer build/load only. Nothing is packaged or enabled by default.

@@ -1,5 +1,35 @@
 # Changelog
 
+## Mali-G615 CSF PanVK Driver 1.1.1-FC (BC→ASTC quality & speed, D3D12 static samplers)
+
+Mesa `5a07217f034b` + series up to Patch 171 (143 qualified patches; new: 124 rewritten, 125–128).
+Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
+All numbers measured on that device.
+
+### Fixes
+- **Washed-out, blurry and broken BC textures (Patch 124 rewritten)**: new BC1–BC7 → ASTC 4x4 encoder.
+  Realistic-block PSNR vs. 1.1.0-FC: BC1 36 → 42 dB, BC3 33 → 37 dB, BC4 42 → 49 dB, BC5 16 → 34 dB,
+  BC7 24 → 42 dB. sRGB formats stay sRGB, BC1 RGB samples alpha = 1, small icons and UI no longer blur.
+- **BC4/BC5 SNORM broken (6–10 dB)**: now decoded exactly to R8/R8G8 SNORM (59–62 dB).
+- **BC6H HDR clamped to LDR (22–23 dB)**: now real ASTC HDR (CEM 11), 50–54 dB.
+- **BC6H SFLOAT negative values decoded as huge/infinite (Patch 128)**: the decoder never set its sign flag;
+  decode is now bit-exact with Mesa's CPU BPTC decoder on 65 536 random blocks.
+- **Black textures in D3D12 titles using static samplers (Patch 125)**: implemented
+  `vkCmdBindDescriptorBufferEmbeddedSamplersEXT` (+ `...2EXT`, `vkCmdSetDescriptorBufferOffsets2EXT`)
+  under `VK_EXT_descriptor_buffer`; the dx12 demo renders correctly.
+
+### Performance (one 2048² texture, all mips; worst-case random data unless noted)
+- **Patch 126**: BC1–BC5 endpoints/indices mapped onto ASTC directly; one pipeline per BC format
+  (format specialisation constant). Real BC1/BC3 game textures: 0.9–3 ms per level (was ~90–108 ms).
+- **Patch 127**: BC7 decoded once per block: 1266 → 233 ms (9061 → 55 register spills).
+- **Patch 128**: BC6H decoded once per block, HDR mode search without pack/unpack round trips:
+  154 → 49 ms (1036 → 0 spills).
+- BC1 RGB 59 → 22 ms, BC4/BC5 SNORM 39–51 → 3.4–3.6 ms.
+
+### Texture memory vs. the old uncompressed decode (2048², full mips)
+- BC1/BC4: 24.0 → 8.0 MB (−67%); BC2/BC3/BC5/BC7: 26.7 → 10.7 MB (−60%);
+  BC5 SNORM: 26.7 → 16.0 MB (−40%); BC6H: 48.0 → 10.7 MB (−78%).
+
 ## Mali-G615 CSF PanVK Driver 1.1.0-FC (Upstream Compiler Optimizations, Shader Disk Cache & Pure ASTC 4x4)
 
 Mesa `5a07217f034b` + series up to Patch 171 (142 qualified patches).

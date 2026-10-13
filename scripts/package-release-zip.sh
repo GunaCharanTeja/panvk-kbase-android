@@ -69,10 +69,10 @@ ver = "$VERSION"
 
 if flavor == "adrenotools":
     name = "PanVK G615"
-    desc = "PanVK Mali-G615/Kbase-CSF driver 1.1.0-FC (Zenithblue RC2/Beta.18 compiler optimizations & persistent Android shader cache, KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, VKD3D DX12 essentials, and pure ASTC 4x4 BC1–BC7 transcoding with 75% VRAM savings) for Winlator and AdrenoTools."
+    desc = "PanVK Mali-G615/Kbase-CSF driver 1.1.1-FC (Zenithblue RC2/Beta.18 compiler optimizations & persistent Android shader cache, KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, VKD3D DX12 essentials, D3D12 embedded static samplers, and BC1–BC7 to ASTC 4x4 transcoding with 40–78% less texture memory) for Winlator and AdrenoTools."
 else:
     name = "PanVK G615 (X11)"
-    desc = "PanVK Mali-G615/Kbase-CSF driver 1.1.0-FC (Zenithblue RC2/Beta.18 compiler optimizations & persistent Android shader cache, KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, MIT-SHM AttachFd, VKD3D DX12 essentials, and pure ASTC 4x4 BC1–BC7 transcoding with 75% VRAM savings) for Termux X11."
+    desc = "PanVK Mali-G615/Kbase-CSF driver 1.1.1-FC (Zenithblue RC2/Beta.18 compiler optimizations & persistent Android shader cache, KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, MIT-SHM AttachFd, VKD3D DX12 essentials, D3D12 embedded static samplers, and BC1–BC7 to ASTC 4x4 transcoding with 40–78% less texture memory) for Termux X11."
 
 meta = {
     "schemaVersion": 1,
