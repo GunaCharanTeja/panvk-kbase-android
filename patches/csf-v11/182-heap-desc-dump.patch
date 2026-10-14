@@ -26,7 +26,10 @@ the kbase target_in_flight (65535 by default): kbase only grants a new
 chunk while that many render passes or fewer are in flight, otherwise the
 firmware waits for FINISH_FRAGMENT to return chunks (r44p1 handle_oom_event).
 PANVK_KBASE_HEAP_SET_ONCE=1 keeps only the init stream HEAP_SET, as upstream
-does, instead of one per CALL.
+does, instead of one per CALL. PANVK_KBASE_HEAP_ADAPT=1 sizes the background
+spare heap from the tiler work per submission of the retiring heap
+(PANVK_KBASE_HEAP_ADAPT_WPS threshold, PANVK_KBASE_HEAP_ADAPT_CHUNKS size)
+and skips a renewal instead of waiting when the spare is not ready yet.
 
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
@@ -58,7 +61,7 @@ index 8789b73..21e9c5f 100644
     /* Non-zero when draws should execute, zero when they should be
      * skipped. Written by the primary before cs_call, read by inherited
 diff --git a/src/panfrost/vulkan/csf/panvk_queue.h b/src/panfrost/vulkan/csf/panvk_queue.h
-index c99f279..a137602 100644
+index c99f279..0ff8ac9 100644
 --- a/src/panfrost/vulkan/csf/panvk_queue.h
 +++ b/src/panfrost/vulkan/csf/panvk_queue.h
 @@ -34,6 +34,8 @@ struct panvk_tiler_heap {
@@ -70,6 +73,15 @@ index c99f279..a137602 100644
  };
  
  struct panvk_subqueue {
+@@ -169,6 +171,8 @@ struct panvk_gpu_queue {
+       bool pending;
+       uint64_t ctx;
+       uint64_t first_chunk;
++      /* Initial chunk count of the next spare (0: the default). */
++      uint32_t chunks;
+    } kbase_spare_heap;
+ #endif
+ 
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 index 2153509..b6576fe 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
@@ -260,10 +272,52 @@ index 2153509..b6576fe 100644
        } else if (td_count > 1) {
           heap_trace(HT_FRAG_END);
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-index 80089bb..9f858e2 100644
+index 80089bb..e60b788 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-@@ -464,6 +464,20 @@ kbase_subqueue_reserve_ring(struct panvk_gpu_queue *queue,
+@@ -115,6 +115,41 @@ kbase_subqueue_wait_seqno(struct panvk_gpu_queue *queue, uint32_t subqueue,
+                           uint64_t target_seqno, uint32_t rekick_mask,
+                           bool allow_ring_drain, uint64_t abs_timeout_ns);
+ 
++/* PANVK_KBASE_HEAP_ADAPT=1 (experiment): size the pre-created spare heap
++ * from the tiler work per submission of the heap generation being retired,
++ * so scenes that regrow the heap through kernel OOM every frame start with
++ * enough chunks, and never block a renewal on the spare: if it is not ready
++ * yet, the renewal is retried on a later submission.
++ * PANVK_KBASE_HEAP_ADAPT_WPS: work per submission that counts as heavy.
++ * PANVK_KBASE_HEAP_ADAPT_CHUNKS: spare chunk count for heavy generations. */
++static bool
++kbase_heap_adapt(void)
++{
++   static int on = -1;
++   if (on < 0)
++      on = debug_get_bool_option("PANVK_KBASE_HEAP_ADAPT", false);
++   return on;
++}
++
++static uint64_t
++kbase_heap_adapt_wps(void)
++{
++   static int64_t v = -1;
++   if (v < 0)
++      v = MAX2(debug_get_num_option("PANVK_KBASE_HEAP_ADAPT_WPS", 16384), 1);
++   return v;
++}
++
++static uint32_t
++kbase_heap_adapt_chunks(void)
++{
++   static int64_t v = -1;
++   if (v < 0)
++      v = CLAMP(debug_get_num_option("PANVK_KBASE_HEAP_ADAPT_CHUNKS", 100), 1,
++                400);
++   return v;
++}
++
+ static bool
+ gpu_queue_uses_kbase(const struct panvk_device *dev)
+ {
+@@ -464,6 +499,20 @@ kbase_subqueue_reserve_ring(struct panvk_gpu_queue *queue,
  /* PANVK_KBASE_HEAP_SLOTS TILER_HEAP descriptors live at the start of
   * tiler_heap.desc (the geometry buffer starts at +4096). */
  #define KBASE_HEAP_DESC_SLOT_STRIDE 64
@@ -284,7 +338,7 @@ index 80089bb..9f858e2 100644
  static_assert(PANVK_KBASE_HEAP_SLOTS * KBASE_HEAP_DESC_SLOT_STRIDE <= 4096,
                "heap descriptor slots overlap the geometry buffer");
  
-@@ -587,8 +601,37 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
+@@ -587,8 +636,37 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
      * firmware heap state at every graphics CALL so it observes the current
      * context address. */
     if (subqueue != PANVK_SUBQUEUE_COMPUTE) {
@@ -324,7 +378,7 @@ index 80089bb..9f858e2 100644
  
        /* A renewal moves the heap to the other TILER_HEAP descriptor slot.
         * Point the context at it from the ring, so entries emitted before
-@@ -710,6 +753,57 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
+@@ -710,6 +788,57 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
     subq->kbase.insert += padded_size;
     subq->kbase.emitted_jobs++;
  
@@ -382,17 +436,20 @@ index 80089bb..9f858e2 100644
     mesa_logd("kbase: emitted subqueue %u job %" PRIu64
               ": ring offset %u, entry %u/%u bytes, stream 0x%" PRIx64
               "/%u, flush %u",
-@@ -2073,7 +2167,8 @@ kbase_spare_heap_job(void *job, void *gdata, int thread_index)
+@@ -2072,8 +2201,10 @@ kbase_spare_heap_job(void *job, void *gdata, int thread_index)
+    /* On failure ctx stays 0 and the renewal creates the heap itself. */
     if (kbase_kmod_csf_tiler_heap_create(
            dev->kmod.dev, queue->tiler_heap.chunk_size,
-           phys_dev->csf.tiler.initial_chunks,
+-          phys_dev->csf.tiler.initial_chunks,
 -          MAX2(phys_dev->csf.tiler.max_chunks, 200), 65535, 0,
++          MAX2(phys_dev->csf.tiler.initial_chunks,
++               queue->kbase_spare_heap.chunks),
 +          MAX2(phys_dev->csf.tiler.max_chunks, 200),
 +          kbase_heap_target_in_flight(), 0,
            &queue->kbase_spare_heap.ctx, &queue->kbase_spare_heap.first_chunk))
        queue->kbase_spare_heap.ctx = 0;
  }
-@@ -2189,7 +2284,8 @@ init_tiler(struct panvk_gpu_queue *queue)
+@@ -2189,7 +2320,8 @@ init_tiler(struct panvk_gpu_queue *queue)
        if (kbase_kmod_csf_tiler_heap_create(
               dev->kmod.dev, tiler_heap->chunk_size,
               phys_dev->csf.tiler.initial_chunks, tiler_heap_max_chunks,
@@ -402,7 +459,7 @@ index 80089bb..9f858e2 100644
           result = panvk_errorf(dev, VK_ERROR_INITIALIZATION_FAILED,
                                 "Failed to create a tiler heap context");
           goto err_free_desc;
-@@ -2198,6 +2294,7 @@ init_tiler(struct panvk_gpu_queue *queue)
+@@ -2198,6 +2330,7 @@ init_tiler(struct panvk_gpu_queue *queue)
        tiler_heap->context.handle = 0;
        tiler_heap->context.dev_addr = heap_ctx_va;
        first_heap_chunk = first_chunk_va;
@@ -410,7 +467,15 @@ index 80089bb..9f858e2 100644
     } else
  #endif
     {
-@@ -2358,7 +2455,8 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
+@@ -2354,11 +2487,16 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
+    if (!kbase_try_destroy_retired_heap(queue))
+       return VK_INCOMPLETE;
+ 
++   if (kbase_heap_adapt() && queue->kbase_spare_heap.pending &&
++       !util_queue_fence_is_signalled(&queue->kbase_spare_heap.fence))
++      return VK_INCOMPLETE;
++
+    new_ctx = kbase_spare_heap_take(queue, &first_chunk);
     if (!new_ctx &&
         kbase_kmod_csf_tiler_heap_create(
            dev->kmod.dev, tiler_heap->chunk_size,
@@ -420,7 +485,7 @@ index 80089bb..9f858e2 100644
            &new_ctx, &first_chunk)) {
        return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                            "Failed to renew the kbase tiler heap");
-@@ -2376,6 +2474,7 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
+@@ -2376,6 +2514,7 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
        cfg.bottom = cfg.base + 64;
        cfg.top = cfg.base + cfg.size;
     }
@@ -428,6 +493,31 @@ index 80089bb..9f858e2 100644
     kbase_clean_priv_mem(tiler_heap->desc, slot_offset, pan_size(TILER_HEAP));
     queue->kbase_heap_slot = slot;
  
+@@ -3005,6 +3144,24 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
+        (queue->kbase_tiler_submit_count >=
+            kbase_tiler_heap_renew_interval() ||
+         (renew_work && queue->kbase_tiler_work_count >= renew_work))) {
++      if (kbase_heap_adapt()) {
++         const uint64_t wps = queue->kbase_tiler_work_count /
++                              MAX2(queue->kbase_tiler_submit_count, 1);
++         const uint32_t chunks =
++            wps >= kbase_heap_adapt_wps() ? kbase_heap_adapt_chunks() : 0;
++         static int trace = -1;
++         if (trace < 0)
++            trace = debug_get_bool_option("PANVK_HEAP_TRACE", false);
++         if (trace)
++            mesa_logi("heap renew: submits %u work %" PRIu64 " wps %" PRIu64
++                      " -> spare %u chunks (spare %s)",
++                      queue->kbase_tiler_submit_count,
++                      queue->kbase_tiler_work_count, wps, chunks,
++                      queue->kbase_spare_heap.pending ? "pending" :
++                      queue->kbase_spare_heap.ctx ? "ready" : "none");
++         queue->kbase_spare_heap.chunks = chunks;
++      }
++
+       /* No graphics drain: in-flight entries keep the retired heap and its
+        * descriptor slot (see kbase_subqueue_emit_job()).  Draining here
+        * serialized the CPU and GPU on nearly every NFS Most Wanted frame. */
 -- 
 2.56.0
 
