@@ -1,0 +1,94 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 181] panvk: optional tally of emitted tiler heap operations
+Generated-by: LLM
+
+Debug only: PANVK_HEAP_TRACE=1 counts the heap operations recorded
+(vertex-tiler started/completed, fragment finish, fragment end, fragment
+passes) and logs the totals every 512 fragment passes. biblioklept
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/180
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 97bc5ab..2153509 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -51,6 +51,8 @@
+ #include "libpan/draw_helper_vp.h"
+ 
+ #include "util/bitscan.h"
++#include "util/u_atomic.h"
++#include "util/log.h"
+ #include "util/u_debug.h"
+ #include "vk_format.h"
+ #include "vk_meta.h"
+@@ -80,6 +82,27 @@ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
+    return phys_dev->kbase_node_path[0] != '\0' && !heap_ops;
+ }
+ 
++/* PANVK_HEAP_TRACE=1: tally the heap operations emitted at record time
++ * (vt_start, vt_end, frag finish with increment, frag_end) to find render
++ * passes whose counts don't balance. Debug only. */
++static uint32_t heap_trace_counts[5];
++enum { HT_VT_START, HT_VT_END, HT_FINISH_INC, HT_FRAG_END, HT_FRAG_PASS };
++
++static void
++heap_trace(unsigned what)
++{
++   static int on = -1;
++   if (on < 0)
++      on = debug_get_bool_option("PANVK_HEAP_TRACE", false);
++   if (!on)
++      return;
++   uint32_t n = p_atomic_inc_return(&heap_trace_counts[what]);
++   if (what == HT_FRAG_PASS && (n % 512) == 0)
++      mesa_logi("heap trace: vt_start %u vt_end %u finish_inc %u frag_end %u frag_passes %u",
++                heap_trace_counts[HT_VT_START], heap_trace_counts[HT_VT_END],
++                heap_trace_counts[HT_FINISH_INC], heap_trace_counts[HT_FRAG_END], n);
++}
++
+ static bool
+ render_needs_zs_crc_ext(struct panvk_cmd_buffer *cmdbuf)
+ {
+@@ -1597,6 +1620,7 @@ get_tiler_desc(struct panvk_cmd_buffer *cmdbuf)
+                    cs_scratch_reg_tuple(b, 0, 2));
+ 
+    cs_vt_start(b, cs_now());
++   heap_trace(HT_VT_START);
+    return VK_SUCCESS;
+ }
+ 
+@@ -6743,8 +6767,10 @@ flush_tiling(struct panvk_cmd_buffer *cmdbuf)
+                 offsetof(struct panvk_cs_subqueue_context, syncobjs));
+ 
+    cs_move64_to(b, add_val, 1);
+-   if (!cmdbuf_skips_gpu_heap_ops(cmdbuf))
++   if (!cmdbuf_skips_gpu_heap_ops(cmdbuf)) {
+       cs_vt_end(b, cs_defer_indirect());
++      heap_trace(HT_VT_END);
++   }
+    panvk_instr_sync64_add(cmdbuf, PANVK_SUBQUEUE_VERTEX_TILER, true,
+                           MALI_CS_SYNC_SCOPE_CSG, add_val, sync_addr,
+                           cs_defer_indirect());
+@@ -6996,6 +7022,7 @@ cs_emit_static_fragment_state(struct cs_builder *b,
+ static VkResult
+ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+ {
++   heap_trace(HT_FRAG_PASS);
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    const struct cs_tracing_ctx *tracing_ctx =
+       &cmdbuf->state.cs[PANVK_SUBQUEUE_FRAGMENT].tracing;
+@@ -7179,7 +7206,9 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+       } else if (td_count == 1) {
+          cs_load_to(b, completed, cur_tiler, BITFIELD_MASK(4), 40);
+          cs_finish_fragment(b, true, completed_top, completed_bottom, async);
++         heap_trace(HT_FINISH_INC);
+       } else if (td_count > 1) {
++         heap_trace(HT_FRAG_END);
+          cs_while(b, MALI_CS_CONDITION_GREATER, tiler_count) {
+             cs_load_to(b, completed, cur_tiler, BITFIELD_MASK(4), 40);
+             cs_finish_fragment(b, false, completed_top, completed_bottom,
+-- 
+2.56.0
+
