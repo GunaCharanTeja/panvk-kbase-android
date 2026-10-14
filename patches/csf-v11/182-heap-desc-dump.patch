@@ -3,28 +3,29 @@ Subject: [PATCH csf-v11 182] panvk: optional dump of tiler heap descriptor state
 Generated-by: LLM
 
 Debug only: with PANVK_HEAP_TRACE=1, every 64 fragment submissions log
-the completed top/bottom of the last recorded tiler context and the
-active TILER_HEAP descriptor, to check whether the hardware reports the
-chunk range that fragment finish should release. biblioklept
+the completed top/bottom range stored by the command stream at fragment
+finish, the whole tiler context and the active TILER_HEAP descriptor, to check whether the hardware
+reports the chunk range that fragment finish should release. biblioklept
 
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/181
 
 diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
-index 8789b73..ab5be1f 100644
+index 8789b73..7457f9e 100644
 --- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
 +++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
-@@ -236,6 +236,7 @@ struct panvk_cs_subqueue_context {
+@@ -236,6 +236,8 @@ struct panvk_cs_subqueue_context {
           uint64_t cs;
        } tracebuf;
     uint64_t kbase_progress_addr;
 +   uint64_t heap_completed[2];
++   uint32_t heap_td[32];
     } debug;
     /* Non-zero when draws should execute, zero when they should be
      * skipped. Written by the primary before cs_call, read by inherited
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index 2153509..b3eea30 100644
+index 2153509..c40f7b5 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 @@ -88,13 +88,19 @@ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
@@ -50,7 +51,27 @@ index 2153509..b3eea30 100644
        return;
     uint32_t n = p_atomic_inc_return(&heap_trace_counts[what]);
     if (what == HT_FRAG_PASS && (n % 512) == 0)
-@@ -7205,6 +7211,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+@@ -7167,6 +7173,19 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+    struct cs_index oq_chain_lo = cs_scratch_reg32(b, 10);
+    struct cs_index oq_syncobj = cs_scratch_reg64(b, 12);
+ 
++   if (heap_trace_on() && td_count == 1 &&
++       !cmdbuf_skips_gpu_heap_ops(cmdbuf)) {
++      for (unsigned half = 0; half < 2; half++) {
++         cs_load_to(b, cs_scratch_reg_tuple(b, 0, 16), cur_tiler,
++                    BITFIELD_MASK(16), half * 64);
++         cs_store(b, cs_scratch_reg_tuple(b, 0, 16), cs_subqueue_ctx_reg(b),
++                  BITFIELD_MASK(16),
++                  offsetof(struct panvk_cs_subqueue_context, debug.heap_td) +
++                     half * 64);
++         cs_flush_stores(b);
++      }
++   }
++
+    cs_move64_to(b, add_val, 1);
+ 
+    if (free_render_descs) {
+@@ -7205,6 +7224,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
           /* Heap chunks are reclaimed by the queue's heap renewal. */
        } else if (td_count == 1) {
           cs_load_to(b, completed, cur_tiler, BITFIELD_MASK(4), 40);
@@ -62,10 +83,10 @@ index 2153509..b3eea30 100644
           heap_trace(HT_FINISH_INC);
        } else if (td_count > 1) {
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-index 80089bb..91f149c 100644
+index 80089bb..867901e 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-@@ -710,6 +710,26 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
+@@ -710,6 +710,30 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
     subq->kbase.insert += padded_size;
     subq->kbase.emitted_jobs++;
  
@@ -79,7 +100,11 @@ index 80089bb..91f149c 100644
 +      const uint32_t *hd = (const uint32_t *)((uint8_t *)panvk_priv_mem_host_addr(
 +                              queue->tiler_heap.desc) +
 +                           queue->kbase_heap_slot * KBASE_HEAP_DESC_SLOT_STRIDE);
-+      kbase_cache_invalidate_range(ctx->debug.heap_completed, 16);
++      kbase_cache_invalidate_range(ctx->debug.heap_completed, 16 + 128);
++      char tdw[32 * 9 + 1] = {0};
++      for (unsigned i = 0; i < 32; i++)
++         snprintf(tdw + i * 9, 10, "%08x ", ctx->debug.heap_td[i]);
++      mesa_logi("heap td words: %s", tdw);
 +      kbase_cache_invalidate_range(hd, 32);
 +      mesa_logi("heap dump frag job %" PRIu64 ": completed top 0x%" PRIx64
 +                " bottom 0x%" PRIx64 " | heapdesc %08x %08x base 0x%08x%08x "
