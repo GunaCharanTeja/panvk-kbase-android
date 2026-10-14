@@ -11,31 +11,61 @@ Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/181
 
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 8789b73..ab5be1f 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -236,6 +236,7 @@ struct panvk_cs_subqueue_context {
+          uint64_t cs;
+       } tracebuf;
+    uint64_t kbase_progress_addr;
++   uint64_t heap_completed[2];
+    } debug;
+    /* Non-zero when draws should execute, zero when they should be
+     * skipped. Written by the primary before cs_call, read by inherited
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index 2153509..2eb45e8 100644
+index 2153509..b3eea30 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-@@ -86,6 +86,7 @@ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
-  * (vt_start, vt_end, frag finish with increment, frag_end) to find render
-  * passes whose counts don't balance. Debug only. */
+@@ -88,13 +88,19 @@ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
  static uint32_t heap_trace_counts[5];
-+void *panvk_per_arch(heap_trace_td);
  enum { HT_VT_START, HT_VT_END, HT_FINISH_INC, HT_FRAG_END, HT_FRAG_PASS };
  
- static void
-@@ -1433,6 +1434,7 @@ get_tiler_desc(struct panvk_cmd_buffer *cmdbuf)
-       tiler_desc = panvk_cmd_alloc_desc_array(cmdbuf, td_count, TILER_CONTEXT);
-       if (!tiler_desc.gpu)
-          return VK_ERROR_OUT_OF_DEVICE_MEMORY;
-+      panvk_per_arch(heap_trace_td) = tiler_desc.cpu;
-    }
- 
-    account_tiler_work(cmdbuf, td_count);
+-static void
+-heap_trace(unsigned what)
++static bool
++heap_trace_on(void)
+ {
+    static int on = -1;
+    if (on < 0)
+       on = debug_get_bool_option("PANVK_HEAP_TRACE", false);
+-   if (!on)
++   return on;
++}
++
++static void
++heap_trace(unsigned what)
++{
++   if (!heap_trace_on())
+       return;
+    uint32_t n = p_atomic_inc_return(&heap_trace_counts[what]);
+    if (what == HT_FRAG_PASS && (n % 512) == 0)
+@@ -7205,6 +7211,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+          /* Heap chunks are reclaimed by the queue's heap renewal. */
+       } else if (td_count == 1) {
+          cs_load_to(b, completed, cur_tiler, BITFIELD_MASK(4), 40);
++         if (heap_trace_on())
++            cs_store(b, completed, cs_subqueue_ctx_reg(b), BITFIELD_MASK(4),
++                     offsetof(struct panvk_cs_subqueue_context,
++                              debug.heap_completed));
+          cs_finish_fragment(b, true, completed_top, completed_bottom, async);
+          heap_trace(HT_FINISH_INC);
+       } else if (td_count > 1) {
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-index 80089bb..9a8c044 100644
+index 80089bb..91f149c 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-@@ -710,6 +710,28 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
+@@ -710,6 +710,26 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
     subq->kbase.insert += padded_size;
     subq->kbase.emitted_jobs++;
  
@@ -44,21 +74,19 @@ index 80089bb..9a8c044 100644
 +      heap_trace = debug_get_bool_option("PANVK_HEAP_TRACE", false);
 +   if (heap_trace && subqueue == PANVK_SUBQUEUE_FRAGMENT &&
 +       (subq->kbase.emitted_jobs % 64) == 0) {
-+      extern void *panvk_per_arch(heap_trace_td);
-+      const uint32_t *td = panvk_per_arch(heap_trace_td);
++      struct panvk_cs_subqueue_context *ctx =
++         panvk_priv_mem_host_addr(subq->context);
 +      const uint32_t *hd = (const uint32_t *)((uint8_t *)panvk_priv_mem_host_addr(
 +                              queue->tiler_heap.desc) +
 +                           queue->kbase_heap_slot * KBASE_HEAP_DESC_SLOT_STRIDE);
-+      if (td)
-+         kbase_cache_invalidate_range(td, 64);
++      kbase_cache_invalidate_range(ctx->debug.heap_completed, 16);
 +      kbase_cache_invalidate_range(hd, 32);
-+      mesa_logi("heap dump frag job %" PRIu64 ": td %p heap 0x%08x%08x geom 0x%08x%08x "
-+                "completed top 0x%08x%08x bottom 0x%08x%08x | heapdesc %08x %08x "
-+                "base 0x%08x%08x bottom 0x%08x%08x top 0x%08x%08x",
-+                subq->kbase.emitted_jobs, td, td ? td[7] : 0, td ? td[6] : 0,
-+                td ? td[9] : 0, td ? td[8] : 0, td ? td[11] : 0,
-+                td ? td[10] : 0, td ? td[13] : 0, td ? td[12] : 0, hd[0], hd[1],
-+                hd[3], hd[2], hd[5], hd[4], hd[7], hd[6]);
++      mesa_logi("heap dump frag job %" PRIu64 ": completed top 0x%" PRIx64
++                " bottom 0x%" PRIx64 " | heapdesc %08x %08x base 0x%08x%08x "
++                "bottom 0x%08x%08x top 0x%08x%08x",
++                subq->kbase.emitted_jobs, ctx->debug.heap_completed[0],
++                ctx->debug.heap_completed[1], hd[0], hd[1], hd[3], hd[2], hd[5],
++                hd[4], hd[7], hd[6]);
 +   }
 +
     mesa_logd("kbase: emitted subqueue %u job %" PRIu64
