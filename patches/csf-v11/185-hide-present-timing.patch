@@ -1,0 +1,51 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 185] panvk: hide VK_EXT_present_timing unless PANVK_PRESENT_TIMING=1
+Generated-by: LLM
+
+DXVK 3.x and vkd3d-proton 3.x query past presentation timings through
+VK_EXT_present_timing. Under Hangover Wine 11.16 on Termux:X11, Red Dead
+Redemption (vkd3d-proton 3.0.1 + DXVK 3.1.1 dxgi) faulted inside
+vkGetPastPresentationTimingEXT right after creating its swapchain
+("err:vulkan:vkGetPastPresentationTimingEXT Exception 0xc0000005 in Unix
+call") and exited with ACCESS_VIOLATION. Keep the extension hidden by
+default; the translation layers fall back to their own frame statistics.
+PANVK_PRESENT_TIMING=1 exposes it again. No biblioklept workarounds in the
+WSI code itself; the root cause in the X11 present-timing path is still to
+be found.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/183
+
+diff --git a/src/panfrost/vulkan/panvk_vX_physical_device.c b/src/panfrost/vulkan/panvk_vX_physical_device.c
+index f44d08d..0132382 100644
+--- a/src/panfrost/vulkan/panvk_vX_physical_device.c
++++ b/src/panfrost/vulkan/panvk_vX_physical_device.c
+@@ -12,6 +12,7 @@
+ #include <sys/sysmacros.h>
+ 
+ #include "git_sha1.h"
++#include "util/u_debug.h"
+ 
+ #include "vk_android.h"
+ #include "vk_device.h"
+@@ -203,8 +204,14 @@ panvk_per_arch(get_physical_device_extensions)(
+       .EXT_pipeline_creation_feedback = true,
+       .EXT_pipeline_robustness = true,
+ #ifdef PANVK_USE_WSI_PLATFORM
+-	  .EXT_present_timing =
+-         device->kmod.dev->props.gpu_can_query_timestamp,
++      /* DXVK 3.x and vkd3d-proton 3.x query past presentation timings through
++       * this extension; under Wine (Termux:X11) vkGetPastPresentationTimingEXT
++       * faults in the X11 WSI and the game exits with ACCESS_VIOLATION.  Keep
++       * it hidden unless PANVK_PRESENT_TIMING=1; the translation layers fall
++       * back to their own frame statistics. */
++      .EXT_present_timing =
++         device->kmod.dev->props.gpu_can_query_timestamp &&
++         debug_get_bool_option("PANVK_PRESENT_TIMING", false),
+ #endif
+       .EXT_private_data = true,
+       .EXT_primitive_topology_list_restart = true,
+-- 
+2.56.0
+
