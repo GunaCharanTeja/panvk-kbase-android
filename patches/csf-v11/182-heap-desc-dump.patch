@@ -25,6 +25,8 @@ FRAGMENT_END, 4 runs it immediately, 8 waits for the fragment job first,
 the kbase target_in_flight (65535 by default): kbase only grants a new
 chunk while that many render passes or fewer are in flight, otherwise the
 firmware waits for FINISH_FRAGMENT to return chunks (r44p1 handle_oom_event).
+PANVK_KBASE_HEAP_SET_ONCE=1 keeps only the init stream HEAP_SET, as upstream
+does, instead of one per CALL.
 
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
@@ -258,7 +260,7 @@ index 2153509..b6576fe 100644
        } else if (td_count > 1) {
           heap_trace(HT_FRAG_END);
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-index 80089bb..7798500 100644
+index 80089bb..9f858e2 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
 @@ -464,6 +464,20 @@ kbase_subqueue_reserve_ring(struct panvk_gpu_queue *queue,
@@ -282,10 +284,12 @@ index 80089bb..7798500 100644
  static_assert(PANVK_KBASE_HEAP_SLOTS * KBASE_HEAP_DESC_SLOT_STRIDE <= 4096,
                "heap descriptor slots overlap the geometry buffer");
  
-@@ -587,6 +601,26 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
+@@ -587,8 +601,37 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
      * firmware heap state at every graphics CALL so it observes the current
      * context address. */
     if (subqueue != PANVK_SUBQUEUE_COMPUTE) {
+-      cs_move64_to(&b, addr64, queue->tiler_heap.context.dev_addr);
+-      cs_heap_set(&b, addr64);
 +      static int heap_ctx_trace = -1;
 +      if (heap_ctx_trace < 0)
 +         heap_ctx_trace = debug_get_bool_option("PANVK_HEAP_TRACE", false);
@@ -306,10 +310,21 @@ index 80089bb..7798500 100644
 +         }
 +      }
 +
-       cs_move64_to(&b, addr64, queue->tiler_heap.context.dev_addr);
-       cs_heap_set(&b, addr64);
++      /* PANVK_KBASE_HEAP_SET_ONCE=1 (experiment): keep only the init
++       * stream HEAP_SET, as upstream does, in case a HEAP_SET per CALL
++       * resets the firmware's pending chunk-release state. */
++      static int heap_set_once = -1;
++      if (heap_set_once < 0)
++         heap_set_once =
++            debug_get_bool_option("PANVK_KBASE_HEAP_SET_ONCE", false);
++      if (!heap_set_once) {
++         cs_move64_to(&b, addr64, queue->tiler_heap.context.dev_addr);
++         cs_heap_set(&b, addr64);
++      }
  
-@@ -710,6 +744,57 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
+       /* A renewal moves the heap to the other TILER_HEAP descriptor slot.
+        * Point the context at it from the ring, so entries emitted before
+@@ -710,6 +753,57 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
     subq->kbase.insert += padded_size;
     subq->kbase.emitted_jobs++;
  
@@ -367,7 +382,7 @@ index 80089bb..7798500 100644
     mesa_logd("kbase: emitted subqueue %u job %" PRIu64
               ": ring offset %u, entry %u/%u bytes, stream 0x%" PRIx64
               "/%u, flush %u",
-@@ -2073,7 +2158,8 @@ kbase_spare_heap_job(void *job, void *gdata, int thread_index)
+@@ -2073,7 +2167,8 @@ kbase_spare_heap_job(void *job, void *gdata, int thread_index)
     if (kbase_kmod_csf_tiler_heap_create(
            dev->kmod.dev, queue->tiler_heap.chunk_size,
            phys_dev->csf.tiler.initial_chunks,
@@ -377,7 +392,7 @@ index 80089bb..7798500 100644
            &queue->kbase_spare_heap.ctx, &queue->kbase_spare_heap.first_chunk))
        queue->kbase_spare_heap.ctx = 0;
  }
-@@ -2189,7 +2275,8 @@ init_tiler(struct panvk_gpu_queue *queue)
+@@ -2189,7 +2284,8 @@ init_tiler(struct panvk_gpu_queue *queue)
        if (kbase_kmod_csf_tiler_heap_create(
               dev->kmod.dev, tiler_heap->chunk_size,
               phys_dev->csf.tiler.initial_chunks, tiler_heap_max_chunks,
@@ -387,7 +402,7 @@ index 80089bb..7798500 100644
           result = panvk_errorf(dev, VK_ERROR_INITIALIZATION_FAILED,
                                 "Failed to create a tiler heap context");
           goto err_free_desc;
-@@ -2198,6 +2285,7 @@ init_tiler(struct panvk_gpu_queue *queue)
+@@ -2198,6 +2294,7 @@ init_tiler(struct panvk_gpu_queue *queue)
        tiler_heap->context.handle = 0;
        tiler_heap->context.dev_addr = heap_ctx_va;
        first_heap_chunk = first_chunk_va;
@@ -395,7 +410,7 @@ index 80089bb..7798500 100644
     } else
  #endif
     {
-@@ -2358,7 +2446,8 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
+@@ -2358,7 +2455,8 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
     if (!new_ctx &&
         kbase_kmod_csf_tiler_heap_create(
            dev->kmod.dev, tiler_heap->chunk_size,
@@ -405,7 +420,7 @@ index 80089bb..7798500 100644
            &new_ctx, &first_chunk)) {
        return panvk_errorf(dev, VK_ERROR_OUT_OF_DEVICE_MEMORY,
                            "Failed to renew the kbase tiler heap");
-@@ -2376,6 +2465,7 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
+@@ -2376,6 +2474,7 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
        cfg.bottom = cfg.base + 64;
        cfg.top = cfg.base + cfg.size;
     }
