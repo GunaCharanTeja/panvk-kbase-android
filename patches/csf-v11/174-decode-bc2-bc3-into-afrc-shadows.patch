@@ -33,7 +33,9 @@ biblioklept
 Mali-G615 MC2, 2048x2048 with mips, against the ASTC transcode: BC3
 random 49.4 ms / 32.0 dB -> 8.2 ms / 37.4 dB (16 bpp); real BC3 level 0
 +2.5 to +7.6 dB at 12 bpp, 26-53 -> 8 ms; BC2 real 46.1 -> 52.4 dB.
-Memory 43.7 -> 54.6 MiB for a 2048x2048 chain.
+Memory 43.7 -> 54.6 MiB for a 2048x2048 chain. On uniformly random
+synthetic BC3 blocks 12 bpp is 0.4 dB (UNORM) / 1.1 dB (SRGB) below the
+transcode; PANVK_BC_AFRC=32 recovers that (+5.4 dB) for 16 bpp.
 
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
