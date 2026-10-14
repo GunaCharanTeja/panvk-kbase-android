@@ -1,14 +1,16 @@
 # BC1-BC7 compatibility
 
-## Current status (1.1.1-FC): in-driver transcoding
+## Current status (1.1.2-FC): in-driver transcoding
 
-BC1-BC7 are supported inside PanVK itself (patches 124-128), not through the
-layer described below. On upload the driver transcodes each BC block on the
-GPU: BC1/2/3/4/5/7 UNORM and SRGB to ASTC 4x4 LDR (sRGB kept), BC4/5 SNORM
-exactly to R8/R8G8 SNORM, BC6H UFLOAT/SFLOAT to ASTC 4x4 HDR (negative SFLOAT
-values read as 0, the only lossy semantic). ASTC is lossy: measured PSNR on
-realistic blocks is 34-54 dB depending on format (see CHANGELOG 1.1.1-FC).
-The rest of this file is the historical evaluation of the external layer.
+BC1-BC7 are supported inside PanVK itself (patches 124-130, 172-174), not
+through the layer described below. On upload the driver converts each BC
+block on the GPU: BC1 and BC7 to ASTC 4x4 LDR (sRGB kept), BC2/BC3 to a 12 bpp
+AFRC-compressed RGBA8 shadow on GPUs with AFRC (ASTC otherwise, or with
+PANVK_BC_AFRC=0), BC4/BC5 UNORM and SNORM exactly to R8/R8G8, BC6H
+UFLOAT/SFLOAT to ASTC 4x4 HDR (negative SFLOAT values read as 0, the only
+lossy semantic). ASTC and AFRC are lossy: measured PSNR is in CHANGELOG
+1.1.2-FC. The rest of this file is the historical evaluation of the external
+layer.
 
 ## Status
 

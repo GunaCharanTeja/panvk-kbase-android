@@ -1,5 +1,45 @@
 # Changelog
 
+## Mali-G615 CSF PanVK Driver 1.1.2-FC (RDR1 fix, BC2/BC3 on AFRC, exact BC4/BC5, faster transcodes)
+
+Mesa `5a07217f034b` + series up to Patch 175 (142 patch files; new: 129, 130, 172–175; removed: 152–154, 160–164).
+Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
+All numbers measured on that device (2048² texture, full mip chain, unless noted).
+
+### Fixes
+- **Red Dead Redemption (D3D12) losing the device while loading**: the RC2/Beta.18 register-allocation
+  speedups (patches 152–154, 160–164, added in 1.1.0-FC) make the game hit a GPU read translation
+  fault (unmapped memory) during loading. Bisected on device (1.0.8 and 1.0.9 good, 1.1.0 on bad, current tree
+  without those patches good); they are removed. Shader compilation is slower again on very large shaders.
+- **D3D12 typed buffers through descriptor heaps (Patch 175)**: `vkGetDescriptorEXT` wrote texel-buffer
+  descriptors without element stride and format; they now match what a `VkBufferView` gets.
+- **BC4/BC5 UNORM lossy (Patch 172)**: decoded exactly to R8 / R8G8 (was ASTC: 51 / 34 dB on random blocks).
+
+### Texture paths (per format)
+| BC format | Stored as | Upload (worst case → real) | Quality vs. 1.1.1-FC |
+| :--- | :--- | :--- | :--- |
+| BC1 | ASTC 4x4 | real 1.4–1.8 ms | same |
+| BC2 / BC3 | **AFRC 12 bpp** (Patch 174) | 50–99 → 7.7–8.8 ms | real textures +0.9 to +7.6 dB |
+| BC4 / BC5 UNORM | **R8 / R8G8, exact** (Patch 172) | 25 / 141 → 2.9 / 6.0 ms | exact |
+| BC6H | ASTC 4x4 HDR | 49 → 40 ms (Patch 173) | same |
+| BC7 | ASTC 4x4 | 233 → 72 ms random, real 160–207 → 44–60 ms (Patch 130) | same or better |
+
+- **Patch 129**: BC1A/BC2/BC3 dual-plane blocks built directly from the BC1 line plus a 1-D alpha fit,
+  single-plane search skipped when it provably cannot win; BC4/BC5 per-channel fits. 2–3× faster, PSNR equal or higher.
+- **Patch 130**: BC7 texels decoded once per block into shared memory (spills 55 → 0); mode 6 refined from its own
+  endpoints, opaque mode 5 transferred exactly.
+- **Patch 173**: BC6H texels converted to the ASTC HDR log domain once per block (identical output).
+- **Patch 174**: BC2/BC3 decode through a fragment pass into an AFRC-compressed RGBA8 shadow (design from
+  zenithblue-oss csf-v11/150, 151, 180, limited to BC2/BC3, at 12 instead of 16 bpp: the smallest rate that stays
+  above ASTC on every mip of real textures). `PANVK_BC_AFRC=0` keeps BC2/BC3 on ASTC (lowest memory),
+  `PANVK_BC_AFRC=32` uses 16 bpp. Known trade-off: on uniformly random synthetic BC3 blocks 12 bpp is
+  0.4 dB (UNORM) / 1.1 dB (sRGB) below the ASTC transcode.
+
+### Texture memory (2048², full mips)
+- BC1/BC4: 8.0 MB; BC6H/BC7: 10.7 MB (unchanged).
+- BC2/BC3: 10.7 → 13.3 MB (AFRC, +25%; zenithblue AFRC uses 16 MB for BC3).
+- BC5 UNORM: 10.7 → 16.0 MB (exact R8G8; same as BC5 SNORM).
+
 ## Mali-G615 CSF PanVK Driver 1.1.1-FC (BC→ASTC quality & speed, D3D12 static samplers)
 
 Mesa `5a07217f034b` + series up to Patch 171 (143 qualified patches; new: 124 rewritten, 125–128).

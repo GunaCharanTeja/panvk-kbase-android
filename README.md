@@ -2,7 +2,7 @@
 
 Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_kbase` kernel interface (`/dev/mali0`) on Android, with native support for **DirectX 9, 10, 11 (DXVK)** and **DirectX 12 (VKD3D-Proton)**, featuring GPU **BC1–BC7 → ASTC 4x4 transcoding** (LDR and HDR).
 
-[![Release 1.1.1-FC](https://img.shields.io/badge/Release-1.1.1--FC-brightgreen)](#)
+[![Release 1.1.2-FC](https://img.shields.io/badge/Release-1.1.2--FC-brightgreen)](#)
 [![Vulkan 1.4](https://img.shields.io/badge/Vulkan-1.4-AC162C?logo=vulkan&logoColor=white)](#)
 [![GPU Mali-G615](https://img.shields.io/badge/GPU-Mali--G615%20(v11%20CSF)-0091BD?logo=arm&logoColor=white)](#)
 [![ASTC 4x4 Transcoding](https://img.shields.io/badge/ASTC%204x4-Hardware%20Transcoded-success)](#)
@@ -37,30 +37,32 @@ This repository provides an open-source Mesa PanVK driver layer specifically eng
 ## Key Enhancements
 
 ### Upstream RC2 / Beta.18 Performance Upgrades (Patches 131–171)
-* **10x–12x Shader Compilation Speedup (Patches 152–154, 160–164)**: Overhauled the Register Allocation (LCRA) spill loop to record all failing nodes and spill simultaneously in one pass, added 8-register headroom reservation for SSA spillers, and enabled incremental post-spill constraint updates. Cuts multi-second shader compile hitches in DXVK/VKD3D from 3.6–4.1s down to 28–249ms.
+* **Removed in 1.1.2-FC: register-allocation speedups (Patches 152–154, 160–164)**: with them Red Dead Redemption (D3D12) loses the device while loading (GPU read translation fault, bisected on device). Very large shaders compile slower again until a validated replacement lands.
 * **Persistent Mesa Shader Disk Cache on Android (Patch 170)**: Unconditionally enables Mesa's on-disk shader cache on Android, allowing warm launches to hit precompiled binaries with instant 0ms compile overhead.
 * **Android Property Query Caching (Patch 171)**: Caches `os_get_option()` queries, eliminating 128ms of stutter during image creation.
 * **CSF Prerast Producer Scoreboard Synchronization (Patch 132)**: Adds missing iterator scoreboard barrier before viewport runs, fixing race conditions in multi-viewport scenes.
 * **GPU Model & Small-Core Identification (Patches 131, 140, jm-v9/006)**: Core-count device naming for Immortalis/small GPUs; adds Mali-G710 and Mali-G77 model rows.
 
-### Patches 124–128: BC1–BC7 → ASTC 4x4 Transcoding (40–78% less texture memory)
-Mali has no BCn sampler, so BC textures are transcoded on the GPU at upload time into formats the hardware samples natively:
+### Patches 124–130, 172–174: BC1–BC7 transcoding (40–78% less texture memory than RGBA8)
+Mali has no BCn sampler, so BC textures are converted on the GPU at upload time into formats the hardware samples natively. Each format uses the path that measured best on device:
 
-| BC format | Stored as | Memory vs. old RGBA8 / RGBA16F decode (2048², full mips) |
-| :--- | :--- | :--- |
-| BC1, BC4 | ASTC 4x4 LDR | 24.0 → 8.0 MB (−67%) |
-| BC2, BC3, BC5, BC7 | ASTC 4x4 LDR | 26.7 → 10.7 MB (−60%) |
-| BC4 SNORM / BC5 SNORM | R8 / R8G8 SNORM (exact) | −67% / −40% |
-| BC6H UFLOAT / SFLOAT | ASTC 4x4 **HDR** | 48.0 → 10.7 MB (−78%) |
+| BC format | Stored as | Memory (2048², full mips) | Upload, Mali-G615 MC2 |
+| :--- | :--- | :--- | :--- |
+| BC1 | ASTC 4x4 LDR | 8.0 MB (−67% vs RGBA8) | real textures 1.4–1.8 ms |
+| BC2, BC3 | **AFRC 12 bpp** RGBA8 shadow (Patch 174) | 13.3 MB (−50%) | 7.7–8.8 ms |
+| BC4 / BC5 (UNORM and SNORM) | **R8 / R8G8, exact** (Patch 172) | 8.0 / 16.0 MB | 2.7–6.0 ms |
+| BC6H UFLOAT / SFLOAT | ASTC 4x4 **HDR** | 10.7 MB (−78% vs RGBA16F) | 40 ms |
+| BC7 | ASTC 4x4 LDR | 10.7 MB (−60%) | real 44–60 ms |
 
-* **Quality (measured, realistic blocks, PSNR):** BC1 40–42 dB, BC2/BC3 35–37 dB, BC4 49 dB, BC5 34 dB, SNORM 59–62 dB, BC6H 50–54 dB, BC7 41–42 dB. BCn endpoints and indices are mapped onto ASTC endpoints/weights directly where the block allows it (exact for BC1 4-colour / BC4), otherwise a principal-axis fit with least-squares refinement. BC1 RGB samples alpha = 1, sRGB formats stay sRGB, BC6H uses real HDR ASTC (CEM 11) instead of clamping to LDR.
-* **Speed (one 2048² texture, all mips, Mali-G615 MC2):** real BC1/BC3 game textures 0.9–3 ms per level; worst-case random data BC1 RGB 22 ms, BC6H 49 ms, BC7 233 ms (was 1266 ms).
-* **Transcoders** (one thread per 4x4 block, specialised per format, decode each BC block once):
-  * `panvk_bc_s3tc_astc`: BC1, BC2, BC3, BC4, BC5 (UNORM/sRGB).
-  * `panvk_bc_rgtc_snorm`: BC4/BC5 SNORM → R8/R8G8 SNORM.
+* **Quality (PSNR vs. the BC decode, real game textures):** BC1 57–66 dB, BC2/BC3 (AFRC) 39–52 dB, BC4/BC5 exact, BC6H 50–54 dB (realistic blocks), BC7 41–54 dB. ASTC paths map BC endpoints and indices onto ASTC directly where the block allows it, otherwise a principal-axis fit with least-squares refinement; sRGB stays sRGB, BC1 RGB samples alpha = 1, BC6H uses real HDR ASTC (CEM 11).
+* **AFRC (Patch 174)** needs a GPU with AFRC (Mali-G615 has it); cube, sparse and 3D images keep the ASTC transcode. `PANVK_BC_AFRC=0` puts BC2/BC3 back on ASTC (lowest memory), `PANVK_BC_AFRC=32` uses 16 bpp.
+* **Transcoders** (one thread per 4x4 block, specialised per format, each BC block decoded once):
+  * `panvk_bc_s3tc_astc`: BC1 (and BC2/BC3 without AFRC).
+  * `panvk_bc_alpha_fs`: BC2/BC3 fragment decode into the AFRC shadow.
+  * `panvk_bc_rgtc_snorm`: BC4/BC5 → R8/R8G8 (UNORM and SNORM).
   * `panvk_bc_bc6_astc`: BC6H → ASTC HDR (decoder bit-exact with Mesa's CPU BPTC decoder, SFLOAT negatives → 0).
   * `panvk_bc_bc7_astc`: all 8 BC7 modes.
-* **Patch 125:** implements `vkCmdBindDescriptorBufferEmbeddedSamplersEXT` (D3D12 static samplers under `VK_EXT_descriptor_buffer`), fixing black textures in VKD3D-Proton titles that use them.
+* **Patch 125:** implements `vkCmdBindDescriptorBufferEmbeddedSamplersEXT` (D3D12 static samplers under `VK_EXT_descriptor_buffer`), fixing black textures in VKD3D-Proton titles that use them. **Patch 175** writes texel-buffer descriptors from `vkGetDescriptorEXT` with stride and format (D3D12 typed buffers).
 
 ### Patch 123: VKD3D DirectX 12 Essentials
 Our tree includes **Patch 123** (`123-vkd3d-dx12-essentials.patch`), which unlocks full DirectX 12 compatibility on the Mali-G615:
@@ -165,12 +167,13 @@ Our tree includes **Patch 123** (`123-vkd3d-dx12-essentials.patch`), which unloc
   * The Collabora graphics team and broader Mesa community.
 * **PanVK Kbase Android Base:**
   * **[ZenithBlue](https://github.com/zenithblue-oss)** – Author of the original `panvk-kbase-android` driver foundation and CSF kbase UAPI interface.
+    The BC2/BC3 AFRC shadow (Patch 174) follows their fragment-decode AFRC design (csf-v11/150, 151, 180), including their AFRC row-stride fix.
 * **DirectX Translation Layer Projects:**
   * **[DXVK](https://github.com/doitsujin/dxvk)** – **Philip Rebohle (doitsujin)** & **Joshua Ashton** for Direct3D 9/10/11 translation to Vulkan.
   * **Hans-Kristian Arntzen** – BC7/BC6H partition, anchor and weight tables (MIT), used by the BC transcoders.
   * **[VKD3D-Proton](https://github.com/HansKristian-Work/vkd3d-proton)** – **Hans-Kristian Arntzen** and contributors for Direct3D 12 translation to Vulkan.
 * **Mali-G615 Maintenance & Feature Suites (Patches 123 & 124):**
-  * **GunaCharanTeja** – Silicon verification on physical Mali-G615 (OPPO CPH2763, MT6878), author of **Patch 123** (`123-vkd3d-dx12-essentials.patch` for D3D12 descriptor buffers and placed heap isolation) and **Patch 124** (`124-panvk-astc-bcn-transcode.patch` for BC1–BC7 → ASTC 4x4 transcoding, reworked with patches 125–128), CI workflow optimization, and release packaging.
+  * **GunaCharanTeja** – Silicon verification on physical Mali-G615 (OPPO CPH2763, MT6878), author of **Patch 123** (`123-vkd3d-dx12-essentials.patch` for D3D12 descriptor buffers and placed heap isolation) and **Patch 124** (`124-panvk-astc-bcn-transcode.patch` for BC1–BC7 → ASTC 4x4 transcoding, reworked with patches 125–130 and 172–175), CI workflow optimization, and release packaging.
 
 ---
 
