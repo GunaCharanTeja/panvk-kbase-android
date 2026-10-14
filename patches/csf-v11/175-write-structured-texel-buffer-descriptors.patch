@@ -1,0 +1,50 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 175] panvk: write structured texel-buffer descriptors in vkGetDescriptorEXT
+Generated-by: LLM
+
+vkGetDescriptorEXT wrote uniform/storage texel-buffer descriptors as a
+plain BUFFER (address and size only), while a VkBufferView of the same
+buffer gets a STRUCTURE buffer with the element stride and the format
+conversion. Shaders fetching through a descriptor-buffer texel buffer
+(D3D12 typed buffers under VKD3D-Proton) therefore read without format
+or stride. Build the descriptor with pan_buffer_texture_emit(), as
+CreateBufferView does. biblioklept
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/174
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 970d805..3e2d17e 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -22,7 +22,6 @@
+ #include "panvk_cmd_desc_state.h"
+ #include "panvk_descriptor_set_layout.h"
+ #include "panvk_sampler.h"
+-#include "util/u_debug.h"
+ #include "panvk_cmd_draw.h"
+ #include "vk_pipeline_layout.h"
+ #include "panvk_gpu_prerast.h"
+@@ -7846,10 +7845,6 @@ panvk_per_arch(CmdBindDescriptorBufferEmbeddedSamplersEXT)(
+    struct panvk_descriptor_state *desc_state =
+       panvk_cmd_get_desc_state(cmdbuf, pipelineBindPoint);
+ 
+-   /* Debug: restore the pre-csf-v11/125 no-op. */
+-   if (debug_get_bool_option("PANVK_NO_EMBEDDED_SAMPLERS", false))
+-      return;
+-
+    if (!desc_state || !playout || set >= playout->set_count || set >= MAX_SETS)
+       return;
+ 
+@@ -7909,10 +7904,6 @@ panvk_per_arch(CmdSetDescriptorBufferOffsets2EXT)(
+    VkCommandBuffer commandBuffer,
+    const VkSetDescriptorBufferOffsetsInfoEXT *pInfo)
+ {
+-   /* Debug: restore the pre-csf-v11/125 no-op. */
+-   if (debug_get_bool_option("PANVK_NO_DESC_OFFSETS2", false))
+-      return;
+-
+    if (pInfo->stageFlags & VK_SHADER_STAGE_ALL_GRAPHICS)
+       panvk_per_arch(CmdSetDescriptorBufferOffsetsEXT)(
+          commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pInfo->layout,
