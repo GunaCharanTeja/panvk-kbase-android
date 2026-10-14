@@ -7,6 +7,9 @@ the completed top/bottom range stored by the command stream at fragment
 finish, the whole tiler context and the active TILER_HEAP descriptor, to check whether the hardware
 reports the chunk range that fragment finish should release. biblioklept
 
+The dump now waits for all iteration scoreboards first, so it cannot race the
+tiler write-back (biblioklept).
+
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/181
@@ -25,7 +28,7 @@ index 8789b73..7457f9e 100644
     /* Non-zero when draws should execute, zero when they should be
      * skipped. Written by the primary before cs_call, read by inherited
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index 2153509..c40f7b5 100644
+index 2153509..f0c1ebe 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 @@ -88,13 +88,19 @@ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
@@ -51,12 +54,15 @@ index 2153509..c40f7b5 100644
        return;
     uint32_t n = p_atomic_inc_return(&heap_trace_counts[what]);
     if (what == HT_FRAG_PASS && (n % 512) == 0)
-@@ -7167,6 +7173,19 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+@@ -7167,6 +7173,22 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
     struct cs_index oq_chain_lo = cs_scratch_reg32(b, 10);
     struct cs_index oq_syncobj = cs_scratch_reg64(b, 12);
  
 +   if (heap_trace_on() && td_count == 1 &&
 +       !cmdbuf_skips_gpu_heap_ops(cmdbuf)) {
++      /* Make sure the fragment job and every earlier iteration are done, so
++       * the dump can't race the tiler write-back. */
++      cs_wait_slots(b, dev->csf.sb.all_iters_mask);
 +      for (unsigned half = 0; half < 2; half++) {
 +         cs_load_to(b, cs_scratch_reg_tuple(b, 0, 16), cur_tiler,
 +                    BITFIELD_MASK(16), half * 64);
@@ -71,7 +77,7 @@ index 2153509..c40f7b5 100644
     cs_move64_to(b, add_val, 1);
  
     if (free_render_descs) {
-@@ -7205,6 +7224,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+@@ -7205,6 +7227,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
           /* Heap chunks are reclaimed by the queue's heap renewal. */
        } else if (td_count == 1) {
           cs_load_to(b, completed, cur_tiler, BITFIELD_MASK(4), 40);
