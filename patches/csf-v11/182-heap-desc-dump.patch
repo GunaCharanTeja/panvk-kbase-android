@@ -15,17 +15,20 @@ each fragment CALL and prints the whole 64-byte descriptor slot.
 
 Also dumped: the tiler context as the vertex-tiler side sees it after
 FINISH_TILING, the tiler context address on both sides, and the completed
-range read right after tiling, before the fragment job runs.
+range read right after tiling, before the fragment job runs. Each recorded
+render pass logs its tiler context address. PANVK_HEAP_VT_COPY=1 is an
+experiment: the VT side copies the completed range to tiler context words
+16-19 after tiling and FINISH_FRAGMENT takes it from there.
 
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/181
 
 diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
-index 8789b73..e0e87ab 100644
+index 8789b73..21e9c5f 100644
 --- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
 +++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
-@@ -236,6 +236,18 @@ struct panvk_cs_subqueue_context {
+@@ -236,6 +236,20 @@ struct panvk_cs_subqueue_context {
           uint64_t cs;
        } tracebuf;
     uint64_t kbase_progress_addr;
@@ -40,7 +43,9 @@ index 8789b73..e0e87ab 100644
 +    * completed range read before the fragment job runs. */
 +   uint64_t vt_tiler_addr;
 +   uint64_t frag_tiler_addr;
-+   uint64_t frag_completed_pre[2];
++   /* Tiler context words 10-19 read right after tiling: completed range
++    * (10-13) and the VT-side copy (16-19). */
++   uint64_t frag_completed_pre[5];
     } debug;
     /* Non-zero when draws should execute, zero when they should be
      * skipped. Written by the primary before cs_call, read by inherited
@@ -58,10 +63,10 @@ index c99f279..a137602 100644
  
  struct panvk_subqueue {
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index 2153509..3450252 100644
+index 2153509..81083ec 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-@@ -88,13 +88,19 @@ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
+@@ -88,13 +88,31 @@ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
  static uint32_t heap_trace_counts[5];
  enum { HT_VT_START, HT_VT_END, HT_FINISH_INC, HT_FRAG_END, HT_FRAG_PASS };
  
@@ -77,6 +82,18 @@ index 2153509..3450252 100644
 +   return on;
 +}
 +
++/* PANVK_HEAP_VT_COPY=1 (experiment): the VT side copies the completed
++ * range to tiler context words 16-19 once tiling is done, and the fragment
++ * side reads it from there. */
++static bool
++heap_vt_copy_on(void)
++{
++   static int on = -1;
++   if (on < 0)
++      on = debug_get_bool_option("PANVK_HEAP_VT_COPY", false);
++   return on;
++}
++
 +static void
 +heap_trace(unsigned what)
 +{
@@ -84,7 +101,43 @@ index 2153509..3450252 100644
        return;
     uint32_t n = p_atomic_inc_return(&heap_trace_counts[what]);
     if (what == HT_FRAG_PASS && (n % 512) == 0)
-@@ -6795,6 +6801,23 @@ flush_tiling(struct panvk_cmd_buffer *cmdbuf)
+@@ -1477,6 +1495,16 @@ get_tiler_desc(struct panvk_cmd_buffer *cmdbuf)
+    cmdbuf->state.gfx.render.tiler =
+       simul_use ? 0xdeadbeefdeadbeefull : tiler_desc.gpu;
+ 
++   if (heap_trace_on()) {
++      static uint32_t pass_n;
++      if (pass_n < 32 || (pass_n % 64) == 0)
++         mesa_logi("heap pass %u: cmdbuf %p tiler desc 0x%" PRIx64
++                   " simul %d td_count %u layers %u",
++                   pass_n, (void *)cmdbuf, tiler_desc.gpu, simul_use,
++                   td_count, cmdbuf->state.gfx.render.layer_count);
++      pass_n++;
++   }
++
+    struct cs_index tiler_ctx_addr = cs_sr_reg64(b, IDVS, TILER_CTX);
+ 
+    if (simul_use) {
+@@ -6755,6 +6783,18 @@ flush_tiling(struct panvk_cmd_buffer *cmdbuf)
+    /* Flush the tiling operations and signal the internal sync object. */
+    cs_finish_tiling(b);
+ 
++   if (heap_vt_copy_on() && !cmdbuf_skips_gpu_heap_ops(cmdbuf)) {
++      struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
++      struct cs_index tiler_ctx = cs_sr_reg64(b, IDVS, TILER_CTX);
++
++      cs_wait_slots(b, dev->csf.sb.all_iters_mask);
++      cs_load_to(b, cs_scratch_reg_tuple(b, 0, 4), tiler_ctx,
++                 BITFIELD_MASK(4), 40);
++      cs_store(b, cs_scratch_reg_tuple(b, 0, 4), tiler_ctx, BITFIELD_MASK(4),
++               64);
++      cs_flush_stores(b);
++   }
++
+    /* We're relying on PANVK_SUBQUEUE_VERTEX_TILER being the first queue to
+     * skip an ADD operation on the syncobjs pointer. */
+    STATIC_ASSERT(PANVK_SUBQUEUE_VERTEX_TILER == 0);
+@@ -6795,6 +6835,23 @@ flush_tiling(struct panvk_cmd_buffer *cmdbuf)
     }
  #endif
  
@@ -108,7 +161,7 @@ index 2153509..3450252 100644
     /* Update the vertex seqno. */
     ++cmdbuf->state.cs[PANVK_SUBQUEUE_VERTEX_TILER].relative_sync_point;
  }
-@@ -7085,6 +7108,22 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+@@ -7085,6 +7142,22 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
     /* Wait for the tiling to be done before submitting the fragment job. */
     wait_finish_tiling(cmdbuf);
  
@@ -116,10 +169,10 @@ index 2153509..3450252 100644
 +   if (heap_trace_on() && !cmdbuf_skips_gpu_heap_ops(cmdbuf)) {
 +      struct cs_index tiler_ptr = cs_reg64(b, PANVK_CS_REG_TILER_DESC_PTR);
 +
-+      cs_load_to(b, cs_scratch_reg_tuple(b, 0, 4), tiler_ptr,
-+                 BITFIELD_MASK(4), 40);
-+      cs_store(b, cs_scratch_reg_tuple(b, 0, 4), cs_subqueue_ctx_reg(b),
-+               BITFIELD_MASK(4),
++      cs_load_to(b, cs_scratch_reg_tuple(b, 0, 10), tiler_ptr,
++                 BITFIELD_MASK(10), 40);
++      cs_store(b, cs_scratch_reg_tuple(b, 0, 10), cs_subqueue_ctx_reg(b),
++               BITFIELD_MASK(10),
 +               offsetof(struct panvk_cs_subqueue_context,
 +                        debug.frag_completed_pre));
 +      cs_store64(b, tiler_ptr, cs_subqueue_ctx_reg(b),
@@ -131,7 +184,7 @@ index 2153509..3450252 100644
     /* Disable the oom handler once the vertex/tiler work has finished.
      * We need to disable the handler at this point as the vertex/tiler subqueue
      * might continue on to the next renderpass and hit an out-of-memory
-@@ -7167,6 +7206,22 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+@@ -7167,6 +7240,22 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
     struct cs_index oq_chain_lo = cs_scratch_reg32(b, 10);
     struct cs_index oq_syncobj = cs_scratch_reg64(b, 12);
  
@@ -154,10 +207,13 @@ index 2153509..3450252 100644
     cs_move64_to(b, add_val, 1);
  
     if (free_render_descs) {
-@@ -7205,6 +7260,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+@@ -7204,7 +7293,12 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+       if (cmdbuf_skips_gpu_heap_ops(cmdbuf)) {
           /* Heap chunks are reclaimed by the queue's heap renewal. */
        } else if (td_count == 1) {
-          cs_load_to(b, completed, cur_tiler, BITFIELD_MASK(4), 40);
+-         cs_load_to(b, completed, cur_tiler, BITFIELD_MASK(4), 40);
++         cs_load_to(b, completed, cur_tiler, BITFIELD_MASK(4),
++                    heap_vt_copy_on() ? 64 : 40);
 +         if (heap_trace_on())
 +            cs_store(b, completed, cs_subqueue_ctx_reg(b), BITFIELD_MASK(4),
 +                     offsetof(struct panvk_cs_subqueue_context,
@@ -166,7 +222,7 @@ index 2153509..3450252 100644
           heap_trace(HT_FINISH_INC);
        } else if (td_count > 1) {
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-index 80089bb..f9efb0f 100644
+index 80089bb..44bdf74 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
 @@ -587,6 +587,26 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
@@ -196,7 +252,7 @@ index 80089bb..f9efb0f 100644
        cs_move64_to(&b, addr64, queue->tiler_heap.context.dev_addr);
        cs_heap_set(&b, addr64);
  
-@@ -710,6 +730,54 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
+@@ -710,6 +730,57 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
     subq->kbase.insert += padded_size;
     subq->kbase.emitted_jobs++;
  
@@ -211,16 +267,19 @@ index 80089bb..f9efb0f 100644
 +                              queue->tiler_heap.desc) +
 +                           queue->kbase_heap_slot * KBASE_HEAP_DESC_SLOT_STRIDE);
 +      kbase_cache_invalidate_range(ctx->debug.heap_completed,
-+                                   16 + 128 + 32 + 16 + 64 + 32);
++                                   16 + 128 + 32 + 16 + 64 + 56);
 +      struct panvk_cs_subqueue_context *vt_ctx = panvk_priv_mem_host_addr(
 +         queue->subqueues[PANVK_SUBQUEUE_VERTEX_TILER].context);
 +      kbase_cache_invalidate_range(vt_ctx->debug.vt_td, 64 + 8);
 +      mesa_logi("heap addrs: vt tiler 0x%" PRIx64 " frag tiler 0x%" PRIx64
-+                " | frag completed before run top 0x%" PRIx64
++                " | frag before run: completed top 0x%" PRIx64
++                " bottom 0x%" PRIx64 " vt copy top 0x%" PRIx64
 +                " bottom 0x%" PRIx64,
 +                vt_ctx->debug.vt_tiler_addr, ctx->debug.frag_tiler_addr,
 +                ctx->debug.frag_completed_pre[0],
-+                ctx->debug.frag_completed_pre[1]);
++                ctx->debug.frag_completed_pre[1],
++                ctx->debug.frag_completed_pre[3],
++                ctx->debug.frag_completed_pre[4]);
 +      char vtw[16 * 9 + 1] = {0};
 +      for (unsigned i = 0; i < 16; i++)
 +         snprintf(vtw + i * 9, 10, "%08x ", vt_ctx->debug.vt_td[i]);
@@ -251,7 +310,7 @@ index 80089bb..f9efb0f 100644
     mesa_logd("kbase: emitted subqueue %u job %" PRIu64
               ": ring offset %u, entry %u/%u bytes, stream 0x%" PRIx64
               "/%u, flush %u",
-@@ -2198,6 +2266,7 @@ init_tiler(struct panvk_gpu_queue *queue)
+@@ -2198,6 +2269,7 @@ init_tiler(struct panvk_gpu_queue *queue)
        tiler_heap->context.handle = 0;
        tiler_heap->context.dev_addr = heap_ctx_va;
        first_heap_chunk = first_chunk_va;
@@ -259,7 +318,7 @@ index 80089bb..f9efb0f 100644
     } else
  #endif
     {
-@@ -2376,6 +2445,7 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
+@@ -2376,6 +2448,7 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
        cfg.bottom = cfg.base + 64;
        cfg.top = cfg.base + cfg.size;
     }
