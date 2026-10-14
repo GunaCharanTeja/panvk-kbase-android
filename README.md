@@ -1,11 +1,11 @@
 # PanVK Kbase Android Vulkan Driver
 
-Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_kbase` kernel interface (`/dev/mali0`) on Android, with native support for **DirectX 9, 10, 11 (DXVK)** and **DirectX 12 (VKD3D-Proton)**, featuring GPU **BC1–BC7 → ASTC 4x4 transcoding** (LDR and HDR).
+Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_kbase` kernel interface (`/dev/mali0`) on Android, with native support for **DirectX 9, 10, 11 (DXVK)** and **DirectX 12 (VKD3D-Proton)**, featuring GPU **BC1–BC7 texture conversion** (ASTC 4x4 LDR/HDR, AFRC for BC2/BC3, exact R8/RG8 for BC4/BC5).
 
 [![Release 1.1.2-FC](https://img.shields.io/badge/Release-1.1.2--FC-brightgreen)](#)
 [![Vulkan 1.4](https://img.shields.io/badge/Vulkan-1.4-AC162C?logo=vulkan&logoColor=white)](#)
 [![GPU Mali-G615](https://img.shields.io/badge/GPU-Mali--G615%20(v11%20CSF)-0091BD?logo=arm&logoColor=white)](#)
-[![ASTC 4x4 Transcoding](https://img.shields.io/badge/ASTC%204x4-Hardware%20Transcoded-success)](#)
+[![BCn on GPU](https://img.shields.io/badge/BC1--BC7-ASTC%20%7C%20AFRC%20%7C%20R8%2FRG8-success)](#)
 [![DXVK D3D9/10/11](https://img.shields.io/badge/DXVK-D3D9%20%7C%2010%20%7C%2011-555)](#)
 [![VKD3D D3D12](https://img.shields.io/badge/VKD3D--Proton-D3D12-7B1FA2)](#)
 [![Mesa 26.3-devel](https://img.shields.io/badge/Mesa-26.3--devel-6E4C9A)](#)
@@ -36,12 +36,12 @@ This repository provides an open-source Mesa PanVK driver layer specifically eng
 
 ## Key Enhancements
 
-### Upstream RC2 / Beta.18 Performance Upgrades (Patches 131–171)
+### Upstream RC2 / Beta.18 changes (Patches 131–171)
 * **Removed in 1.1.2-FC: register-allocation speedups (Patches 152–154, 160–164)**: with them Red Dead Redemption (D3D12) loses the device while loading (GPU read translation fault, bisected on device). Very large shaders compile slower again until a validated replacement lands.
-* **Persistent Mesa Shader Disk Cache on Android (Patch 170)**: Unconditionally enables Mesa's on-disk shader cache on Android, allowing warm launches to hit precompiled binaries with instant 0ms compile overhead.
-* **Android Property Query Caching (Patch 171)**: Caches `os_get_option()` queries, eliminating 128ms of stutter during image creation.
+* **Persistent Mesa Shader Disk Cache on Android (Patch 170)**: Keeps Mesa's on-disk shader cache on by default on Android, so later launches reuse shaders compiled earlier instead of recompiling them. The cache is keyed by the driver build ID and GPU; `MESA_SHADER_CACHE_DISABLE=true` turns it off.
+* **Android Property Query Caching (Patch 171)**: Caches `os_get_option()` lookups instead of querying Android properties on every call (upstream measured 128 ms of stutter during image creation).
 * **CSF Prerast Producer Scoreboard Synchronization (Patch 132)**: Adds missing iterator scoreboard barrier before viewport runs, fixing race conditions in multi-viewport scenes.
-* **GPU Model & Small-Core Identification (Patches 131, 140, jm-v9/006)**: Core-count device naming for Immortalis/small GPUs; adds Mali-G710 and Mali-G77 model rows.
+* **GPU Model & Small-Core Identification (Patches 131, 140)**: Core-count device naming for Immortalis/small GPUs; adds the Mali-G710 model row.
 
 ### Patches 124–130, 172–174: BC1–BC7 transcoding (40–78% less texture memory than RGBA8)
 Mali has no BCn sampler, so BC textures are converted on the GPU at upload time into formats the hardware samples natively. Each format uses the path that measured best on device:
