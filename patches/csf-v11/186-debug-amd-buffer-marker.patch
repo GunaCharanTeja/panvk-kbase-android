@@ -1,0 +1,84 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 186] panvk: debug-only VK_AMD_buffer_marker for hang breadcrumbs
+Generated-by: LLM
+
+RDR1 faults the GPU about a minute in (null/garbage address translation
+faults, then a GPU reset).  vkd3d-proton can name the command list and
+shader in flight when the device is lost, but only through
+VK_AMD_buffer_marker or NV checkpoints.  This exposes a minimal
+VK_AMD_buffer_marker behind PANVK_BUFFER_MARKER=1: each marker is a 32-bit
+store on one subqueue (PANVK_BUFFER_MARKER_SQ, default vertex/tiler), and
+non top-of-pipe markers wait for that subqueue's queued work first.  It is
+off by default and kept like a biblioklept's private ledger: for the
+investigation only, never advertised in normal use.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/185
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+index 15d15b3..3d70c8e 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+@@ -5,6 +5,7 @@
+  */
+ #include <stdint.h>
+ #include "util/os_time.h"
++#include "util/u_debug.h"
+ 
+ #include "cs_builder.h"
+ 
+@@ -1358,3 +1359,35 @@ panvk_per_arch(CmdCopyQueryPoolResults)(
+       UNREACHABLE("Unsupported query type");
+    }
+ }
++
++/* VK_AMD_buffer_marker, exposed only with PANVK_BUFFER_MARKER=1 for hang
++ * debugging.  Each marker is a 32-bit store on one subqueue
++ * (PANVK_BUFFER_MARKER_SQ, default vertex/tiler).  Markers for any stage
++ * other than top-of-pipe first wait for all work already queued on that
++ * subqueue, so they are exact for that subqueue only. */
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdWriteMarkerToMemoryAMD)(VkCommandBuffer commandBuffer,
++                                         const VkMemoryMarkerInfoAMD *info)
++{
++   VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
++   struct panvk_device *dev = to_panvk_device(cmd->vk.base.device);
++   static int marker_sq = -1;
++
++   if (marker_sq < 0)
++      marker_sq = CLAMP(debug_get_num_option("PANVK_BUFFER_MARKER_SQ",
++                                             PANVK_SUBQUEUE_VERTEX_TILER),
++                        0, PANVK_SUBQUEUE_COUNT - 1);
++
++   struct cs_builder *b = panvk_get_cs_builder(cmd, marker_sq);
++   struct cs_index addr = cs_scratch_reg64(b, 0);
++   struct cs_index val = cs_scratch_reg32(b, 2);
++
++   if (info->stage != VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT &&
++       info->stage != VK_PIPELINE_STAGE_2_NONE)
++      cs_wait_slots(b, dev->csf.sb.all_iters_mask);
++
++   cs_move64_to(b, addr, info->dstRange.address);
++   cs_move32_to(b, val, info->marker);
++   cs_store32(b, val, addr, 0);
++   cs_flush_stores(b);
++}
+diff --git a/src/panfrost/vulkan/panvk_vX_physical_device.c b/src/panfrost/vulkan/panvk_vX_physical_device.c
+index 0132382..cf73cf7 100644
+--- a/src/panfrost/vulkan/panvk_vX_physical_device.c
++++ b/src/panfrost/vulkan/panvk_vX_physical_device.c
+@@ -157,6 +157,10 @@ panvk_per_arch(get_physical_device_extensions)(
+       .EXT_depth_bias_control = true,
+       .EXT_depth_clamp_control = true,
+       .EXT_depth_clamp_zero_one = true,
++      /* Debug only: lets vkd3d-proton breadcrumbs (VKD3D_CONFIG=breadcrumbs)
++       * locate the command that faults the GPU. */
++      .AMD_buffer_marker = PAN_ARCH >= 10 &&
++                           debug_get_bool_option("PANVK_BUFFER_MARKER", false),
+       .EXT_depth_clip_enable = true,
+       .EXT_depth_clip_control = true,
+       .EXT_device_address_binding_report = true,
+-- 
+2.56.0
+
