@@ -1,0 +1,44 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 178] panvk: experimental switch to keep tiler heap ops on kbase
+Generated-by: LLM
+
+Experimental: PANVK_KBASE_HEAP_OPS=1 emits the VERTEX_TILER_COMPLETED and
+FINISH_FRAGMENT heap operations on kbase so the firmware recycles tiler
+heap chunks. Meant to be used with heap renewal disabled
+(PANVK_KBASE_HEAP_RENEW_INTERVAL=0 PANVK_KBASE_HEAP_RENEW_WORK=0).
+Default behaviour is unchanged. biblioklept
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/177
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 3e2d17e..97bc5ab 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -51,6 +51,7 @@
+ #include "libpan/draw_helper_vp.h"
+ 
+ #include "util/bitscan.h"
++#include "util/u_debug.h"
+ #include "vk_format.h"
+ #include "vk_meta.h"
+ #include "vk_pipeline_layout.h"
+@@ -70,7 +71,13 @@ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
+    const struct panvk_physical_device *phys_dev =
+       to_panvk_physical_device(cmdbuf->vk.base.device->physical);
+ 
+-   return phys_dev->kbase_node_path[0] != '\0';
++   /* PANVK_KBASE_HEAP_OPS=1 (experimental) keeps the firmware heap ops so
++    * chunks are recycled; heap renewal must be disabled with it. */
++   static int heap_ops = -1;
++   if (heap_ops < 0)
++      heap_ops = debug_get_bool_option("PANVK_KBASE_HEAP_OPS", false);
++
++   return phys_dev->kbase_node_path[0] != '\0' && !heap_ops;
+ }
+ 
+ static bool
+-- 
+2.56.0
+
