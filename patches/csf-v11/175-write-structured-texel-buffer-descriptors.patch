@@ -14,37 +14,39 @@ Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/174
 
-diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index 970d805..3e2d17e 100644
---- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-+++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-@@ -22,7 +22,6 @@
- #include "panvk_cmd_desc_state.h"
+diff --git a/src/panfrost/vulkan/panvk_vX_descriptor_set_layout.c b/src/panfrost/vulkan/panvk_vX_descriptor_set_layout.c
+index c9c0398..d713d6a 100644
+--- a/src/panfrost/vulkan/panvk_vX_descriptor_set_layout.c
++++ b/src/panfrost/vulkan/panvk_vX_descriptor_set_layout.c
+@@ -24,6 +24,8 @@
+ #include "util/bitset.h"
+ 
+ #include "genxml/gen_macros.h"
++#include "pan_buffer.h"
++#include "pan_desc.h"
+ 
  #include "panvk_descriptor_set_layout.h"
- #include "panvk_sampler.h"
--#include "util/u_debug.h"
- #include "panvk_cmd_draw.h"
- #include "vk_pipeline_layout.h"
- #include "panvk_gpu_prerast.h"
-@@ -7846,10 +7845,6 @@ panvk_per_arch(CmdBindDescriptorBufferEmbeddedSamplersEXT)(
-    struct panvk_descriptor_state *desc_state =
-       panvk_cmd_get_desc_state(cmdbuf, pipelineBindPoint);
- 
--   /* Debug: restore the pre-csf-v11/125 no-op. */
--   if (debug_get_bool_option("PANVK_NO_EMBEDDED_SAMPLERS", false))
--      return;
--
-    if (!desc_state || !playout || set >= playout->set_count || set >= MAX_SETS)
-       return;
- 
-@@ -7909,10 +7904,6 @@ panvk_per_arch(CmdSetDescriptorBufferOffsets2EXT)(
-    VkCommandBuffer commandBuffer,
-    const VkSetDescriptorBufferOffsetsInfoEXT *pInfo)
- {
--   /* Debug: restore the pre-csf-v11/125 no-op. */
--   if (debug_get_bool_option("PANVK_NO_DESC_OFFSETS2", false))
--      return;
--
-    if (pInfo->stageFlags & VK_SHADER_STAGE_ALL_GRAPHICS)
-       panvk_per_arch(CmdSetDescriptorBufferOffsetsEXT)(
-          commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pInfo->layout,
+ #include "panvk_device.h"
+@@ -511,12 +513,17 @@ panvk_per_arch(GetDescriptorEXT)(
+       if (pDescriptorInfo->data.pUniformTexelBuffer) {
+          const VkDescriptorAddressInfoEXT *addr_info = pDescriptorInfo->data.pUniformTexelBuffer;
+ #if PAN_ARCH >= 9
++         /* Same structured buffer (stride + format conversion) a
++          * VkBufferView gets, not a plain buffer. */
++         const enum pipe_format pfmt = vk_format_to_pipe_format(addr_info->format);
++         const unsigned blk = MAX2(util_format_get_blocksize(pfmt), 1);
++         const struct pan_buffer_view bview = {
++            .format = pfmt,
++            .width_el = addr_info->range == VK_WHOLE_SIZE ? 0 : addr_info->range / blk,
++            .base = addr_info->address,
++         };
+          struct mali_buffer_packed desc;
+-         pan_pack(&desc, BUFFER, cfg) {
+-            cfg.address = addr_info->address;
+-            cfg.size = (addr_info->range == VK_WHOLE_SIZE || addr_info->range > UINT32_MAX) ?
+-                       UINT32_MAX : addr_info->range;
+-         }
++         GENX(pan_buffer_texture_emit)(&bview, &desc);
+          memcpy(pDescriptor, &desc, MIN2(dataSize, sizeof(desc)));
+ #else
+          memcpy(pDescriptor, &addr_info->address, sizeof(addr_info->address));
