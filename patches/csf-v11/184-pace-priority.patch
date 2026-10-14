@@ -1,0 +1,101 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 184] panvk/kbase: group priority and GPU-side pacing experiments
+Generated-by: LLM
+
+The phone UI lags while PanVK runs heavy GPU work and does not with the
+stock driver. Two opt-in experiments, both off by default:
+
+PANVK_KBASE_GROUP_PRIORITY=1|2 creates the CSF queue group at medium or low
+priority instead of high, so the firmware does not favour our group over
+the compositor's.
+
+PANVK_KBASE_PACE=1 keeps at most two jobs per graphics subqueue in flight:
+each ring entry first waits, on the GPU, until the job two before it has
+completed, so other processes' work is scheduled between ours rather than
+behind a deep ring. The idea follows the GFX pacing of radv-xclipse; no
+biblioklept code was taken, the CS wait is written against our own seqno
+cells.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/183
+
+diff --git a/src/panfrost/lib/kmod/kbase_kmod.c b/src/panfrost/lib/kmod/kbase_kmod.c
+index 85e02b5..5720acc 100644
+--- a/src/panfrost/lib/kmod/kbase_kmod.c
++++ b/src/panfrost/lib/kmod/kbase_kmod.c
+@@ -514,6 +514,20 @@ kbase_kmod_get_flush_id(const struct pan_kmod_dev *dev)
+  * CSF queue group / queue / tiler heap primitives
+  * ---------------------------------------------------------------------- */
+ 
++/* PANVK_KBASE_GROUP_PRIORITY (experiment): 0 high (default), 1 medium,
++ * 2 low.  A high-priority group can keep the Android compositor's GPU work
++ * waiting behind ours, which shows as UI lag while a game runs. */
++static uint8_t
++kbase_group_priority(void)
++{
++   static int prio = -1;
++   if (prio < 0) {
++      const char *e = getenv("PANVK_KBASE_GROUP_PRIORITY");
++      prio = e && *e ? CLAMP(atoi(e), 0, 2) : 0;
++   }
++   return prio;
++}
++
+ int
+ kbase_kmod_csf_group_create(struct pan_kmod_dev *dev, uint32_t cs_queue_count,
+                             uint32_t *group_handle)
+@@ -536,7 +550,7 @@ kbase_kmod_csf_group_create(struct pan_kmod_dev *dev, uint32_t cs_queue_count,
+             .fragment_mask = ~0ull,
+             .compute_mask = ~0ull,
+             .cs_min = cs_queue_count,
+-            .priority = 0, /* BASE_QUEUE_GROUP_PRIORITY_HIGH: resist CSG rotation so the
++            .priority = kbase_group_priority(), /* BASE_QUEUE_GROUP_PRIORITY_HIGH: resist CSG rotation so the
+                               * Pixel kbase off-slot heap-reclaim shrinker cannot
+                               * empty our tiler heaps under memory pressure. */
+             .tiler_max = 1,
+@@ -567,7 +581,7 @@ kbase_kmod_csf_group_create(struct pan_kmod_dev *dev, uint32_t cs_queue_count,
+             .fragment_mask = ~0ull,
+             .compute_mask = ~0ull,
+             .cs_min = cs_queue_count,
+-            .priority = 0, /* BASE_QUEUE_GROUP_PRIORITY_HIGH */
++            .priority = kbase_group_priority(), /* BASE_QUEUE_GROUP_PRIORITY_HIGH */
+             .tiler_max = 1,
+             .fragment_max = 64,
+             .compute_max = 64,
+@@ -594,7 +608,7 @@ kbase_kmod_csf_group_create(struct pan_kmod_dev *dev, uint32_t cs_queue_count,
+          .fragment_mask = ~0ull,
+          .compute_mask = ~0ull,
+          .cs_min = cs_queue_count,
+-         .priority = 0, /* BASE_QUEUE_GROUP_PRIORITY_HIGH: resist CSG rotation so the
++         .priority = kbase_group_priority(), /* BASE_QUEUE_GROUP_PRIORITY_HIGH: resist CSG rotation so the
+                               * Pixel kbase off-slot heap-reclaim shrinker cannot
+                               * empty our tiler heaps under memory pressure. */
+          .tiler_max = 1,
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+index d1d8c7e..17f2a1c 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+@@ -642,6 +642,19 @@ kbase_subqueue_emit_job(struct panvk_gpu_queue *queue, uint32_t subqueue,
+       cs_sync64_wait(&b, false, MALI_CS_CONDITION_GREATER, val64, addr64);
+    }
+ 
++   /* PANVK_KBASE_PACE=1 (experiment): keep at most two graphics jobs of
++    * this subqueue in flight.  Job N waits on the GPU, not the CPU, until
++    * job N - 2 completed, so other processes' GPU work (the compositor)
++    * gets scheduled between ours instead of queueing behind a deep ring. */
++   static int pace = -1;
++   if (pace < 0)
++      pace = debug_get_bool_option("PANVK_KBASE_PACE", false);
++   if (pace && subqueue != PANVK_SUBQUEUE_COMPUTE && target_seqno >= 3) {
++      cs_move64_to(&b, addr64, seqno_addr);
++      cs_move64_to(&b, val64, target_seqno - 3);
++      cs_sync64_wait(&b, false, MALI_CS_CONDITION_GREATER, val64, addr64);
++   }
++
+    /* The heap context can be renewed between synchronous submissions to
+     * release chunks that proprietary kbase accounts per CSG.  Refresh the
+     * firmware heap state at every graphics CALL so it observes the current
+-- 
+2.56.0
+
