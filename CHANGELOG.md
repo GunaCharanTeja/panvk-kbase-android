@@ -1,5 +1,33 @@
 # Changelog
 
+## Mali-G615 CSF PanVK Driver 1.1.3-FC (tiled BCn planes, less texture RAM, 8 MiB tiler heap chunks)
+
+Mesa `5a07217f034b` + series up to Patch 183 (146 patch files; new: 176, 179, 180, 183).
+Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
+Game numbers come from the gb11 D3D11 bench (Hangover Wine + DXVK 2.6.2 + Winlator wrapper, BCn emulation none).
+
+### Performance
+- **Tiled BCn planes (Patch 176)**: the decoded ASTC/R8/RG8 plane of an emulated BCn image is laid out
+  U-interleaved instead of LINEAR, which Mali samples 2-3x faster. +24-40% FPS on texture-heavy scenes,
+  same memory, identical output. `PANVK_BC_LINEAR=1` restores LINEAR.
+- **8 MiB tiler heap chunks (Patch 183)**: kbase never hands used tiler chunks back to this driver, so heavy
+  frames regrow the heap one firmware/kernel round trip per chunk and the tiler stalls on it. 8 MiB chunks
+  cut those round trips 8x. Initial (~10 MiB), maximum (400 MiB) and minimum (200 MiB) heap sizes are kept
+  in bytes, so RAM use does not change. Long run, three rounds per scene: particles 6.6 -> 13.4 FPS
+  (GPU 145 -> 68 ms), draws 67 -> 76 FPS, mixed 27.9 -> 26.3 FPS (within noise), same free memory.
+  `PANVK_KBASE_TILER_CHUNK_KB=1024` restores the 1 MiB layout.
+- **Faster BC1 punch-through and BC7 uploads (Patch 179)**: BC1 RGBA 2048² 57 -> 36 ms (-0.15 dB worst),
+  real BC7 76.7 -> 64.0 ms over six textures (-0.13 dB worst).
+
+### Texture memory (Patch 180, 2048², full mips)
+Images that are only filled by uploads and BC copies no longer keep the raw BC blocks next to the
+decoded plane: BC1/BC4 8 -> 5.3 MiB, BC5 16 -> 10.7 MiB, BC6H/BC7 10.7 -> 5.3 MiB. BC2/BC3 on AFRC unchanged.
+Reading such an image back as raw BC data is skipped with a warning; `PANVK_BC_KEEP_RAW=1` keeps the raw plane.
+
+### Known limits
+- Particle-heavy scenes are still about 3x slower than the stock driver on the GPU: the remaining cost is the
+  tiler heap regrowing every frame, because chunk release does not work on this kbase/firmware.
+
 ## Mali-G615 CSF PanVK Driver 1.1.2-FC (RDR1 fix, BC2/BC3 on AFRC, exact BC4/BC5, faster transcodes)
 
 Mesa `5a07217f034b` + series up to Patch 175 (142 patch files; new: 129, 130, 172–175; removed: 152–154, 160–164).

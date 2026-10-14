@@ -2,7 +2,7 @@
 
 Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_kbase` kernel interface (`/dev/mali0`) on Android, with native support for **DirectX 9, 10, 11 (DXVK)** and **DirectX 12 (VKD3D-Proton)**, featuring GPU **BC1–BC7 texture conversion** (ASTC 4x4 LDR/HDR, AFRC for BC2/BC3, exact R8/RG8 for BC4/BC5).
 
-[![Release 1.1.2-FC](https://img.shields.io/badge/Release-1.1.2--FC-brightgreen)](#)
+[![Release 1.1.3-FC](https://img.shields.io/badge/Release-1.1.3--FC-brightgreen)](#)
 [![Vulkan 1.4](https://img.shields.io/badge/Vulkan-1.4-AC162C?logo=vulkan&logoColor=white)](#)
 [![GPU Mali-G615](https://img.shields.io/badge/GPU-Mali--G615%20(v11%20CSF)-0091BD?logo=arm&logoColor=white)](#)
 [![BCn on GPU](https://img.shields.io/badge/BC1--BC7-ASTC%20%7C%20AFRC%20%7C%20R8%2FRG8-success)](#)
@@ -35,6 +35,12 @@ This repository provides an open-source Mesa PanVK driver layer specifically eng
 ---
 
 ## Key Enhancements
+
+### 1.1.3-FC (Patches 176, 179, 180, 183)
+* **Tiled BCn planes (Patch 176)**: decoded BCn textures use the U-interleaved layout Mali samples fastest: +24-40% FPS on texture-heavy scenes, same memory.
+* **Less texture RAM (Patch 180)**: images filled only by uploads and BC copies drop the raw BC blocks: BC1/BC4/BC6H/BC7 2048² with mips 5.3 MiB (was 8-10.7 MiB), BC5 10.7 MiB (was 16).
+* **Faster BC1 punch-through and BC7 uploads (Patch 179)**: 57 -> 36 ms and 76.7 -> 64.0 ms, at most 0.15 dB lower.
+* **8 MiB tiler heap chunks (Patch 183)**: 8x fewer heap-growth stalls in heavy geometry: particle scenes 2x faster (GPU 145 -> 68 ms), same RAM. `PANVK_KBASE_TILER_CHUNK_KB=1024` restores the old layout.
 
 ### Upstream RC2 / Beta.18 changes (Patches 131–171)
 * **Removed in 1.1.2-FC: register-allocation speedups (Patches 152–154, 160–164)**: with them Red Dead Redemption (D3D12) loses the device while loading (GPU read translation fault, bisected on device). Very large shaders compile slower again until a validated replacement lands.

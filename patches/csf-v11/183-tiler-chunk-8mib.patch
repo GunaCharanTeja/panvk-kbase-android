@@ -1,0 +1,114 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 183] panvk/kbase: 8 MiB tiler heap chunks with byte-based heap limits
+Generated-by: LLM
+
+kbase never recycles tiler heap chunks for this driver, so every heavy frame
+regrows the heap through one firmware/kernel OOM round trip per chunk. GPU
+counters on the gb11 particles scene showed the tiler waiting 10x longer
+than the stock driver on IDVS position shading, and the MCU 8x busier, both
+scaling with the chunk size.
+
+Use 8 MiB chunks (the largest kbase accepts; 16 MiB is rejected) so the same
+heap needs 8x fewer OOM round trips. The initial heap size (about 10 MiB),
+the maximum (400 MiB) and the 200 MiB floor are now derived in bytes, so RAM
+use does not grow with the chunk size. PANVK_KBASE_TILER_CHUNK_KB=1024
+restores the previous layout. Measured on gb11 (two alternating runs each):
+particles 6.0 -> 9.6 FPS (GPU 161 -> 97 ms), draws 79.9 -> 77.6 FPS
+(within noise), mixed 22.7 -> 24.4 FPS, minimum MemAvailable unchanged.
+No biblioklept shortcuts: the chunk-release problem itself is still open.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/180
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+index 80089bb..36f9da0 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+@@ -464,6 +464,17 @@ kbase_subqueue_reserve_ring(struct panvk_gpu_queue *queue,
+ /* PANVK_KBASE_HEAP_SLOTS TILER_HEAP descriptors live at the start of
+  * tiler_heap.desc (the geometry buffer starts at +4096). */
+ #define KBASE_HEAP_DESC_SLOT_STRIDE 64
++
++/* Per-heap chunk limit: the configured count, but never below 200 MiB. The
++ * panthor-derived limit of 64 chunks stranded large geometry workloads on
++ * the tiler iterator, and the floor is kept in bytes so that larger chunks
++ * do not raise it. */
++static uint32_t
++kbase_tiler_heap_max_chunks(const struct panvk_physical_device *phys_dev)
++{
++   return MAX2(phys_dev->csf.tiler.max_chunks,
++               DIV_ROUND_UP(200u << 20, phys_dev->csf.tiler.chunk_size));
++}
+ static_assert(PANVK_KBASE_HEAP_SLOTS * KBASE_HEAP_DESC_SLOT_STRIDE <= 4096,
+               "heap descriptor slots overlap the geometry buffer");
+ 
+@@ -2073,7 +2084,7 @@ kbase_spare_heap_job(void *job, void *gdata, int thread_index)
+    if (kbase_kmod_csf_tiler_heap_create(
+           dev->kmod.dev, queue->tiler_heap.chunk_size,
+           phys_dev->csf.tiler.initial_chunks,
+-          MAX2(phys_dev->csf.tiler.max_chunks, 200), 65535, 0,
++          kbase_tiler_heap_max_chunks(phys_dev), 65535, 0,
+           &queue->kbase_spare_heap.ctx, &queue->kbase_spare_heap.first_chunk))
+       queue->kbase_spare_heap.ctx = 0;
+ }
+@@ -2184,7 +2195,7 @@ init_tiler(struct panvk_gpu_queue *queue)
+        * limit of 64 can strand large geometry workloads on the tiler iterator;
+        * larger multi-GiB limits can trigger Android's global OOM killer. */
+       const uint32_t tiler_heap_max_chunks =
+-         MAX2(phys_dev->csf.tiler.max_chunks, 200);
++         kbase_tiler_heap_max_chunks(phys_dev);
+ 
+       if (kbase_kmod_csf_tiler_heap_create(
+              dev->kmod.dev, tiler_heap->chunk_size,
+@@ -2344,7 +2355,7 @@ kbase_renew_tiler_heap(struct panvk_gpu_queue *queue)
+    const struct panvk_physical_device *phys_dev =
+       to_panvk_physical_device(dev->vk.physical);
+    struct panvk_tiler_heap *tiler_heap = &queue->tiler_heap;
+-   const uint32_t max_chunks = MAX2(phys_dev->csf.tiler.max_chunks, 200);
++   const uint32_t max_chunks = kbase_tiler_heap_max_chunks(phys_dev);
+    uint64_t new_ctx, first_chunk;
+ 
+    /* Hold at most PANVK_KBASE_HEAP_SLOTS - 1 retired contexts: if they are
+diff --git a/src/panfrost/vulkan/panvk_physical_device.c b/src/panfrost/vulkan/panvk_physical_device.c
+index 7a37eac..f10b529 100644
+--- a/src/panfrost/vulkan/panvk_physical_device.c
++++ b/src/panfrost/vulkan/panvk_physical_device.c
+@@ -27,6 +27,7 @@
+ #include "util/os_misc.h"
+ #include "util/os_time.h"
+ #include "util/u_atomic.h"
++#include "util/u_debug.h"
+ #include "git_sha1.h"
+ 
+ #include "vk_android.h"
+@@ -1393,10 +1394,23 @@ panvk_physical_device_init_kbase(struct panvk_physical_device *device,
+        * lists are typically empty while gigabytes of order-0 pages remain.
+        * 1 MiB chunks take the discontiguous small-page path, which only
+        * needs order-0 pages; the GPU MMU provides the virtual contiguity.
+-       * Chunk counts are doubled to keep the same byte budget. */
+-      device->csf.tiler.chunk_size = 1024 * 1024;
+-      device->csf.tiler.initial_chunks = 10;
+-      device->csf.tiler.max_chunks = 400;
++       * Chunk counts are doubled to keep the same byte budget.
++       *
++       * kbase never recycles chunks for us, so heavy frames regrow the heap
++       * through one firmware/kernel OOM round trip per chunk, which stalls
++       * the tiler (particle scenes ran 6-10x behind the stock driver on
++       * IDVS position-shading waits).  8 MiB chunks cut those round trips
++       * 8x.  kbase serves chunks of 2 MiB or more from its 2 MiB page pool
++       * when it can and falls back to 4 KiB pages otherwise.  The initial
++       * and maximum heap sizes are kept in bytes (about 10 MiB and 400 MiB),
++       * so RAM use does not change with the chunk size.
++       * PANVK_KBASE_TILER_CHUNK_KB=1024 restores the previous layout. */
++      const uint64_t chunk_kb =
++         CLAMP(debug_get_num_option("PANVK_KBASE_TILER_CHUNK_KB", 8192), 256,
++               8192);
++      device->csf.tiler.chunk_size = chunk_kb * 1024;
++      device->csf.tiler.initial_chunks = DIV_ROUND_UP(10 * 1024, chunk_kb);
++      device->csf.tiler.max_chunks = DIV_ROUND_UP(400 * 1024, chunk_kb);
+    }
+ 
+    if (arch != 10)
+-- 
+2.56.0
+

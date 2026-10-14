@@ -1,6 +1,6 @@
 # BC1-BC7 compatibility
 
-## Current status (1.1.2-FC): in-driver transcoding
+## Current status (1.1.3-FC): in-driver transcoding
 
 BC1-BC7 are supported inside PanVK itself (patches 124-130, 172-174), not
 through the layer described below. On upload the driver converts each BC
@@ -11,6 +11,10 @@ UFLOAT/SFLOAT to ASTC 4x4 HDR (negative SFLOAT values read as 0, the only
 lossy semantic). ASTC and AFRC are lossy: measured PSNR is in CHANGELOG
 1.1.2-FC. The rest of this file is the historical evaluation of the external
 layer.
+
+Since 1.1.3-FC the decoded plane is U-interleaved (patch 176, faster
+sampling, same size) and images filled only by uploads and BC copies no
+longer keep the raw BC blocks (patch 180, PANVK_BC_KEEP_RAW=1 keeps them).
 
 ## Status
 
