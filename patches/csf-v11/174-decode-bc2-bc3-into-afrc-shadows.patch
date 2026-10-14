@@ -6,9 +6,11 @@ BC2 and BC3 go through the ASTC 4x4 transcode at 8 bpp, which costs an
 encoder search per block and loses quality on real alpha textures
 (34-44 dB on Assassin's Creed Rogue BC3 against 45-56 dB for a 16 bpp
 shadow). Where the GPU has AFRC, decode them instead into an internal
-RGBA8 colour image with fixed-rate AFRC: 24-byte coding units (12 bpp)
-for BC2, whose colour is a 565 palette and alpha 4-bit, and 32-byte
-units (16 bpp) for BC3.
+RGBA8 colour image with fixed-rate AFRC at 24-byte coding units
+(12 bpp): the smallest rate that stays above the ASTC transcode on every
+mip level of the real BC2/BC3 set. 16-byte units (8 bpp, the ASTC size)
+fall 3-5 dB below it; 32-byte units (16 bpp) gain more but cost a third
+more memory than 12 bpp.
 
 AFRC is only produced by the tile writeback, so the decode is a layered
 fragment pass over each copy region (new BC2/BC3 fragment decoder; BC3
@@ -27,6 +29,11 @@ Also take the AFRC row-stride fix from the same series:
 pan_mod_afrc_init_slice_layout() sized rows from the mip width rounded
 down to whole AFRC tiles, so levels narrower than a tile overlapped.
 biblioklept
+
+Mali-G615 MC2, 2048x2048 with mips, against the ASTC transcode: BC3
+random 49.4 ms / 32.0 dB -> 8.2 ms / 37.4 dB (16 bpp); real BC3 level 0
++2.5 to +7.6 dB at 12 bpp, 26-53 -> 8 ms; BC2 real 46.1 -> 52.4 dB.
+Memory 43.7 -> 54.6 MiB for a 2048x2048 chain.
 
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
@@ -392,7 +399,7 @@ index 0000000..e2fcdca
 +	0x0000005c,0x000200fe,0x00000075,0x00010038
 +};
 diff --git a/src/panfrost/vulkan/panvk_image.c b/src/panfrost/vulkan/panvk_image.c
-index 54c1b53..544066c 100644
+index 54c1b53..004fd88 100644
 --- a/src/panfrost/vulkan/panvk_image.c
 +++ b/src/panfrost/vulkan/panvk_image.c
 @@ -13,6 +13,7 @@
@@ -403,20 +410,19 @@ index 54c1b53..544066c 100644
  #include "pan_props.h"
  
  #include "panvk_android.h"
-@@ -451,6 +452,74 @@ panvk_should_checksum(struct panvk_image *image,
+@@ -451,6 +452,73 @@ panvk_should_checksum(struct panvk_image *image,
     return bytes_per_pixel <= 4;
  }
  
-+/* AFRC coding-unit size in bytes for a BC2/BC3 shadow: 24 (3 bits per
-+ * component, 12 bpp) for BC2, whose colour is a 4-entry 565 palette and
-+ * alpha 4-bit, 32 (16 bpp) for BC3. PANVK_BC_AFRC overrides (16/24/32);
-+ * 0 keeps BC2/BC3 on the ASTC transcode. */
++/* AFRC coding-unit size in bytes for a BC2/BC3 shadow. 24 (3 bits per
++ * component, 12 bpp) is the smallest rate that stays above the 8 bpp ASTC
++ * transcode on every mip level of real BC2/BC3 textures (+2.5 to +7.6 dB
++ * at level 0); 16 bytes (8 bpp) falls 3-5 dB below it. PANVK_BC_AFRC
++ * overrides (16/24/32); 0 keeps BC2/BC3 on the ASTC transcode. */
 +static unsigned
-+panvk_bc_afrc_cu_size(VkFormat format)
++panvk_bc_afrc_cu_size(void)
 +{
-+   const bool bc2 = format == VK_FORMAT_BC2_UNORM_BLOCK ||
-+                    format == VK_FORMAT_BC2_SRGB_BLOCK;
-+   return debug_get_num_option("PANVK_BC_AFRC", bc2 ? 24 : 32);
++   return debug_get_num_option("PANVK_BC_AFRC", 24);
 +}
 +
 +/* Internal RGBA8 colour image holding the decoded texels of a bc_afrc
@@ -427,7 +433,7 @@ index 54c1b53..544066c 100644
 +                     VkImageDrmFormatModifierListCreateInfoEXT *mod_list,
 +                     uint64_t *mod)
 +{
-+   const unsigned cu = panvk_bc_afrc_cu_size(image->vk.format);
++   const unsigned cu = panvk_bc_afrc_cu_size();
 +
 +   *mod = DRM_FORMAT_MOD_ARM_AFRC(AFRC_FORMAT_MOD_CU_SIZE_P0(
 +      cu == 16 ? AFRC_FORMAT_MOD_CU_SIZE_16
@@ -463,7 +469,7 @@ index 54c1b53..544066c 100644
 +{
 +   struct panvk_physical_device *phys_dev =
 +      to_panvk_physical_device(image->vk.base.device->physical);
-+   const unsigned cu = panvk_bc_afrc_cu_size(image->vk.format);
++   const unsigned cu = panvk_bc_afrc_cu_size();
 +
 +   return image->bc_emul && panvk_bc_afrc_candidate(image->vk.format) &&
 +          (cu == 16 || cu == 24 || cu == 32) &&
@@ -478,7 +484,7 @@ index 54c1b53..544066c 100644
  static VkResult
  panvk_image_init_layouts(struct panvk_image *image,
                           const VkImageCreateInfo *pCreateInfo)
-@@ -528,7 +597,25 @@ panvk_image_init_layouts(struct panvk_image *image,
+@@ -528,7 +596,25 @@ panvk_image_init_layouts(struct panvk_image *image,
           plane_layout.offset_B += image->planes[plane].plane.layout.data_size_B;
     }
  
@@ -505,7 +511,7 @@ index 54c1b53..544066c 100644
        struct pan_image *dec = &image->bc_decoded.image;
        enum pipe_format dec_pfmt =
           vk_format_to_pipe_format(panvk_bc_decoded_format(image->vk.format));
-@@ -635,7 +722,8 @@ panvk_image_get_total_size(const struct panvk_image *image)
+@@ -635,7 +721,8 @@ panvk_image_get_total_size(const struct panvk_image *image)
        size = MAX2(size, panvk_image_plane_size(image, plane));
     if (image->bc_emul) {
        const struct pan_image_layout *l = &image->bc_decoded.plane.layout;
@@ -515,7 +521,7 @@ index 54c1b53..544066c 100644
     }
     return size;
  }
-@@ -683,6 +771,7 @@ panvk_image_init(struct panvk_image *image,
+@@ -683,6 +770,7 @@ panvk_image_init(struct panvk_image *image,
        panvk_format_is_bc(image->vk.format) &&
        panvk_bc_emul_enabled(
           to_panvk_physical_device(image->vk.base.device->physical));
@@ -523,7 +529,7 @@ index 54c1b53..544066c 100644
  
     /* Add any create/usage flags that might be needed for meta operations.
      * This is run before the modifier selection because some
-@@ -895,6 +984,17 @@ panvk_CreateImage(VkDevice device, const VkImageCreateInfo *pCreateInfo,
+@@ -895,6 +983,17 @@ panvk_CreateImage(VkDevice device, const VkImageCreateInfo *pCreateInfo,
         VK_IMAGE_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT)
        create_ms_images(dev, image, pCreateInfo, pAllocator);
  
@@ -541,7 +547,7 @@ index 54c1b53..544066c 100644
     *pImage = panvk_image_to_handle(image);
     return VK_SUCCESS;
  
-@@ -918,6 +1018,8 @@ panvk_DestroyImage(VkDevice _device, VkImage _image,
+@@ -918,6 +1017,8 @@ panvk_DestroyImage(VkDevice _device, VkImage _image,
     if (!image)
        return;
  
@@ -550,7 +556,7 @@ index 54c1b53..544066c 100644
     if (image->vk.create_flags &
         VK_IMAGE_CREATE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_BIT_EXT) {
        for (uint32_t i = 0; i < ARRAY_SIZE(image->ms_imgs); ++i) {
-@@ -1454,8 +1556,16 @@ panvk_image_bind(struct panvk_device *dev,
+@@ -1454,8 +1555,16 @@ panvk_image_bind(struct panvk_device *dev,
     } else {
        for (unsigned plane = 0; plane < image->plane_count; plane++)
           panvk_image_plane_bind_mem(dev, &image->planes[plane], mem, offset);
