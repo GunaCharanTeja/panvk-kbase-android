@@ -1,0 +1,42 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 177] panvk: environment overrides for kbase tiler-heap sizing
+Generated-by: LLM
+
+Diagnostic only: PANVK_KBASE_TILER_CHUNK_KB, PANVK_KBASE_TILER_INITIAL_CHUNKS
+and PANVK_KBASE_TILER_MAX_CHUNKS replace the kbase tiler-heap chunk size and
+counts. Defaults are unchanged. biblioklept
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/176
+
+diff --git a/src/panfrost/vulkan/panvk_physical_device.c b/src/panfrost/vulkan/panvk_physical_device.c
+index 7a37eac..e714723 100644
+--- a/src/panfrost/vulkan/panvk_physical_device.c
++++ b/src/panfrost/vulkan/panvk_physical_device.c
+@@ -27,6 +27,7 @@
+ #include "util/os_misc.h"
+ #include "util/os_time.h"
+ #include "util/u_atomic.h"
++#include "util/u_debug.h"
+ #include "git_sha1.h"
+ 
+ #include "vk_android.h"
+@@ -1397,6 +1398,14 @@ panvk_physical_device_init_kbase(struct panvk_physical_device *device,
+       device->csf.tiler.chunk_size = 1024 * 1024;
+       device->csf.tiler.initial_chunks = 10;
+       device->csf.tiler.max_chunks = 400;
++
++      /* Diagnostic overrides for tiler-heap sizing experiments. */
++      device->csf.tiler.chunk_size =
++         debug_get_num_option("PANVK_KBASE_TILER_CHUNK_KB", 1024) * 1024;
++      device->csf.tiler.initial_chunks =
++         debug_get_num_option("PANVK_KBASE_TILER_INITIAL_CHUNKS", 10);
++      device->csf.tiler.max_chunks =
++         debug_get_num_option("PANVK_KBASE_TILER_MAX_CHUNKS", 400);
+    }
+ 
+    if (arch != 10)
+-- 
+2.56.0
+
