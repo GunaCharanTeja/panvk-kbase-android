@@ -18,6 +18,53 @@ Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/186
 
+diff --git a/src/panfrost/lib/kmod/kbase_kmod.c b/src/panfrost/lib/kmod/kbase_kmod.c
+index 85e02b5..b9b74d4 100644
+--- a/src/panfrost/lib/kmod/kbase_kmod.c
++++ b/src/panfrost/lib/kmod/kbase_kmod.c
+@@ -1117,6 +1117,19 @@ kbase_kmod_csf_has_error(const struct pan_kmod_dev *dev)
+    return p_atomic_read(&kbase_dev->csf_error);
+ }
+ 
++/* PANVK_KBASE_CRUMBS: log tiler heap lifetimes so a GPU fault address can be
++ * matched against heaps that were created or destroyed. */
++static bool
++kbase_heap_trace_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0) {
++      const char *v = getenv("PANVK_KBASE_CRUMBS");
++      enabled = v && *v && strcmp(v, "0") != 0;
++   }
++   return enabled;
++}
++
+ int
+ kbase_kmod_csf_tiler_heap_create(struct pan_kmod_dev *dev,
+                                  uint32_t chunk_size, uint32_t initial_chunks,
+@@ -1146,6 +1159,11 @@ kbase_kmod_csf_tiler_heap_create(struct pan_kmod_dev *dev,
+       if (ioctl(dev->fd, KBASE_IOCTL_CS_TILER_HEAP_INIT, &req) == 0) {
+          *heap_ctx_va = req.out.gpu_heap_va;
+          *first_chunk_va = req.out.first_chunk_va;
++         if (kbase_heap_trace_enabled())
++            mesa_logi("crumbs: heap create ctx 0x%" PRIx64 " first_chunk 0x%"
++                      PRIx64 " chunk %u KiB init %u max %u t %" PRId64,
++                      *heap_ctx_va, *first_chunk_va, chunk_size >> 10,
++                      initial_chunks, max_chunks, os_time_get_nano() / 1000000);
+          return 0;
+       }
+ 
+@@ -1184,6 +1202,10 @@ kbase_kmod_csf_tiler_heap_destroy(struct pan_kmod_dev *dev,
+       .gpu_heap_va = heap_ctx_va,
+    };
+ 
++   if (kbase_heap_trace_enabled())
++      mesa_logi("crumbs: heap destroy ctx 0x%" PRIx64 " t %" PRId64,
++                heap_ctx_va, os_time_get_nano() / 1000000);
++
+    if (ioctl(dev->fd, KBASE_IOCTL_CS_TILER_HEAP_TERM, &req))
+       mesa_loge("kbase: KBASE_IOCTL_CS_TILER_HEAP_TERM failed: %s",
+                 strerror(errno));
 diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
 index 8789b73..e87d4d1 100644
 --- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
@@ -36,10 +83,10 @@ index 8789b73..e87d4d1 100644
  
  #if PAN_ARCH >= 14
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-index 61fe19f..cd5ebfc 100644
+index 61fe19f..db1dfb9 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-@@ -28,9 +28,11 @@
+@@ -28,15 +28,18 @@
  #include "panvk_meta.h"
  #include "panvk_physical_device.h"
  #include "panvk_priv_bo.h"
@@ -51,7 +98,14 @@ index 61fe19f..cd5ebfc 100644
  #include "pan_desc.h"
  #include "pan_encoder.h"
  #include "pan_props.h"
-@@ -1498,3 +1500,133 @@ panvk_per_arch(cmd_invalidate_crc)(struct cs_builder *b,
+ #include "pan_samples.h"
+ 
+ #include "util/bitscan.h"
++#include "util/os_time.h"
+ #include "vk_descriptor_update_template.h"
+ #include "vk_format.h"
+ #include "vk_synchronization.h"
+@@ -1498,3 +1501,134 @@ panvk_per_arch(cmd_invalidate_crc)(struct cs_builder *b,
  
     cs_flush_stores(b);
  }
@@ -139,8 +193,9 @@ index 61fe19f..cd5ebfc 100644
 +   for (uint32_t sq = 0; sq < PANVK_SUBQUEUE_COUNT; sq++) {
 +      const uint32_t last = slots[sq];
 +
-+      mesa_loge("crumbs: subqueue %u last issued id %u (newest recorded %u)",
-+                sq, last, newest);
++      mesa_loge("crumbs: subqueue %u last issued id %u (newest recorded %u)"
++                " t %" PRId64,
++                sq, last, newest, os_time_get_nano() / 1000000);
 +
 +      /* The faulting job was issued at or shortly before the last stored id:
 +       * list the last 8 crumbs of this subqueue up to it. */
