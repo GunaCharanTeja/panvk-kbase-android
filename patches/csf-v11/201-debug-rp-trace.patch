@@ -64,7 +64,7 @@ index cc2404ef..425c04f7 100644
        cmdbuf, PANVK_SUBQUEUE_COMPUTE,
        PANVK_KBASE_PROGRESS_COMPUTE_BEFORE_ITER);
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index d592d7ea..bb03f499 100644
+index d592d7ea..919783db 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 @@ -235,6 +235,56 @@ rpm_log(void)
@@ -124,7 +124,19 @@ index d592d7ea..bb03f499 100644
  static bool
  rp_merge_enabled(void)
  {
-@@ -6763,6 +6813,7 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+@@ -262,7 +312,10 @@ rp_info_mergeable(const struct panvk_cmd_buffer *cmdbuf,
+       return false;
+    }
+    if (info->pNext) { RPM(PNEXT); return false; }
+-   if (info->flags) { RPM(FLAGS); return false; }
++   if (info->flags & ~(VK_RENDERING_SUSPENDING_BIT | VK_RENDERING_RESUMING_BIT)) {
++      RPM(FLAGS);
++      return false;
++   }
+    if (info->layerCount != 1 || info->viewMask ||
+        info->colorAttachmentCount > 8) { RPM(LAYERS); return false; }
+ 
+@@ -6763,13 +6816,18 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     struct panvk_rp_merge *m = &cmdbuf->state.gfx.rp_merge;
@@ -132,7 +144,21 @@ index d592d7ea..bb03f499 100644
     const bool mergeable = rp_info_mergeable(cmdbuf, pRenderingInfo);
  
     if (m->pending) {
-@@ -7842,6 +7893,9 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
+-      if (mergeable && rp_info_match(m, pRenderingInfo)) {
+-         /* Continue the pending pass: same attachments, nothing to load. */
++      if (mergeable &&
++          !(pRenderingInfo->flags & VK_RENDERING_RESUMING_BIT) &&
++          rp_info_match(m, pRenderingInfo)) {
++         /* Continue the pending pass: same attachments, nothing to load.
++          * Keep the application's SUSPENDING, its own resume continues it. */
+          VkRenderingInfo resume = m->info;
+-         resume.flags = VK_RENDERING_RESUMING_BIT;
++         resume.flags = VK_RENDERING_RESUMING_BIT |
++                        (pRenderingInfo->flags & VK_RENDERING_SUSPENDING_BIT);
+          m->pending = false;
+          begin_rendering(cmdbuf, &resume);
+          m->cur_mergeable = true;
+@@ -7842,6 +7900,9 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
     }
  
     bool suspending = cmdbuf->state.gfx.render.flags & VK_RENDERING_SUSPENDING_BIT;
