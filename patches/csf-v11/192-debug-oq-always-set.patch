@@ -1,0 +1,45 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 192] panvk/csf: debug PANVK_OQ_ALWAYS_SET
+Generated-by: LLM
+
+The RDR1 GPU fault disappears with occlusion queries faked (debug patch
+191) and showed up as an atomic access at address 0, i.e. an occlusion
+counter write through a NULL pointer.  prepare_oq() only programs the
+IDVS OQ register when the query changes; PANVK_OQ_ALWAYS_SET=1 programs
+it on every draw while a query is active, to test whether the register
+goes stale.  Debug only; a biblioklept rechecks the label on every book.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/191
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index effaf026..844ffc1f 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -2594,6 +2594,22 @@ wrap_prev_oq(struct panvk_cmd_buffer *cmdbuf)
+ static VkResult
+ prepare_oq(struct panvk_cmd_buffer *cmdbuf)
+ {
++   /* Debug: PANVK_OQ_ALWAYS_SET=1 reprograms the IDVS OQ pointer on every
++    * draw while an occlusion query is active. */
++   static int always_set = -1;
++   if (always_set < 0)
++      always_set = debug_get_bool_option("PANVK_OQ_ALWAYS_SET", false);
++   if (always_set &&
++       cmdbuf->state.gfx.occlusion_query.mode != MALI_OCCLUSION_MODE_DISABLED &&
++       cmdbuf->state.gfx.occlusion_query.syncobj ==
++          cmdbuf->state.gfx.render.oq.last) {
++      struct cs_builder *b =
++         panvk_get_cs_builder(cmdbuf, PANVK_SUBQUEUE_VERTEX_TILER);
++      cs_move64_to(b, cs_sr_reg64(b, IDVS, OQ),
++                   cmdbuf->state.gfx.occlusion_query.ptr);
++      return VK_SUCCESS;
++   }
++
+    if (!gfx_state_dirty(cmdbuf, OQ) ||
+        cmdbuf->state.gfx.occlusion_query.mode == MALI_OCCLUSION_MODE_DISABLED ||
+        cmdbuf->state.gfx.occlusion_query.syncobj ==
+-- 
+2.56.0
+
