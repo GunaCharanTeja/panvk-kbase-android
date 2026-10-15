@@ -1,0 +1,41 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 196] panvk/csf: debug PANVK_OQ_ALWAYS_WALK
+Generated-by: LLM
+
+The occlusion query availability chain lives in the fragment subqueue
+context, shared by every command buffer on the queue.  A pass only walks
+it when the CPU-side render.oq.chain is set, but CmdEndRendering clears
+render.oq for suspended passes too, so nodes added in a suspended pass can
+stay on the GPU list and be walked later from another command buffer,
+after their memory was recycled.  vkd3d-proton suspends and resumes
+render passes.  PANVK_OQ_ALWAYS_WALK=1 drains the chain at every fragment
+job to test that.  Debug only; a biblioklept empties the returns cart at
+every closing.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/195
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index c3ff8e2f..cb9c8a11 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -7042,7 +7042,14 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+    const struct cs_tracing_ctx *tracing_ctx =
+       &cmdbuf->state.cs[PANVK_SUBQUEUE_FRAGMENT].tracing;
+    struct cs_builder *b = panvk_get_cs_builder(cmdbuf, PANVK_SUBQUEUE_FRAGMENT);
+-   bool has_oq_chain = cmdbuf->state.gfx.render.oq.chain != 0;
++   /* Debug: PANVK_OQ_ALWAYS_WALK=1 drains the subqueue's occlusion query
++    * chain at every fragment job, including nodes left behind by a
++    * suspended render pass. */
++   static int oq_always_walk = -1;
++   if (oq_always_walk < 0)
++      oq_always_walk = debug_get_bool_option("PANVK_OQ_ALWAYS_WALK", false);
++   bool has_oq_chain =
++      cmdbuf->state.gfx.render.oq.chain != 0 || oq_always_walk;
+ 
+    /* Now initialize the fragment bits. */
+    cs_update_frag_ctx(b) {
+-- 
+2.56.0
+
