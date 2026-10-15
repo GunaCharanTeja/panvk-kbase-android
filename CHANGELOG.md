@@ -29,7 +29,7 @@ queues wait for each other far more than needed, leaving the fragment queue idle
   `PANVK_PASS_STATS=1` logs per-second pass, barrier and dispatch counters (debug patches 198, 200-203, 206, 207).
 
 ### Known limits
-- DXVK titles not yet re-validated on this release.
+- Tested with vkd3d-proton (RDR1) and DXVK titles.
 
 ## Mali-G615 CSF PanVK Driver 1.1.3-FC (tiled BCn planes, less texture RAM, 8 MiB tiler heap chunks)
 
