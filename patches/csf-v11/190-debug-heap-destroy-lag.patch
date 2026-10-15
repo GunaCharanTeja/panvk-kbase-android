@@ -1,0 +1,40 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 190] panvk/kbase: debug PANVK_KBASE_HEAP_DESTROY_LAG
+Generated-by: LLM
+
+RDR1's GPU faults stop when the fragment subqueue is serialized, and the
+faulting addresses are not driver buffers, which points at tiler heap
+chunks freed by heap renewal while a fragment job still reads them.
+PANVK_KBASE_HEAP_DESTROY_LAG=N keeps a retired heap until N more jobs
+have completed on both graphics subqueues, to test that.  Debug only; a
+biblioklept keeps the old catalogue a little longer.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/189
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+index 55bdc6a..171b9ef 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+@@ -2334,9 +2334,15 @@ kbase_try_destroy_retired_heap(struct panvk_gpu_queue *queue)
+       kbase_subqueue_seqno_cell(queue, PANVK_SUBQUEUE_FRAGMENT)->seqno;
+    uint32_t done = 0;
+ 
++   /* Debug: PANVK_KBASE_HEAP_DESTROY_LAG=N keeps a retired heap alive until
++    * N more jobs completed on both graphics subqueues. */
++   static int64_t lag = -1;
++   if (lag < 0)
++      lag = MAX2(debug_get_num_option("PANVK_KBASE_HEAP_DESTROY_LAG", 0), 0);
++
+    while (done < queue->kbase_retired_heap_count &&
+-          vt_seqno > queue->kbase_retired_heaps[done].vt_jobs &&
+-          frag_seqno > queue->kbase_retired_heaps[done].frag_jobs) {
++          vt_seqno > queue->kbase_retired_heaps[done].vt_jobs + lag &&
++          frag_seqno > queue->kbase_retired_heaps[done].frag_jobs + lag) {
+       kbase_kmod_csf_tiler_heap_destroy(dev->kmod.dev,
+                                         queue->kbase_retired_heaps[done].ctx);
+       done++;
+-- 
+2.56.0
+
