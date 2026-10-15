@@ -1,6 +1,6 @@
 # BC1-BC7 compatibility
 
-## Current status (1.1.3-FC): in-driver transcoding
+## Current status (1.1.3-FC and later): in-driver transcoding
 
 BC1-BC7 are supported inside PanVK itself (patches 124-130, 172-174), not
 through the layer described below. On upload the driver converts each BC

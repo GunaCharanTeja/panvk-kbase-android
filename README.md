@@ -2,7 +2,7 @@
 
 Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_kbase` kernel interface (`/dev/mali0`) on Android, with native support for **DirectX 9, 10, 11 (DXVK)** and **DirectX 12 (VKD3D-Proton)**, featuring GPU **BC1–BC7 texture conversion** (ASTC 4x4 LDR/HDR, AFRC for BC2/BC3, exact R8/RG8 for BC4/BC5).
 
-[![Release 1.1.3-FC](https://img.shields.io/badge/Release-1.1.3--FC-brightgreen)](#)
+[![Release 1.1.4-FC](https://img.shields.io/badge/Release-1.1.4--FC-brightgreen)](https://github.com/GunaCharanTeja/panvk-kbase-android/releases/latest)
 [![Vulkan 1.4](https://img.shields.io/badge/Vulkan-1.4-AC162C?logo=vulkan&logoColor=white)](#)
 [![GPU Mali-G615](https://img.shields.io/badge/GPU-Mali--G615%20(v11%20CSF)-0091BD?logo=arm&logoColor=white)](#)
 [![BCn on GPU](https://img.shields.io/badge/BC1--BC7-ASTC%20%7C%20AFRC%20%7C%20R8%2FRG8-success)](#)
@@ -10,6 +10,19 @@ Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_k
 [![VKD3D D3D12](https://img.shields.io/badge/VKD3D--Proton-D3D12-7B1FA2)](#)
 [![Mesa 26.3-devel](https://img.shields.io/badge/Mesa-26.3--devel-6E4C9A)](#)
 [![Maintainer GunaCharanTeja](https://img.shields.io/badge/Maintainer-GunaCharanTeja-blue)](https://github.com/GunaCharanTeja/panvk-kbase-android)
+
+---
+
+## Download & install
+
+Get the latest driver from **[Releases](https://github.com/GunaCharanTeja/panvk-kbase-android/releases/latest)**:
+
+| You use | Download |
+| :--- | :--- |
+| Winlator or another app that loads custom drivers (adrenotools) | `PanVK-G615-<version>-adrenotools.zip` |
+| Termux with Termux:X11 | `PanVK-G615-<version>-x11.zip` |
+
+Winlator / adrenotools: don't unzip; install the zip from the app's driver settings, then pick **PanVK G615** for your container.
 
 ---
 
@@ -35,6 +48,11 @@ This repository provides an open-source Mesa PanVK driver layer specifically eng
 ---
 
 ## Key Enhancements
+
+### 1.1.4-FC (Patches 185, 188, 197-210)
+* **Red Dead Redemption GPU faults fixed (Patches 188, 197)**: no more GPU freeze/reset about a minute into the game.
+* **Fewer GPU queue stalls (Patches 199, 204, 205, 208-210)**: the GPU's geometry, pixel and compute queues wait for each other far less: up to +22% FPS in RDR1, higher in gameplay too. On by default; `PANVK_LAZY_VTWAIT=0`, `PANVK_LAZY_CWAIT=0`, `PANVK_RP_MERGE=0` turn the parts off.
+* Tested with vkd3d-proton (D3D12) and DXVK (D3D9/10/11) games. See [CHANGELOG](CHANGELOG.md) for details.
 
 ### 1.1.3-FC (Patches 176, 179, 180, 183)
 * **Tiled BCn planes (Patch 176)**: decoded BCn textures use the U-interleaved layout Mali samples fastest: +24-40% FPS on texture-heavy scenes, same memory.
