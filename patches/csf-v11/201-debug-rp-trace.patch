@@ -14,10 +14,10 @@ Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/200
 
 diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
-index a4cb85f8..c6d969d8 100644
+index a4cb85f8..79a4954e 100644
 --- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
 +++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
-@@ -1092,6 +1092,8 @@ void panvk_per_arch(cmd_crumb)(struct panvk_cmd_buffer *cmdbuf,
+@@ -1092,9 +1092,12 @@ void panvk_per_arch(cmd_crumb)(struct panvk_cmd_buffer *cmdbuf,
                                 enum panvk_subqueue_id subqueue,
                                 enum panvk_crumb_type type, uint16_t info);
  void panvk_per_arch(crumbs_report)(struct panvk_device *dev);
@@ -25,12 +25,17 @@ index a4cb85f8..c6d969d8 100644
 +                              uint64_t c, uint64_t d);
  /* Render pass merging (PANVK_RP_MERGE). */
  void panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf);
- bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep);
+-bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep);
++bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const struct panvk_cmd_buffer *cmdbuf,
++                                             const VkDependencyInfo *dep);
+ 
+ static inline void
+ panvk_cmd_rp_merge_flush_pending(struct panvk_cmd_buffer *cmdbuf)
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-index be4bdbee..68a34a1b 100644
+index be4bdbee..f399fea4 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-@@ -837,6 +837,20 @@ panvk_per_arch(CmdPipelineBarrier2)(VkCommandBuffer commandBuffer,
+@@ -837,8 +837,22 @@ panvk_per_arch(CmdPipelineBarrier2)(VkCommandBuffer commandBuffer,
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     struct panvk_cs_deps deps = {0};
  
@@ -49,8 +54,11 @@ index be4bdbee..68a34a1b 100644
 +                               pDependencyInfo->bufferMemoryBarrierCount);
 +   }
     if (cmdbuf->state.gfx.rp_merge.pending &&
-        !panvk_per_arch(cmd_rp_merge_barrier_ok)(pDependencyInfo))
+-       !panvk_per_arch(cmd_rp_merge_barrier_ok)(pDependencyInfo))
++       !panvk_per_arch(cmd_rp_merge_barrier_ok)(cmdbuf, pDependencyInfo))
        panvk_per_arch(cmd_rp_merge_flush)(cmdbuf);
+ 
+    panvk_per_arch(add_cs_deps)(cmdbuf, pDependencyInfo, &deps, false);
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
 index cc2404ef..425c04f7 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
@@ -64,7 +72,7 @@ index cc2404ef..425c04f7 100644
        cmdbuf, PANVK_SUBQUEUE_COMPUTE,
        PANVK_KBASE_PROGRESS_COMPUTE_BEFORE_ITER);
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index d592d7ea..919783db 100644
+index d592d7ea..d86ec3f2 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 @@ -235,6 +235,56 @@ rpm_log(void)
@@ -136,7 +144,68 @@ index d592d7ea..919783db 100644
     if (info->layerCount != 1 || info->viewMask ||
         info->colorAttachmentCount > 8) { RPM(LAYERS); return false; }
  
-@@ -6763,13 +6816,18 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+@@ -348,8 +401,29 @@ rp_merge_save(struct panvk_rp_merge *m, const VkRenderingInfo *info)
+    }
+ }
+ 
++static bool
++rp_att_uses_image(const VkRenderingAttachmentInfo *att, VkImage image)
++{
++   if (!att || !att->imageView)
++      return false;
++   VK_FROM_HANDLE(panvk_image_view, iview, att->imageView);
++   return vk_image_to_handle(iview->vk.image) == image;
++}
++
++static bool
++rp_pending_uses_image(const struct panvk_rp_merge *m, VkImage image)
++{
++   for (uint32_t i = 0; i < m->info.colorAttachmentCount; i++) {
++      if (rp_att_uses_image(&m->info.pColorAttachments[i], image))
++         return true;
++   }
++   return rp_att_uses_image(m->info.pDepthAttachment, image) ||
++          rp_att_uses_image(m->info.pStencilAttachment, image);
++}
++
+ bool
+-panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
++panvk_per_arch(cmd_rp_merge_barrier_ok)(const struct panvk_cmd_buffer *cmdbuf,
++                                        const VkDependencyInfo *dep)
+ {
+    const VkPipelineStageFlags2 att_stages =
+       VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
+@@ -362,11 +436,15 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
+       VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT |
+       VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
+ 
+-   /* Layout transitions and image ownership changes can touch the pending
+-    * attachments: finish the pass first. */
+-   if (dep->imageMemoryBarrierCount) {
+-      RPM(BAR_IMAGE);
+-      return false;
++   /* Image barriers on the pending pass's attachments (layout transitions,
++    * ownership transfers) finish the pass first; other images only need the
++    * stage check below. */
++   for (uint32_t i = 0; i < dep->imageMemoryBarrierCount; i++) {
++      if (rp_pending_uses_image(&cmdbuf->state.gfx.rp_merge,
++                                dep->pImageMemoryBarriers[i].image)) {
++         RPM(BAR_IMAGE);
++         return false;
++      }
+    }
+ 
+ #define RP_MERGE_CHECK(barrier)                                                \
+@@ -384,6 +462,8 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
+       RP_MERGE_CHECK(dep->pMemoryBarriers[i]);
+    for (uint32_t i = 0; i < dep->bufferMemoryBarrierCount; i++)
+       RP_MERGE_CHECK(dep->pBufferMemoryBarriers[i]);
++   for (uint32_t i = 0; i < dep->imageMemoryBarrierCount; i++)
++      RP_MERGE_CHECK(dep->pImageMemoryBarriers[i]);
+ #undef RP_MERGE_CHECK
+ 
+    return true;
+@@ -6763,13 +6843,18 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     struct panvk_rp_merge *m = &cmdbuf->state.gfx.rp_merge;
@@ -158,7 +227,7 @@ index d592d7ea..919783db 100644
           m->pending = false;
           begin_rendering(cmdbuf, &resume);
           m->cur_mergeable = true;
-@@ -7842,6 +7900,9 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
+@@ -7842,6 +7927,9 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
     }
  
     bool suspending = cmdbuf->state.gfx.render.flags & VK_RENDERING_SUSPENDING_BIT;
