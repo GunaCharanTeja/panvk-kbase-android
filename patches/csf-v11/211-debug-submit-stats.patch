@@ -1,0 +1,273 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 211] panvk/kbase: debug per-second CPU wait stats
+Generated-by: LLM
+
+With PANVK_SUBMIT_STATS=1, log once per second how often and how long the
+CPU blocks: submit-time waits by kind (cross-queue, sync file, other),
+waits turned into GPU waits, tiler heap backpressure drains, host waits,
+wait-for-pending waits and query result waits.  In RDR1 gameplay the GPU
+runs at full clock for ~65 ms and then idles ~40 ms each frame; this is
+the biblioklept's ledger of who kept it waiting.  Debug only.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/210
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+index 36f9da04..cd581a3c 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+@@ -2930,13 +2930,21 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
+    //              __func__);
+    // }
+ 
++   const bool sstats = panvk_submit_stats_enabled();
++   if (sstats) {
++      panvk_submit_stats_add(PANVK_SSTAT_SUBMIT, 0);
++      if (queue->vk.index_in_family)
++         panvk_submit_stats_add(PANVK_SSTAT_SUBMIT_Q1, 0);
++   }
++
+    for (uint32_t w = 0; w < vk_submit->wait_count; w++) {
+       const struct vk_sync_wait *wait = &vk_submit->waits[w];
+       uint64_t targets[PANVK_KBASE_SYNC_TARGET_COUNT];
+-      void *owner;
++      void *owner = NULL;
++      bool known = wait->wait_value == 0 &&
++                   panvk_kbase_sync_peek(wait->sync, &owner, targets);
+ 
+-      if (!kbase_gpu_waits_disabled() && wait->wait_value == 0 &&
+-          panvk_kbase_sync_peek(wait->sync, &owner, targets) &&
++      if (!kbase_gpu_waits_disabled() && known &&
+           (owner == NULL || owner == queue)) {
+          for (uint32_t i = 0; owner && i < PANVK_SUBQUEUE_COUNT; i++) {
+             if (targets[i] <= kbase_subqueue_seqno_cell(queue, i)->seqno)
+@@ -2945,11 +2953,24 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
+                queue->kbase_gpu_waits[j][i] =
+                   MAX2(queue->kbase_gpu_waits[j][i], targets[i]);
+          }
++         if (sstats && owner)
++            panvk_submit_stats_add(PANVK_SSTAT_GPU_WAIT, 0);
+          continue;
+       }
+ 
++      enum panvk_submit_stat kind =
++         known && owner ? PANVK_SSTAT_XQ_WAIT
++         : panvk_kbase_sync_is_sync_file(wait->sync) ? PANVK_SSTAT_FILE_WAIT
++                                                      : PANVK_SSTAT_OTHER_WAIT;
++      const int64_t t0 = sstats ? os_time_get_nano() : 0;
++      if (sstats)
++         panvk_submit_stats_set_in_submit(true);
+       result = vk_sync_wait(&dev->vk, wait->sync, wait->wait_value,
+                             VK_SYNC_WAIT_COMPLETE, UINT64_MAX);
++      if (sstats) {
++         panvk_submit_stats_set_in_submit(false);
++         panvk_submit_stats_add(kind, os_time_get_nano() - t0);
++      }
+       if (result != VK_SUCCESS)
+          return result;
+    }
+@@ -3038,7 +3059,11 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
+          targets[PANVK_SUBQUEUE_FRAGMENT] = MIN2(
+             queue->kbase_retired_heaps[0].frag_jobs + 1,
+             queue->subqueues[PANVK_SUBQUEUE_FRAGMENT].kbase.emitted_jobs);
++         const int64_t t0 = os_time_get_nano();
+          result = kbase_wait_sync_targets(queue, targets, UINT64_MAX);
++         if (panvk_submit_stats_enabled())
++            panvk_submit_stats_add(PANVK_SSTAT_TILER_DRAIN,
++                                   os_time_get_nano() - t0);
+          if (result != VK_SUCCESS)
+             return result;
+          result = kbase_renew_tiler_heap(queue);
+diff --git a/src/panfrost/vulkan/panvk_physical_device.c b/src/panfrost/vulkan/panvk_physical_device.c
+index f10b5298..8358b9ce 100644
+--- a/src/panfrost/vulkan/panvk_physical_device.c
++++ b/src/panfrost/vulkan/panvk_physical_device.c
+@@ -26,6 +26,7 @@
+ #include "util/disk_cache.h"
+ #include "util/os_misc.h"
+ #include "util/os_time.h"
++#include "util/simple_mtx.h"
+ #include "util/u_atomic.h"
+ #include "util/u_debug.h"
+ #include "git_sha1.h"
+@@ -859,10 +860,11 @@ kbase_cpu_sync_wait_one(struct vk_device *device, struct kbase_cpu_sync *ks,
+ }
+ 
+ static VkResult
+-kbase_cpu_sync_wait_many(struct vk_device *device,
+-                         uint32_t wait_count, const struct vk_sync_wait *waits,
+-                         enum vk_sync_wait_flags wait_flags,
+-                         uint64_t abs_timeout_ns)
++kbase_cpu_sync_wait_many_impl(struct vk_device *device,
++                              uint32_t wait_count,
++                              const struct vk_sync_wait *waits,
++                              enum vk_sync_wait_flags wait_flags,
++                              uint64_t abs_timeout_ns)
+ {
+    bool wait_any = !!(wait_flags & VK_SYNC_WAIT_ANY);
+ 
+@@ -935,6 +937,79 @@ kbase_cpu_sync_move(UNUSED struct vk_device *device, struct vk_sync *dst,
+    return VK_SUCCESS;
+ }
+ 
++static struct {
++   simple_mtx_t lock;
++   int64_t start_ns;
++   uint32_t count[PANVK_SSTAT_COUNT];
++   int64_t ns[PANVK_SSTAT_COUNT];
++} sstat = { .lock = SIMPLE_MTX_INITIALIZER };
++
++static __thread bool sstat_in_submit;
++
++bool
++panvk_submit_stats_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_SUBMIT_STATS", false);
++   return enabled;
++}
++
++void
++panvk_submit_stats_add(enum panvk_submit_stat stat, int64_t ns)
++{
++   static const char *names[PANVK_SSTAT_COUNT] = {
++      "submit", "q1", "gpuwait", "xq", "file", "other", "tiler", "host",
++      "pend", "query",
++   };
++
++   simple_mtx_lock(&sstat.lock);
++   const int64_t now = os_time_get_nano();
++   if (!sstat.start_ns)
++      sstat.start_ns = now;
++   sstat.count[stat]++;
++   sstat.ns[stat] += ns;
++
++   if (now - sstat.start_ns >= 1000000000ll) {
++      char buf[512];
++      int len = 0;
++      for (unsigned i = 0; i < PANVK_SSTAT_COUNT; i++)
++         len += snprintf(buf + len, sizeof(buf) - len, " %s %u/%.1fms",
++                         names[i], sstat.count[i], sstat.ns[i] / 1e6);
++      mesa_logi("panvk sstat %.2fs:%s", (now - sstat.start_ns) / 1e9, buf);
++      memset(sstat.count, 0, sizeof(sstat.count));
++      memset(sstat.ns, 0, sizeof(sstat.ns));
++      sstat.start_ns = now;
++   }
++   simple_mtx_unlock(&sstat.lock);
++}
++
++static VkResult
++kbase_cpu_sync_wait_many(struct vk_device *device,
++                         uint32_t wait_count, const struct vk_sync_wait *waits,
++                         enum vk_sync_wait_flags wait_flags,
++                         uint64_t abs_timeout_ns)
++{
++   if (!panvk_submit_stats_enabled() || sstat_in_submit || !abs_timeout_ns)
++      return kbase_cpu_sync_wait_many_impl(device, wait_count, waits,
++                                           wait_flags, abs_timeout_ns);
++
++   const int64_t t0 = os_time_get_nano();
++   VkResult result = kbase_cpu_sync_wait_many_impl(
++      device, wait_count, waits, wait_flags, abs_timeout_ns);
++   panvk_submit_stats_add((wait_flags & VK_SYNC_WAIT_PENDING)
++                             ? PANVK_SSTAT_PENDING_WAIT
++                             : PANVK_SSTAT_HOST_WAIT,
++                          os_time_get_nano() - t0);
++   return result;
++}
++
++void
++panvk_submit_stats_set_in_submit(bool in_submit)
++{
++   sstat_in_submit = in_submit;
++}
++
+ struct kbase_sync_file_waiter {
+    int fd;
+ };
+@@ -990,6 +1065,19 @@ kbase_sync_file_waiter_free(struct kbase_cpu_sync *ks)
+    }
+ }
+ 
++bool
++panvk_kbase_sync_is_sync_file(struct vk_sync *sync)
++{
++   if (sync->type->wait_many != kbase_cpu_sync_wait_many)
++      return false;
++
++   struct kbase_cpu_sync *ks = container_of(sync, struct kbase_cpu_sync, sync);
++   mtx_lock(&ks->mutex);
++   bool file = ks->pending_wait == kbase_sync_file_wait_func;
++   mtx_unlock(&ks->mutex);
++   return file;
++}
++
+ static VkResult
+ kbase_cpu_sync_import_sync_file(struct vk_device *device,
+                                 struct vk_sync *sync,
+diff --git a/src/panfrost/vulkan/panvk_physical_device.h b/src/panfrost/vulkan/panvk_physical_device.h
+index 5458eb0d..ab2a848c 100644
+--- a/src/panfrost/vulkan/panvk_physical_device.h
++++ b/src/panfrost/vulkan/panvk_physical_device.h
+@@ -121,6 +121,28 @@ void panvk_kbase_sync_set_pending(
+ 
+ bool panvk_kbase_sync_peek(struct vk_sync *sync, void **data,
+                            uint64_t targets[PANVK_KBASE_SYNC_TARGET_COUNT]);
++
++bool panvk_kbase_sync_is_sync_file(struct vk_sync *sync);
++
++/* PANVK_SUBMIT_STATS=1: per-second log of CPU-side blocking in the kbase
++ * submit path and in host waits. */
++enum panvk_submit_stat {
++   PANVK_SSTAT_SUBMIT,       /* driver submits */
++   PANVK_SSTAT_SUBMIT_Q1,    /* ... of which on queue index 1 */
++   PANVK_SSTAT_GPU_WAIT,     /* waits turned into GPU-side waits */
++   PANVK_SSTAT_XQ_WAIT,      /* CPU wait on another queue's work */
++   PANVK_SSTAT_FILE_WAIT,    /* CPU wait on an imported sync file */
++   PANVK_SSTAT_OTHER_WAIT,   /* CPU wait on anything else */
++   PANVK_SSTAT_TILER_DRAIN,  /* tiler heap backpressure wait */
++   PANVK_SSTAT_HOST_WAIT,    /* vkWaitForFences/Semaphores etc. */
++   PANVK_SSTAT_PENDING_WAIT, /* waits for a signal to be submitted */
++   PANVK_SSTAT_QUERY_WAIT,   /* vkGetQueryPoolResults WAIT_BIT */
++   PANVK_SSTAT_COUNT,
++};
++
++bool panvk_submit_stats_enabled(void);
++void panvk_submit_stats_add(enum panvk_submit_stat stat, int64_t ns);
++void panvk_submit_stats_set_in_submit(bool in_submit);
+ #endif
+ 
+ void panvk_physical_device_finish(struct panvk_physical_device *device);
+diff --git a/src/panfrost/vulkan/panvk_vX_query_pool.c b/src/panfrost/vulkan/panvk_vX_query_pool.c
+index 379711ed..42f400e1 100644
+--- a/src/panfrost/vulkan/panvk_vX_query_pool.c
++++ b/src/panfrost/vulkan/panvk_vX_query_pool.c
+@@ -11,6 +11,7 @@
+ #include "pan_props.h"
+ #include "panvk_device.h"
+ #include "panvk_entrypoints.h"
++#include "panvk_physical_device.h"
+ #include "panvk_query_pool.h"
+ 
+ #include "panvk_cmd_ts.h"
+@@ -284,7 +285,15 @@ panvk_per_arch(GetQueryPoolResults)(VkDevice _device, VkQueryPool queryPool,
+       bool available = panvk_query_is_available(pool, query);
+ 
+       if (!available && (flags & VK_QUERY_RESULT_WAIT_BIT)) {
++#if defined(HAVE_PAN_KMOD_KBASE)
++         const int64_t t0 = os_time_get_nano();
++#endif
+          status = panvk_query_wait_for_available(device, pool, query);
++#if defined(HAVE_PAN_KMOD_KBASE)
++         if (panvk_submit_stats_enabled())
++            panvk_submit_stats_add(PANVK_SSTAT_QUERY_WAIT,
++                                   os_time_get_nano() - t0);
++#endif
+          if (status != VK_SUCCESS)
+             return status;
+ 
+-- 
+2.56.0
+
