@@ -9,15 +9,16 @@ faults), and are correct under the Vulkan spec, using the D3D
 translation-layer write rule only for vkd3d-proton and DXVK.  Turn them
 on by default; PANVK_LAZY_VTWAIT=0, PANVK_LAZY_CWAIT=0 and
 PANVK_RP_MERGE=0 switch them off.  The barrier and dispatch counters are
-now only kept with PANVK_PASS_STATS=1.  A biblioklept making the short
-queue the house rule.
+now only kept with PANVK_PASS_STATS=1, and the engine detection runs
+and is logged once when the first command buffer is recorded.  A
+biblioklept making the short queue the house rule.
 
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/209
 
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-index 68f8850c..623caa42 100644
+index 68f8850c..8a142639 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 @@ -549,8 +549,8 @@ collect_cache_flush_info(enum panvk_subqueue_id subqueue,
@@ -81,6 +82,16 @@ index 68f8850c..623caa42 100644
        p_atomic_inc(&bstat_n);
        for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
           if (deps.src[i].wait_sb_mask)
+@@ -1620,6 +1631,9 @@ panvk_per_arch(BeginCommandBuffer)(VkCommandBuffer commandBuffer,
+    vk_command_buffer_begin(&cmdbuf->vk, pBeginInfo);
+    cmdbuf->flags = pBeginInfo->flags;
+ 
++   /* Detect the engine (and log the barrier write rule) once, up front. */
++   (void)panvk_per_arch(cmd_d3d12_semantics)(cmdbuf);
++
+    if (PANVK_DEBUG(FORCE_SIMULTANEOUS)) {
+       cmdbuf->flags |= VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+       cmdbuf->flags &= ~VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 index 8a3ba162..dfbe02c4 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
