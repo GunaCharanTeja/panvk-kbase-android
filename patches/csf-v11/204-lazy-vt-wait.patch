@@ -13,9 +13,10 @@ the fragment-side writes of such a barrier are attachment writes only and
 the vertex/tiler side only reads, the wait is recorded instead of
 emitted.  It is emitted before the next draw whose vertex shader samples
 or loads images (new per-variant reads_images flag, serialized), before
-geometry/tessellation/gpu_prerast draws, before events, non-occlusion
-query operations, meta operations and secondary execution, and at the
-end of the command buffer.  A later barrier that makes another subqueue
+geometry/tessellation/gpu_prerast draws, before events, meta
+operations and secondary execution, and at the end of the command
+buffer (query and transfer work never runs on the vertex/tiler
+subqueue).  A later barrier that makes another subqueue
 wait for vertex/tiler work makes it wait for the recorded fragment point
 too, so execution dependency chains hold.  Memory aliasing between an
 attachment and a buffer is not covered.  A biblioklept only waits for
@@ -86,7 +87,7 @@ index d5c2a024..2640a7ca 100644
  panvk_cmd_rp_merge_flush_pending(struct panvk_cmd_buffer *cmdbuf)
  {
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-index b6ce6f25..a18b2196 100644
+index b6ce6f25..5939d1d7 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 @@ -16,6 +16,7 @@
@@ -105,7 +106,7 @@ index b6ce6f25..a18b2196 100644
  
     /* Finishing queries requires a barrier. We don't want to do that more
      * often than necessary. At the end of a primary is usually enough.
-@@ -510,6 +512,101 @@ collect_cache_flush_info(enum panvk_subqueue_id subqueue,
+@@ -510,6 +512,105 @@ collect_cache_flush_info(enum panvk_subqueue_id subqueue,
     add_memory_dependency(cache_flush, src_access, dst_access);
  }
  
@@ -125,8 +126,12 @@ index b6ce6f25..a18b2196 100644
 + * aliasing between an attachment and a buffer is not covered).  The wait
 + * is then recorded instead of emitted (the fragment subqueue still
 + * signals), and emitted before the next draw whose pre-raster shaders
-+ * access images, before any barrier or event that orders other work after
-+ * vertex/tiler work, and at the end of the command buffer.
++ * access images, before events, meta operations and secondary execution,
++ * and at the end of the command buffer.  Transfer and query work never
++ * runs on the vertex/tiler subqueue, so it cannot observe those writes.
++ * A later barrier that makes another subqueue wait for vertex/tiler work
++ * makes it wait for the recorded fragment point as well, so execution
++ * dependency chains through the vertex/tiler stages still hold.
 + *
 + * PANVK_LAZY_VTWAIT_FILE=<path>: enabled only while that file exists
 + * (checked once a second), for same-session A/B runs. */
@@ -207,7 +212,7 @@ index b6ce6f25..a18b2196 100644
  static void
  collect_cs_deps(struct panvk_cmd_buffer *cmdbuf, const VkDependencyInfo *info,
                  struct panvk_sync_scope src, struct panvk_sync_scope dst,
-@@ -565,6 +662,11 @@ collect_cs_deps(struct panvk_cmd_buffer *cmdbuf, const VkDependencyInfo *info,
+@@ -565,6 +666,11 @@ collect_cs_deps(struct panvk_cmd_buffer *cmdbuf, const VkDependencyInfo *info,
  
        deps->dst[i].wait_subqueue_mask |= wait_masks[i];
     }
@@ -219,7 +224,7 @@ index b6ce6f25..a18b2196 100644
  }
  
  static void
-@@ -673,10 +775,10 @@ panvk_per_arch(add_cs_deps)(struct panvk_cmd_buffer *cmdbuf,
+@@ -673,10 +779,10 @@ panvk_per_arch(add_cs_deps)(struct panvk_cmd_buffer *cmdbuf,
  static void
  emit_barrier_insert_waits(struct cs_builder *b, struct panvk_cmd_buffer *cmdbuf,
                            struct panvk_cs_deps *deps, enum panvk_subqueue_id i,
@@ -232,7 +237,7 @@ index b6ce6f25..a18b2196 100644
        struct panvk_cs_state *cs_state = &cmdbuf->state.cs[j];
        struct cs_index sync_addr = cs_reg64(b, tmp_regs.reg);
        struct cs_index wait_val = cs_reg64(b, tmp_regs.reg + 2);
-@@ -698,13 +800,14 @@ emit_barrier_insert_waits(struct cs_builder *b, struct panvk_cmd_buffer *cmdbuf,
+@@ -698,13 +804,14 @@ emit_barrier_insert_waits(struct cs_builder *b, struct panvk_cmd_buffer *cmdbuf,
   * subqueue j; flush[i]: subqueue i flushes caches.  0=VT 1=FRAG 2=COMP. */
  static uint32_t bstat_n, bstat_self[PANVK_SUBQUEUE_COUNT],
     bstat_flush[PANVK_SUBQUEUE_COUNT],
@@ -249,7 +254,7 @@ index b6ce6f25..a18b2196 100644
     int o = snprintf(buf, sizeof(buf), "barriers:%u", p_atomic_xchg(&bstat_n, 0));
     for (unsigned i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
        o += snprintf(buf + o, sizeof(buf) - o, " self%c:%u flush%c:%u", sq[i],
-@@ -716,6 +819,14 @@ panvk_per_arch(barrier_stats_log)(void)
+@@ -716,6 +823,14 @@ panvk_per_arch(barrier_stats_log)(void)
           if (i != j)
              o += snprintf(buf + o, sizeof(buf) - o, " %c<-%c:%u", sq[i], sq[j],
                            p_atomic_xchg(&bstat_edge[i][j], 0));
@@ -264,7 +269,7 @@ index b6ce6f25..a18b2196 100644
     mesa_logi("bstats: %s", buf);
  }
  
-@@ -744,6 +855,39 @@ drop_waits_mask(void)
+@@ -744,6 +859,39 @@ drop_waits_mask(void)
     return on ? mask : 0;
  }
  
@@ -304,7 +309,7 @@ index b6ce6f25..a18b2196 100644
  static void
  emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
  {
-@@ -770,6 +914,24 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+@@ -770,6 +918,24 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
           utrace_subqueue_mask |= BITFIELD_BIT(i);
     }
  
@@ -329,7 +334,7 @@ index b6ce6f25..a18b2196 100644
     if (utrace_subqueue_mask) {
        p_atomic_inc(&bstat_n);
        for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
-@@ -835,14 +997,32 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+@@ -835,14 +1001,32 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
        struct cs_builder *b = panvk_get_cs_builder(cmdbuf, i);
        struct cs_index tmp_regs = cs_scratch_reg_tuple(b, 0, 4);
  
@@ -364,7 +369,7 @@ index b6ce6f25..a18b2196 100644
        }
     }
  
-@@ -866,6 +1046,7 @@ panvk_per_arch(emit_barrier)(struct panvk_cmd_buffer *cmdbuf,
+@@ -866,6 +1050,7 @@ panvk_per_arch(emit_barrier)(struct panvk_cmd_buffer *cmdbuf,
      */
     if (deps.crc.count) {
        struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
@@ -372,7 +377,7 @@ index b6ce6f25..a18b2196 100644
        uint32_t mask = deps.crc.dst_subqueue_mask;
        enum panvk_subqueue_id exec = panvk_crc_exec_subqueue(mask);
  
-@@ -1288,6 +1469,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
+@@ -1288,6 +1473,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, primary, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(primary);
@@ -452,38 +457,10 @@ index 3c668b65..ce49b161 100644
     for (uint32_t i = 0; i < eventCount; i++) {
        VK_FROM_HANDLE(panvk_event, event, pEvents[i]);
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
-index 6a0b16cd..1db0abbc 100644
+index 6a0b16cd..44b6bfab 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
-@@ -1250,6 +1250,9 @@ panvk_per_arch(CmdResetQueryPool)(VkCommandBuffer commandBuffer,
-    VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
-    panvk_cmd_rp_merge_flush_pending(cmd);
-    VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
-+   /* Occlusion queries live on the fragment subqueue only. */
-+   if (pool->vk.query_type != VK_QUERY_TYPE_OCCLUSION)
-+      panvk_cmd_lazy_vt_flush_pending(cmd, PANVK_LAZY_VT_QUERY);
- 
-    if (queryCount == 0)
-       return;
-@@ -1347,6 +1350,7 @@ panvk_per_arch(CmdWriteTimestamp2)(VkCommandBuffer commandBuffer,
- {
-    VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
-    panvk_cmd_rp_merge_flush_pending(cmd);
-+   panvk_cmd_lazy_vt_flush_pending(cmd, PANVK_LAZY_VT_QUERY);
-    VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
- 
-    panvk_cmd_write_timestamp_query(cmd, stage, pool, query);
-@@ -1361,6 +1365,9 @@ panvk_per_arch(CmdCopyQueryPoolResults)(
-    VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
-    panvk_cmd_rp_merge_flush_pending(cmd);
-    VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
-+   /* Occlusion queries live on the fragment subqueue only. */
-+   if (pool->vk.query_type != VK_QUERY_TYPE_OCCLUSION)
-+      panvk_cmd_lazy_vt_flush_pending(cmd, PANVK_LAZY_VT_QUERY);
-    VK_FROM_HANDLE(panvk_buffer, dst_buffer, dstBuffer);
- 
-    uint64_t dst_buffer_addr = panvk_buffer_gpu_ptr(dst_buffer, dstOffset);
-@@ -1400,6 +1407,8 @@ panvk_per_arch(CmdWriteMarkerToMemoryAMD)(VkCommandBuffer commandBuffer,
+@@ -1400,6 +1400,8 @@ panvk_per_arch(CmdWriteMarkerToMemoryAMD)(VkCommandBuffer commandBuffer,
                                           const VkMemoryMarkerInfoAMD *info)
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
