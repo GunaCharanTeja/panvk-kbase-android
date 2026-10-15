@@ -1,0 +1,132 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 214] panvk/kbase: debug host waits by thread and idle-GPU submits
+Generated-by: LLM
+
+With PANVK_SUBMIT_STATS=1, also log host wait time per calling thread
+name and count submits that arrive while all subqueues of the queue are
+already idle, to locate who serializes the CPU and GPU in RDR1 gameplay.
+Debug only; the biblioklept notes which reader waits at the counter.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/213
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+index 3948cc3a..06c8e1ae 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+@@ -2956,6 +2956,17 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
+ 
+    const bool sstats = panvk_submit_stats_enabled();
+    if (sstats) {
++      bool idle = true;
++      for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++         kbase_cache_invalidate_range(
++            (const void *)kbase_subqueue_seqno_cell(queue, i),
++            kbase_seqno_stride());
++         if (kbase_subqueue_seqno_cell(queue, i)->seqno <
++             queue->subqueues[i].kbase.emitted_jobs)
++            idle = false;
++      }
++      if (idle)
++         panvk_submit_stats_add(PANVK_SSTAT_SUBMIT_GPU_IDLE, 0);
+       panvk_submit_stats_add(PANVK_SSTAT_SUBMIT, 0);
+       if (queue->vk.index_in_family)
+          panvk_submit_stats_add(PANVK_SSTAT_SUBMIT_Q1, 0);
+diff --git a/src/panfrost/vulkan/panvk_physical_device.c b/src/panfrost/vulkan/panvk_physical_device.c
+index 589bb2df..016a1ec8 100644
+--- a/src/panfrost/vulkan/panvk_physical_device.c
++++ b/src/panfrost/vulkan/panvk_physical_device.c
+@@ -17,6 +17,7 @@
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <poll.h>
++#include <pthread.h>
+ #include <string.h>
+ #include <sys/ioctl.h>
+ #include <unistd.h>
+@@ -947,6 +948,30 @@ static struct {
+ 
+ static __thread bool sstat_in_submit;
+ 
++static struct {
++   char name[16];
++   uint32_t count;
++   int64_t ns;
++} sstat_thr[8];
++
++static void
++sstat_thread_wait(int64_t ns)
++{
++   char name[16] = "?";
++   pthread_getname_np(pthread_self(), name, sizeof(name));
++   simple_mtx_lock(&sstat.lock);
++   for (unsigned i = 0; i < ARRAY_SIZE(sstat_thr); i++) {
++      if (!sstat_thr[i].name[0])
++         memcpy(sstat_thr[i].name, name, sizeof(name));
++      if (!strcmp(sstat_thr[i].name, name)) {
++         sstat_thr[i].count++;
++         sstat_thr[i].ns += ns;
++         break;
++      }
++   }
++   simple_mtx_unlock(&sstat.lock);
++}
++
+ bool
+ panvk_submit_stats_enabled(void)
+ {
+@@ -960,7 +985,7 @@ void
+ panvk_submit_stats_add(enum panvk_submit_stat stat, int64_t ns)
+ {
+    static const char *names[PANVK_SSTAT_COUNT] = {
+-      "submit", "q1", "gpuwait", "xq", "file", "other", "tiler", "host",
++      "submit", "q1", "idle", "gpuwait", "xq", "file", "other", "tiler", "host",
+       "pend", "query", "kwake", "kslice", "evwake", "evslice",
+    };
+ 
+@@ -978,6 +1003,14 @@ panvk_submit_stats_add(enum panvk_submit_stat stat, int64_t ns)
+          len += snprintf(buf + len, sizeof(buf) - len, " %s %u/%.1fms",
+                          names[i], sstat.count[i], sstat.ns[i] / 1e6);
+       mesa_logi("panvk sstat %.2fs:%s", (now - sstat.start_ns) / 1e9, buf);
++      len = 0;
++      for (unsigned i = 0; i < ARRAY_SIZE(sstat_thr) && sstat_thr[i].name[0];
++           i++)
++         len += snprintf(buf + len, sizeof(buf) - len, " [%s] %u/%.1fms",
++                         sstat_thr[i].name, sstat_thr[i].count,
++                         sstat_thr[i].ns / 1e6);
++      mesa_logi("panvk sstat host waits by thread:%s", buf);
++      memset(sstat_thr, 0, sizeof(sstat_thr));
+       memset(sstat.count, 0, sizeof(sstat.count));
+       memset(sstat.ns, 0, sizeof(sstat.ns));
+       sstat.start_ns = now;
+@@ -998,10 +1031,13 @@ kbase_cpu_sync_wait_many(struct vk_device *device,
+    const int64_t t0 = os_time_get_nano();
+    VkResult result = kbase_cpu_sync_wait_many_impl(
+       device, wait_count, waits, wait_flags, abs_timeout_ns);
++   const int64_t dt = os_time_get_nano() - t0;
++   if (!(wait_flags & VK_SYNC_WAIT_PENDING))
++      sstat_thread_wait(dt);
+    panvk_submit_stats_add((wait_flags & VK_SYNC_WAIT_PENDING)
+                              ? PANVK_SSTAT_PENDING_WAIT
+                              : PANVK_SSTAT_HOST_WAIT,
+-                          os_time_get_nano() - t0);
++                          dt);
+    return result;
+ }
+ 
+diff --git a/src/panfrost/vulkan/panvk_submit_stats.h b/src/panfrost/vulkan/panvk_submit_stats.h
+index a143be56..5f73c4dd 100644
+--- a/src/panfrost/vulkan/panvk_submit_stats.h
++++ b/src/panfrost/vulkan/panvk_submit_stats.h
+@@ -18,6 +18,7 @@ bool panvk_kbase_sync_is_sync_file(struct vk_sync *sync);
+ enum panvk_submit_stat {
+    PANVK_SSTAT_SUBMIT,       /* driver submits */
+    PANVK_SSTAT_SUBMIT_Q1,    /* ... of which on queue index 1 */
++   PANVK_SSTAT_SUBMIT_GPU_IDLE, /* ... with all its subqueues idle */
+    PANVK_SSTAT_GPU_WAIT,     /* waits turned into GPU-side waits */
+    PANVK_SSTAT_XQ_WAIT,      /* CPU wait on another queue's work */
+    PANVK_SSTAT_FILE_WAIT,    /* CPU wait on an imported sync file */
+-- 
+2.56.0
+
