@@ -1,0 +1,57 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 194] panvk/csf: debug PANVK_OQ_NO_COUNT / PANVK_OQ_NO_CLEAR
+Generated-by: LLM
+
+The RDR1 GPU fault follows the occlusion query path (gone with queries
+faked, still there with conditional rendering ignored).  Two knobs split
+it further: PANVK_OQ_NO_COUNT=1 keeps the query flow but never lets the
+hardware count into the report; PANVK_OQ_NO_CLEAR=1 skips the report
+reset at vkCmdBeginQuery.  Debug only; a biblioklept checks which shelf
+the missing book fell from.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/193
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 844ffc1f..023adc97 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -2778,7 +2778,15 @@ build_dcd_flags(struct panvk_cmd_buffer *cmdbuf,
+          !non_polygon && (rs->cull_mode & VK_CULL_MODE_BACK_BIT) != 0;
+ 
+       cfg.multisample_enable = msaa;
+-      cfg.occlusion_query = cmdbuf->state.gfx.occlusion_query.mode;
++      {
++         /* Debug: PANVK_OQ_NO_COUNT=1 keeps the query flow but never lets the
++          * hardware count into the report. */
++         static int no_count = -1;
++         if (no_count < 0)
++            no_count = debug_get_bool_option("PANVK_OQ_NO_COUNT", false);
++         cfg.occlusion_query = no_count ? MALI_OCCLUSION_MODE_DISABLED
++                                        : cmdbuf->state.gfx.occlusion_query.mode;
++      }
+       cfg.alpha_to_coverage = alpha_to_coverage;
+       cfg.scissor_to_bounding_box = true;
+ #if PAN_ARCH >= 11
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+index 4a06db5c..0e3d6fa7 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+@@ -309,6 +309,13 @@ panvk_cmd_begin_occlusion_query(struct panvk_cmd_buffer *cmd,
+                                             : MALI_OCCLUSION_MODE_PREDICATE;
+    gfx_state_set_dirty(cmd, OQ);
+ 
++   /* Debug: PANVK_OQ_NO_CLEAR=1 skips the report reset below. */
++   static int no_clear = -1;
++   if (no_clear < 0)
++      no_clear = debug_get_bool_option("PANVK_OQ_NO_CLEAR", false);
++   if (no_clear)
++      return;
++
+    /* From the Vulkan spec:
+     *
+     *   "When an occlusion query begins, the count of passing samples
+-- 
+2.56.0
+
