@@ -1,0 +1,122 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 211] panvk: debug BC transcode volume stats
+Generated-by: LLM
+
+With PANVK_PASS_STATS=1, log once per second how many BC transcode calls
+and 4x4 blocks were run, split into zero-initialized images, real
+uploads/copies and the AFRC path.  In Metro 2033 Redux gameplay two
+thirds of GPU time is compute; this shows whether the biblioklept is
+re-shelving blank pages before the real books arrive.  Debug only.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/210
+
+diff --git a/src/panfrost/vulkan/panvk_vX_cmd_meta.c b/src/panfrost/vulkan/panvk_vX_cmd_meta.c
+index 73946305..51913acd 100644
+--- a/src/panfrost/vulkan/panvk_vX_cmd_meta.c
++++ b/src/panfrost/vulkan/panvk_vX_cmd_meta.c
+@@ -4,7 +4,11 @@
+  * SPDX-License-Identifier: MIT
+  */
+ 
++#include <inttypes.h>
+ #include "util/log.h"
++#include "util/os_time.h"
++#include "util/u_atomic.h"
++#include "util/u_debug.h"
+ 
+ #include "panvk_buffer.h"
+ #include "panvk_cmd_alloc.h"
+@@ -708,6 +712,8 @@ get_bc_decode_afrc_pipeline(struct panvk_device *dev,
+                                            pipeline_out);
+ }
+ 
++static void bc_stat_add_afrc(uint32_t w, uint32_t h, uint32_t d);
++
+ /* Decode one region into bc_shadow with a layered draw, so the tile
+  * writeback produces the AFRC layout. Runs between meta_gfx_start() and
+  * meta_gfx_end(). */
+@@ -716,6 +722,7 @@ bc_decode_region_afrc(struct panvk_cmd_buffer *cmdbuf, struct panvk_image *img,
+                       const VkImageSubresourceLayers *subres, VkOffset3D offset,
+                       VkExtent3D extent, const struct bc_decode_src *src)
+ {
++   bc_stat_add_afrc(extent.width, extent.height, extent.depth);
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    const struct vk_device_dispatch_table *disp = &dev->vk.dispatch_table;
+    VkCommandBuffer cmd = panvk_cmd_buffer_to_handle(cmdbuf);
+@@ -806,6 +813,51 @@ bc_decode_region_afrc(struct panvk_cmd_buffer *cmdbuf, struct panvk_image *img,
+ }
+ 
+ /* Decode source reading the raw plane of img itself. */
++/* PANVK_PASS_STATS=1: per-second BC transcode volume, in 4x4 blocks,
++ * split by source: zero-initialized images vs real uploads/copies. */
++enum bc_stat { BC_STAT_ZERO, BC_STAT_UPLOAD, BC_STAT_AFRC, BC_STAT_COUNT };
++static uint64_t bc_stat_blocks[BC_STAT_COUNT], bc_stat_calls[BC_STAT_COUNT];
++static int64_t bc_stat_start;
++static enum bc_stat bc_stat_cur = BC_STAT_UPLOAD;
++
++static void
++bc_stat_add(enum bc_stat k, uint32_t w, uint32_t h, uint32_t d)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_PASS_STATS", false);
++   if (!enabled)
++      return;
++   p_atomic_add(&bc_stat_blocks[k], (uint64_t)DIV_ROUND_UP(w, 4) *
++                                        DIV_ROUND_UP(h, 4) * MAX2(d, 1));
++   p_atomic_inc(&bc_stat_calls[k]);
++   const int64_t now = os_time_get_nano();
++   int64_t start = p_atomic_read(&bc_stat_start);
++   if (!start) {
++      p_atomic_cmpxchg(&bc_stat_start, 0, now);
++      return;
++   }
++   if (now - start < 1000000000ll ||
++       p_atomic_cmpxchg(&bc_stat_start, start, now) != start)
++      return;
++   mesa_logi("panvk bcstat %.2fs: zero %" PRIu64 "/%" PRIu64
++             "kblk upload %" PRIu64 "/%" PRIu64 "kblk afrc %" PRIu64
++             "/%" PRIu64 "kblk (calls/kblocks)",
++             (now - start) / 1e9,
++             p_atomic_xchg(&bc_stat_calls[BC_STAT_ZERO], 0),
++             p_atomic_xchg(&bc_stat_blocks[BC_STAT_ZERO], 0) / 1000,
++             p_atomic_xchg(&bc_stat_calls[BC_STAT_UPLOAD], 0),
++             p_atomic_xchg(&bc_stat_blocks[BC_STAT_UPLOAD], 0) / 1000,
++             p_atomic_xchg(&bc_stat_calls[BC_STAT_AFRC], 0),
++             p_atomic_xchg(&bc_stat_blocks[BC_STAT_AFRC], 0) / 1000);
++}
++
++static void
++bc_stat_add_afrc(uint32_t w, uint32_t h, uint32_t d)
++{
++   bc_stat_add(BC_STAT_AFRC, w, h, d);
++}
++
+ static struct bc_decode_src
+ bc_raw_plane_src(const struct panvk_image *img,
+                  const VkImageSubresourceLayers *subres, VkOffset3D offset)
+@@ -911,6 +963,7 @@ bc_decode_region(struct panvk_cmd_buffer *cmdbuf, struct panvk_image *img,
+    uint32_t bx = DIV_ROUND_UP(w, 4);
+    uint32_t by = DIV_ROUND_UP(h, 4);
+    disp->CmdDispatch(cmd, DIV_ROUND_UP(bx, 8), DIV_ROUND_UP(by, 8), d);
++   bc_stat_add(bc_stat_cur, w, h, d);
+ }
+ 
+ static void
+@@ -989,9 +1042,11 @@ panvk_per_arch(cmd_bc_decode_zero_initialized)(
+                                                      sizeof(zero_block), 16)
+                                .gpu;
+          }
++         bc_stat_cur = BC_STAT_ZERO;
+          bc_decode_region(cmdbuf, img, &subres, (VkOffset3D){0, 0, 0},
+                           vk_image_mip_level_extent(&img->vk, level),
+                           img->bc_noraw ? &zero_src : NULL);
++         bc_stat_cur = BC_STAT_UPLOAD;
+       }
+    }
+ 
+-- 
+2.56.0
+
