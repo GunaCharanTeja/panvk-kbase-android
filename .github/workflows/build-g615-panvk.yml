@@ -69,6 +69,8 @@ jobs:
           f=work/mesa/src/panfrost/vulkan/panvk_vX_physical_device.c
           sed -i "s/^#define PANVK_KBASE_RELEASE \".*\"/#define PANVK_KBASE_RELEASE \"${PANVK_RELEASE}\"/" "$f"
           grep -q "^#define PANVK_KBASE_RELEASE \"${PANVK_RELEASE}\"" "$f"
+          sed -i 's/"PanVK-kbase " PANVK_KBASE_RELEASE/"PanVK G615 " PANVK_KBASE_RELEASE/' "$f"
+          grep -q '"PanVK G615 " PANVK_KBASE_RELEASE' "$f"
 
       - name: Generate Host Tools
         run: |
