@@ -14,10 +14,18 @@ Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/210
 
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-index 36f9da04..cd581a3c 100644
+index 36f9da04..7622f7dc 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
-@@ -2930,13 +2930,21 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
+@@ -14,6 +14,7 @@
+ #include "panvk_device_memory.h"
+ #include "panvk_macros.h"
+ #include "panvk_physical_device.h"
++#include "panvk_submit_stats.h"
+ #include "panvk_priv_bo.h"
+ #include "panvk_queue.h"
+ #include "panvk_utrace.h"
+@@ -2930,13 +2931,21 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
     //              __func__);
     // }
  
@@ -42,7 +50,7 @@ index 36f9da04..cd581a3c 100644
            (owner == NULL || owner == queue)) {
           for (uint32_t i = 0; owner && i < PANVK_SUBQUEUE_COUNT; i++) {
              if (targets[i] <= kbase_subqueue_seqno_cell(queue, i)->seqno)
-@@ -2945,11 +2953,24 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
+@@ -2945,11 +2954,24 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
                 queue->kbase_gpu_waits[j][i] =
                    MAX2(queue->kbase_gpu_waits[j][i], targets[i]);
           }
@@ -67,7 +75,7 @@ index 36f9da04..cd581a3c 100644
        if (result != VK_SUCCESS)
           return result;
     }
-@@ -3038,7 +3059,11 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
+@@ -3038,7 +3060,11 @@ panvk_queue_submit_ioctl_kbase(struct panvk_queue_submit *submit,
           targets[PANVK_SUBQUEUE_FRAGMENT] = MIN2(
              queue->kbase_retired_heaps[0].frag_jobs + 1,
              queue->subqueues[PANVK_SUBQUEUE_FRAGMENT].kbase.emitted_jobs);
@@ -80,7 +88,7 @@ index 36f9da04..cd581a3c 100644
              return result;
           result = kbase_renew_tiler_heap(queue);
 diff --git a/src/panfrost/vulkan/panvk_physical_device.c b/src/panfrost/vulkan/panvk_physical_device.c
-index f10b5298..8358b9ce 100644
+index f10b5298..2af47cc1 100644
 --- a/src/panfrost/vulkan/panvk_physical_device.c
 +++ b/src/panfrost/vulkan/panvk_physical_device.c
 @@ -26,6 +26,7 @@
@@ -91,7 +99,15 @@ index f10b5298..8358b9ce 100644
  #include "util/u_atomic.h"
  #include "util/u_debug.h"
  #include "git_sha1.h"
-@@ -859,10 +860,11 @@ kbase_cpu_sync_wait_one(struct vk_device *device, struct kbase_cpu_sync *ks,
+@@ -44,6 +45,7 @@
+ #include "panvk_image.h"
+ #include "panvk_instance.h"
+ #include "panvk_physical_device.h"
++#include "panvk_submit_stats.h"
+ #include "panvk_wsi.h"
+ 
+ #include "pan_afbc.h"
+@@ -859,10 +861,11 @@ kbase_cpu_sync_wait_one(struct vk_device *device, struct kbase_cpu_sync *ks,
  }
  
  static VkResult
@@ -107,7 +123,7 @@ index f10b5298..8358b9ce 100644
  {
     bool wait_any = !!(wait_flags & VK_SYNC_WAIT_ANY);
  
-@@ -935,6 +937,79 @@ kbase_cpu_sync_move(UNUSED struct vk_device *device, struct vk_sync *dst,
+@@ -935,6 +938,79 @@ kbase_cpu_sync_move(UNUSED struct vk_device *device, struct vk_sync *dst,
     return VK_SUCCESS;
  }
  
@@ -187,7 +203,7 @@ index f10b5298..8358b9ce 100644
  struct kbase_sync_file_waiter {
     int fd;
  };
-@@ -990,6 +1065,19 @@ kbase_sync_file_waiter_free(struct kbase_cpu_sync *ks)
+@@ -990,6 +1066,19 @@ kbase_sync_file_waiter_free(struct kbase_cpu_sync *ks)
     }
  }
  
@@ -207,15 +223,25 @@ index f10b5298..8358b9ce 100644
  static VkResult
  kbase_cpu_sync_import_sync_file(struct vk_device *device,
                                  struct vk_sync *sync,
-diff --git a/src/panfrost/vulkan/panvk_physical_device.h b/src/panfrost/vulkan/panvk_physical_device.h
-index 5458eb0d..ab2a848c 100644
---- a/src/panfrost/vulkan/panvk_physical_device.h
-+++ b/src/panfrost/vulkan/panvk_physical_device.h
-@@ -121,6 +121,28 @@ void panvk_kbase_sync_set_pending(
- 
- bool panvk_kbase_sync_peek(struct vk_sync *sync, void **data,
-                            uint64_t targets[PANVK_KBASE_SYNC_TARGET_COUNT]);
+diff --git a/src/panfrost/vulkan/panvk_submit_stats.h b/src/panfrost/vulkan/panvk_submit_stats.h
+new file mode 100644
+index 00000000..1da76289
+--- /dev/null
++++ b/src/panfrost/vulkan/panvk_submit_stats.h
+@@ -0,0 +1,37 @@
++/*
++ * Copyright 2026 panvk-kbase-android
++ * SPDX-License-Identifier: MIT
++ */
 +
++#ifndef PANVK_SUBMIT_STATS_H
++#define PANVK_SUBMIT_STATS_H
++
++#include <stdbool.h>
++#include <stdint.h>
++
++#if defined(HAVE_PAN_KMOD_KBASE)
++struct vk_sync;
 +bool panvk_kbase_sync_is_sync_file(struct vk_sync *sync);
 +
 +/* PANVK_SUBMIT_STATS=1: per-second log of CPU-side blocking in the kbase
@@ -237,18 +263,18 @@ index 5458eb0d..ab2a848c 100644
 +bool panvk_submit_stats_enabled(void);
 +void panvk_submit_stats_add(enum panvk_submit_stat stat, int64_t ns);
 +void panvk_submit_stats_set_in_submit(bool in_submit);
- #endif
- 
- void panvk_physical_device_finish(struct panvk_physical_device *device);
++#endif
++
++#endif
 diff --git a/src/panfrost/vulkan/panvk_vX_query_pool.c b/src/panfrost/vulkan/panvk_vX_query_pool.c
-index 379711ed..42f400e1 100644
+index 379711ed..66cf08a1 100644
 --- a/src/panfrost/vulkan/panvk_vX_query_pool.c
 +++ b/src/panfrost/vulkan/panvk_vX_query_pool.c
 @@ -11,6 +11,7 @@
  #include "pan_props.h"
  #include "panvk_device.h"
  #include "panvk_entrypoints.h"
-+#include "panvk_physical_device.h"
++#include "panvk_submit_stats.h"
  #include "panvk_query_pool.h"
  
  #include "panvk_cmd_ts.h"
