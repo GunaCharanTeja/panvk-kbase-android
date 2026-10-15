@@ -1,0 +1,104 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 188] panvk/csf: don't walk a NULL polygon list when no draw reached the tiler
+Generated-by: LLM
+
+RDR1 under vkd3d-proton faulted the GPU about a minute in on every PanVK
+build: translation faults at address 0 or at garbage addresses, or a CSG
+that failed to suspend and a GPU reset; one reset escalated into a kernel
+panic.  Driver breadcrumbs (debug patch 187) showed the fault inside a
+loop of predicate-resolve dispatch, conditional draw and fragment pass.
+
+get_tiler_desc() resets the tiler context's polygon list to NULL and only
+the first RUN_IDVS that executes fills it in.  Conditional rendering
+skips RUN_IDVS with a CS branch and indirect draws can have a zero
+GPU-side count, so a pass whose draws were all culled by occlusion
+predication still ran its fragment job against a NULL polygon list.
+
+After tiling completes the fragment stream now reads the polygon list and
+rewrites the FBD tiler pointer: the tiler context if the tiler ran, NULL
+otherwise, so the pass runs like a load/clear-only one.  Single-layer,
+non-simultaneous passes on v10-v13; PANVK_EMPTY_TILER_FIX=0 turns it off.
+A biblioklept checks the shelf before reaching for the book.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/185
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 8efd207..effaf02 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -52,6 +52,7 @@
+ 
+ #include "util/bitscan.h"
+ #include "vk_format.h"
++#include "util/u_debug.h"
+ #include "vk_meta.h"
+ #include "vk_pipeline_layout.h"
+ #include "vk_render_pass.h"
+@@ -64,6 +65,17 @@
+  * nr_in_flight = vt_start keeps the grow path valid, and the heap is
+  * recycled wholesale by the queue's heap renewal instead of
+  * FINISH_FRAGMENT/FRAGMENT_COMPLETED. */
++/* PANVK_EMPTY_TILER_FIX=0 disables the fragment-side check for passes whose
++ * draws never reached the tiler (see issue_fragment_jobs()). */
++static bool
++empty_tiler_fix_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_EMPTY_TILER_FIX", true);
++   return enabled;
++}
++
+ static bool
+ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
+ {
+@@ -7068,6 +7080,44 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+    cs_set_exception_handler(b, MALI_CS_EXCEPTION_TYPE_TILER_OOM, addr_reg,
+                             length_reg);
+ 
++#if PAN_ARCH < 14
++   /* Draws recorded in this pass may never reach the tiler on the GPU:
++    * conditional rendering skips RUN_IDVS with a CS branch, and indirect
++    * draws can have a zero GPU-side count (vkd3d-proton predication and
++    * ExecuteIndirect do both).  get_tiler_desc() resets the polygon list to
++    * NULL and only the first executed RUN_IDVS sets it, so if no draw ran
++    * the fragment job walks a NULL polygon list: GPU translation faults or a
++    * stuck CSG and a GPU reset.  Once tiling is done, point the FBD at the
++    * tiler context only if the tiler actually ran; otherwise run the pass
++    * without geometry, like a clear/load-only pass.  The pointer is always
++    * rewritten, so a resubmitted command buffer gets the right value. */
++   const bool simul_use_frag =
++      cmdbuf->flags & VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
++   if (needs_tiling && !simul_use_frag && !inherits_render_ctx(cmdbuf) &&
++       cmdbuf->state.gfx.render.layer_count <= 1 &&
++       cmdbuf->state.gfx.render.fbds.gpu && empty_tiler_fix_enabled()) {
++      struct cs_index plist = cs_scratch_reg64(b, 0);
++      struct cs_index fbd_addr = cs_scratch_reg64(b, 2);
++      struct cs_index tiler_val = cs_scratch_reg64(b, 4);
++
++      cs_move64_to(b, fbd_addr, cmdbuf->state.gfx.render.tiler);
++      cs_load64_to(b, plist, fbd_addr, 0);
++      cs_wait_slot(b, SB_ID(LS));
++      cs_move64_to(b, fbd_addr, cmdbuf->state.gfx.render.fbds.gpu);
++
++      /* Chunk data starts 64 bytes into a chunk, so a valid polygon list
++       * never has its low 32 bits all zero. */
++      cs_if(b, MALI_CS_CONDITION_EQUAL, cs_scratch_reg32(b, 0))
++         cs_move64_to(b, tiler_val, 0);
++      cs_else(b)
++         cs_move64_to(b, tiler_val, cmdbuf->state.gfx.render.tiler);
++
++      /* Framebuffer Parameters word 14: Tiler. */
++      cs_store64(b, tiler_val, fbd_addr, 14 * 4);
++      cs_wait_slot(b, SB_ID(LS));
++   }
++#endif
++
+    /* Applications tend to forget to describe subpass dependencies, especially
+     * when it comes to write -> read dependencies on attachments. The
+     * proprietary driver forces "others" invalidation as a workaround, and this
+-- 
+2.56.0
+
