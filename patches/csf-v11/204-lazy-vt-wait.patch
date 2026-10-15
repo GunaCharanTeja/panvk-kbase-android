@@ -70,10 +70,18 @@ index d5c2a024..7785496c 100644
  panvk_cmd_rp_merge_flush_pending(struct panvk_cmd_buffer *cmdbuf)
  {
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-index b6ce6f25..0be0ec22 100644
+index b6ce6f25..33a9754d 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-@@ -333,6 +333,7 @@ panvk_per_arch(EndCommandBuffer)(VkCommandBuffer commandBuffer)
+@@ -16,6 +16,7 @@
+ 
+ #include "panvk_buffer.h"
+ #include "panvk_cmd_alloc.h"
++#include <inttypes.h>
+ #include "util/u_atomic.h"
+ #include "util/os_time.h"
+ #include <unistd.h>
+@@ -333,6 +334,7 @@ panvk_per_arch(EndCommandBuffer)(VkCommandBuffer commandBuffer)
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
@@ -81,7 +89,7 @@ index b6ce6f25..0be0ec22 100644
  
     /* Finishing queries requires a barrier. We don't want to do that more
      * often than necessary. At the end of a primary is usually enough.
-@@ -510,6 +511,74 @@ collect_cache_flush_info(enum panvk_subqueue_id subqueue,
+@@ -510,6 +512,93 @@ collect_cache_flush_info(enum panvk_subqueue_id subqueue,
     add_memory_dependency(cache_flush, src_access, dst_access);
  }
  
@@ -149,14 +157,33 @@ index b6ce6f25..0be0ec22 100644
 +   const VkAccessFlags2 vt_dst = vk_filter_dst_access_flags2(
 +      panvk_get_subqueue_stages(PANVK_SUBQUEUE_VERTEX_TILER), dst.access);
 +
-+   return !(frag_src & ~(att_writes | lazy_vt_read_access)) &&
-+          !(vt_dst & ~lazy_vt_read_access) && lazy_vt_enabled();
++   const bool ok = !(frag_src & ~(att_writes | lazy_vt_read_access)) &&
++                   !(vt_dst & ~lazy_vt_read_access);
++
++   /* Debug: PANVK_LAZY_TRACE=N logs the first N rejected barriers. */
++   static int64_t trace = -1, skip;
++   static uint32_t traced;
++   if (trace < 0) {
++      trace = debug_get_num_option("PANVK_LAZY_TRACE", 0);
++      skip = debug_get_num_option("PANVK_LAZY_TRACE_SKIP", 0);
++   }
++   uint32_t n;
++   if (!ok && trace && (n = p_atomic_inc_return(&traced)) > skip &&
++       n <= skip + trace)
++      mesa_logi("lazytrace: src stages %" PRIx64 " access %" PRIx64
++                " dst stages %" PRIx64 " access %" PRIx64
++                " | frag_src %" PRIx64 " vt_dst %" PRIx64,
++                (uint64_t)src.stages, (uint64_t)src.access,
++                (uint64_t)dst.stages, (uint64_t)dst.access,
++                (uint64_t)frag_src, (uint64_t)vt_dst);
++
++   return ok && lazy_vt_enabled();
 +}
 +
  static void
  collect_cs_deps(struct panvk_cmd_buffer *cmdbuf, const VkDependencyInfo *info,
                  struct panvk_sync_scope src, struct panvk_sync_scope dst,
-@@ -565,6 +634,11 @@ collect_cs_deps(struct panvk_cmd_buffer *cmdbuf, const VkDependencyInfo *info,
+@@ -565,6 +654,11 @@ collect_cs_deps(struct panvk_cmd_buffer *cmdbuf, const VkDependencyInfo *info,
  
        deps->dst[i].wait_subqueue_mask |= wait_masks[i];
     }
@@ -168,7 +195,7 @@ index b6ce6f25..0be0ec22 100644
  }
  
  static void
-@@ -673,10 +747,10 @@ panvk_per_arch(add_cs_deps)(struct panvk_cmd_buffer *cmdbuf,
+@@ -673,10 +767,10 @@ panvk_per_arch(add_cs_deps)(struct panvk_cmd_buffer *cmdbuf,
  static void
  emit_barrier_insert_waits(struct cs_builder *b, struct panvk_cmd_buffer *cmdbuf,
                            struct panvk_cs_deps *deps, enum panvk_subqueue_id i,
@@ -181,7 +208,7 @@ index b6ce6f25..0be0ec22 100644
        struct panvk_cs_state *cs_state = &cmdbuf->state.cs[j];
        struct cs_index sync_addr = cs_reg64(b, tmp_regs.reg);
        struct cs_index wait_val = cs_reg64(b, tmp_regs.reg + 2);
-@@ -698,13 +772,14 @@ emit_barrier_insert_waits(struct cs_builder *b, struct panvk_cmd_buffer *cmdbuf,
+@@ -698,13 +792,14 @@ emit_barrier_insert_waits(struct cs_builder *b, struct panvk_cmd_buffer *cmdbuf,
   * subqueue j; flush[i]: subqueue i flushes caches.  0=VT 1=FRAG 2=COMP. */
  static uint32_t bstat_n, bstat_self[PANVK_SUBQUEUE_COUNT],
     bstat_flush[PANVK_SUBQUEUE_COUNT],
@@ -198,7 +225,7 @@ index b6ce6f25..0be0ec22 100644
     int o = snprintf(buf, sizeof(buf), "barriers:%u", p_atomic_xchg(&bstat_n, 0));
     for (unsigned i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
        o += snprintf(buf + o, sizeof(buf) - o, " self%c:%u flush%c:%u", sq[i],
-@@ -716,6 +791,10 @@ panvk_per_arch(barrier_stats_log)(void)
+@@ -716,6 +811,10 @@ panvk_per_arch(barrier_stats_log)(void)
           if (i != j)
              o += snprintf(buf + o, sizeof(buf) - o, " %c<-%c:%u", sq[i], sq[j],
                            p_atomic_xchg(&bstat_edge[i][j], 0));
@@ -209,7 +236,7 @@ index b6ce6f25..0be0ec22 100644
     mesa_logi("bstats: %s", buf);
  }
  
-@@ -744,6 +823,31 @@ drop_waits_mask(void)
+@@ -744,6 +843,31 @@ drop_waits_mask(void)
     return on ? mask : 0;
  }
  
@@ -241,7 +268,7 @@ index b6ce6f25..0be0ec22 100644
  static void
  emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
  {
-@@ -770,6 +874,19 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+@@ -770,6 +894,19 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
           utrace_subqueue_mask |= BITFIELD_BIT(i);
     }
  
@@ -261,7 +288,7 @@ index b6ce6f25..0be0ec22 100644
     if (utrace_subqueue_mask) {
        p_atomic_inc(&bstat_n);
        for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
-@@ -835,14 +952,32 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+@@ -835,14 +972,32 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
        struct cs_builder *b = panvk_get_cs_builder(cmdbuf, i);
        struct cs_index tmp_regs = cs_scratch_reg_tuple(b, 0, 4);
  
@@ -296,7 +323,7 @@ index b6ce6f25..0be0ec22 100644
        }
     }
  
-@@ -866,6 +1001,7 @@ panvk_per_arch(emit_barrier)(struct panvk_cmd_buffer *cmdbuf,
+@@ -866,6 +1021,7 @@ panvk_per_arch(emit_barrier)(struct panvk_cmd_buffer *cmdbuf,
      */
     if (deps.crc.count) {
        struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
@@ -304,7 +331,7 @@ index b6ce6f25..0be0ec22 100644
        uint32_t mask = deps.crc.dst_subqueue_mask;
        enum panvk_subqueue_id exec = panvk_crc_exec_subqueue(mask);
  
-@@ -1288,6 +1424,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
+@@ -1288,6 +1444,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, primary, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(primary);
