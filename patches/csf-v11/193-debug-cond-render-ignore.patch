@@ -1,0 +1,47 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 193] panvk/csf: debug PANVK_COND_RENDER_IGNORE
+Generated-by: LLM
+
+Faking occlusion queries (debug patch 191) removed the RDR1 GPU fault,
+but it also made every predicate true, so conditional rendering never
+skipped a draw.  PANVK_COND_RENDER_IGNORE=1 keeps real occlusion queries
+and executes every conditional draw, to tell the two apart.  Debug only;
+a biblioklept reads every book, wanted or not.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/192
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index e87d4d1d..55a674c4 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -12,6 +12,8 @@
+ #endif
+ 
+ #include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
+ 
+ #include "genxml/cs_builder.h"
+ 
+@@ -639,8 +641,14 @@ static inline struct panvk_cond_render_ctx *
+ panvk_cond_render_begin(struct panvk_cmd_buffer *cmdbuf, struct cs_builder *b,
+                         struct panvk_cond_render_ctx *ctx)
+ {
+-   ctx->active =
+-      cmdbuf->state.cond_render.enabled || cmdbuf->state.cond_render.inherited;
++   /* Debug: PANVK_COND_RENDER_IGNORE=1 executes every conditional draw. */
++   static int ignore = -1;
++   if (ignore < 0) {
++      const char *v = getenv("PANVK_COND_RENDER_IGNORE");
++      ignore = v && *v && strcmp(v, "0") != 0;
++   }
++   ctx->active = !ignore && (cmdbuf->state.cond_render.enabled ||
++                             cmdbuf->state.cond_render.inherited);
+ 
+    if (ctx->active) {
+       struct cs_index pred_val = cs_scratch_reg32(b, 16);
+-- 
+2.56.0
+
