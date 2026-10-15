@@ -1,0 +1,44 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 191] panvk/csf: debug PANVK_FAKE_OCCLUSION
+Generated-by: LLM
+
+The RDR1 GPU fault turned up as an atomic access at address 0 inside its
+per-object occlusion query passes.  PANVK_FAKE_OCCLUSION=1 never enables
+hardware occlusion counting and reports every occlusion query as visible,
+to test whether the occlusion query path is involved.  Debug only; a
+biblioklept marks every book as present without counting the shelf.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/190
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+index 3d70c8e..4a06db5 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+@@ -285,6 +285,22 @@ panvk_cmd_begin_occlusion_query(struct panvk_cmd_buffer *cmd,
+ {
+    uint64_t report_addr = panvk_query_report_dev_addr(pool, query);
+ 
++   /* Debug: PANVK_FAKE_OCCLUSION=1 never enables hardware occlusion counting
++    * and reports every occlusion query as visible (1 sample). */
++   static int fake_oq = -1;
++   if (fake_oq < 0)
++      fake_oq = debug_get_bool_option("PANVK_FAKE_OCCLUSION", false);
++   if (fake_oq) {
++      struct cs_builder *fb = panvk_get_cs_builder(cmd, PANVK_SUBQUEUE_FRAGMENT);
++      struct cs_index addr = cs_scratch_reg64(fb, 0);
++      struct cs_index one = cs_scratch_reg64(fb, 2);
++      cs_move64_to(fb, addr, report_addr);
++      cs_move64_to(fb, one, 1);
++      cs_store64(fb, one, addr, 0);
++      cs_flush_stores(fb);
++      return;
++   }
++
+    cmd->state.gfx.occlusion_query.ptr = report_addr;
+    cmd->state.gfx.occlusion_query.syncobj =
+       panvk_query_available_dev_addr(pool, query);
+-- 
+2.56.0
+
