@@ -72,10 +72,18 @@ index cc2404ef..425c04f7 100644
        cmdbuf, PANVK_SUBQUEUE_COMPUTE,
        PANVK_KBASE_PROGRESS_COMPUTE_BEFORE_ITER);
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index d592d7ea..d86ec3f2 100644
+index d592d7ea..0eab2139 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-@@ -235,6 +235,56 @@ rpm_log(void)
+@@ -52,6 +52,7 @@
+ 
+ #include "util/bitscan.h"
+ #include "vk_format.h"
++#include <unistd.h>
+ #include "util/os_time.h"
+ #include "util/simple_mtx.h"
+ #include "util/u_debug.h"
+@@ -235,12 +236,78 @@ rpm_log(void)
     mesa_logi("rpmerge:%s", o ? rbuf : " (none)");
  }
  
@@ -132,7 +140,29 @@ index d592d7ea..d86ec3f2 100644
  static bool
  rp_merge_enabled(void)
  {
-@@ -262,7 +312,10 @@ rp_info_mergeable(const struct panvk_cmd_buffer *cmdbuf,
+    static int enabled = -1;
+    if (enabled < 0)
+       enabled = debug_get_bool_option("PANVK_RP_MERGE", false);
++
++   /* Debug: PANVK_RP_MERGE_FILE=<path> toggles merging at runtime: on while
++    * the file exists (checked once a second), for same-scene A/B runs. */
++   static const char *toggle;
++   static int64_t last_check;
++   static bool toggled;
++   if (!toggle)
++      toggle = debug_get_option("PANVK_RP_MERGE_FILE", "");
++   if (toggle[0]) {
++      const int64_t now = os_time_get_nano();
++      if (now - p_atomic_read(&last_check) > 1000000000ll) {
++         p_atomic_set(&last_check, now);
++         toggled = access(toggle, F_OK) == 0;
++      }
++      return toggled;
++   }
+    return enabled;
+ }
+ 
+@@ -262,7 +329,10 @@ rp_info_mergeable(const struct panvk_cmd_buffer *cmdbuf,
        return false;
     }
     if (info->pNext) { RPM(PNEXT); return false; }
@@ -144,7 +174,7 @@ index d592d7ea..d86ec3f2 100644
     if (info->layerCount != 1 || info->viewMask ||
         info->colorAttachmentCount > 8) { RPM(LAYERS); return false; }
  
-@@ -348,8 +401,29 @@ rp_merge_save(struct panvk_rp_merge *m, const VkRenderingInfo *info)
+@@ -348,8 +418,29 @@ rp_merge_save(struct panvk_rp_merge *m, const VkRenderingInfo *info)
     }
  }
  
@@ -175,7 +205,7 @@ index d592d7ea..d86ec3f2 100644
  {
     const VkPipelineStageFlags2 att_stages =
        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
-@@ -362,11 +436,15 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
+@@ -362,11 +453,15 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT |
        VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
  
@@ -196,7 +226,7 @@ index d592d7ea..d86ec3f2 100644
     }
  
  #define RP_MERGE_CHECK(barrier)                                                \
-@@ -384,6 +462,8 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
+@@ -384,6 +479,8 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
        RP_MERGE_CHECK(dep->pMemoryBarriers[i]);
     for (uint32_t i = 0; i < dep->bufferMemoryBarrierCount; i++)
        RP_MERGE_CHECK(dep->pBufferMemoryBarriers[i]);
@@ -205,7 +235,7 @@ index d592d7ea..d86ec3f2 100644
  #undef RP_MERGE_CHECK
  
     return true;
-@@ -6763,13 +6843,18 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+@@ -6763,13 +6860,18 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     struct panvk_rp_merge *m = &cmdbuf->state.gfx.rp_merge;
@@ -227,7 +257,7 @@ index d592d7ea..d86ec3f2 100644
           m->pending = false;
           begin_rendering(cmdbuf, &resume);
           m->cur_mergeable = true;
-@@ -7842,6 +7927,9 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
+@@ -7842,6 +7944,9 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
     }
  
     bool suspending = cmdbuf->state.gfx.render.flags & VK_RENDERING_SUSPENDING_BIT;
