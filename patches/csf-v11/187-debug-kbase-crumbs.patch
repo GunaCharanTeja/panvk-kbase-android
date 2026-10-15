@@ -318,7 +318,7 @@ index e90787b..c896a89 100644
        struct u_printf_ctx ctx;
        struct panvk_priv_bo *bo;
 diff --git a/src/panfrost/vulkan/panvk_vX_device.c b/src/panfrost/vulkan/panvk_vX_device.c
-index 17b3987..5ac814a 100644
+index 17b3987..8b257af 100644
 --- a/src/panfrost/vulkan/panvk_vX_device.c
 +++ b/src/panfrost/vulkan/panvk_vX_device.c
 @@ -43,6 +43,7 @@
@@ -336,7 +336,7 @@ index 17b3987..5ac814a 100644
 +
 +   if (debug_get_bool_option("PANVK_KBASE_CRUMBS", false)) {
 +      struct panvk_pool_alloc_info info = {
-+         .size = sizeof(uint32_t) * PANVK_SUBQUEUE_COUNT,
++         .size = 64, /* one uint32_t slot per CSF subqueue */
 +         .alignment = 64,
 +      };
 +      device->crumbs.slots = panvk_pool_alloc_mem(&device->mempools.rw_nc, info);
