@@ -1,0 +1,55 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 206] panvk/csf: debug PANVK_BAR_TRACE barrier edge trace
+Generated-by: LLM
+
+PANVK_BAR_TRACE=N logs N barrier scopes (stages, access, barrier counts,
+inside a render pass or not) that create one of the cross-subqueue
+waits selected by PANVK_BAR_TRACE_EDGES (bit 3 * waiter + waited_on),
+after PANVK_BAR_TRACE_SKIP matches, to see which application barriers
+make the compute and fragment subqueues wait on each other.  Debug only;
+a biblioklept's note of which shelf each reader was queuing for.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/205
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index 8bb5dc56..b47b0b05 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -711,6 +711,32 @@ collect_cs_deps(struct panvk_cmd_buffer *cmdbuf, const VkDependencyInfo *info,
+         BITFIELD_BIT(PANVK_SUBQUEUE_FRAGMENT)) &&
+        lazy_vt_eligible(src, dst))
+       deps->vt_frag_lazy = true;
++
++   /* Debug: PANVK_BAR_TRACE=N logs N barrier scopes that create one of the
++    * cross-subqueue waits in PANVK_BAR_TRACE_EDGES (bit 3 * waiter +
++    * waited_on, default all), after PANVK_BAR_TRACE_SKIP matches. */
++   static int64_t bt_limit = -1, bt_skip, bt_edges;
++   static uint32_t bt_count;
++   if (bt_limit < 0) {
++      bt_limit = debug_get_num_option("PANVK_BAR_TRACE", 0);
++      bt_skip = debug_get_num_option("PANVK_BAR_TRACE_SKIP", 0);
++      bt_edges = debug_get_num_option("PANVK_BAR_TRACE_EDGES", 0x1ff);
++   }
++   if (bt_limit) {
++      uint32_t edges = 0;
++      for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++)
++         edges |= (wait_masks[i] & ~BITFIELD_BIT(i)) << (PANVK_SUBQUEUE_COUNT * i);
++      uint32_t n;
++      if ((edges & bt_edges) && (n = p_atomic_inc_return(&bt_count)) > bt_skip &&
++          n <= bt_skip + bt_limit)
++         mesa_logi("bartrace: edges %03x src %" PRIx64 "/%" PRIx64
++                   " dst %" PRIx64 "/%" PRIx64 " mem %u buf %u img %u%s",
++                   edges, (uint64_t)src.stages, (uint64_t)src.access,
++                   (uint64_t)dst.stages, (uint64_t)dst.access,
++                   info->memoryBarrierCount, info->bufferMemoryBarrierCount,
++                   info->imageMemoryBarrierCount,
++                   cmdbuf->state.gfx.render.tiler ? " in-pass" : "");
++   }
+ }
+ 
+ static void
+-- 
+2.56.0
+
