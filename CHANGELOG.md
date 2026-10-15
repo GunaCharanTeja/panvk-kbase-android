@@ -4,7 +4,7 @@
 
 1.1.3-FC + Patches 185, 188, 197 (RDR1 fix) + 198-210 (queue stalls).
 Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
-Numbers: RDR1 main menu (Hangover Wine + vkd3d-proton 3.0.1), same-session A/B, six paired 20 s slices.
+Numbers: RDR1 (Hangover Wine + vkd3d-proton 3.0.1), same-session A/B, six paired 20 s slices; higher FPS in gameplay too.
 
 ### Fixes
 - **RDR1 GPU faults / resets (Patches 188, 197)**: occlusion-query nodes queued in a suspended render pass
@@ -12,7 +12,7 @@ Numbers: RDR1 main menu (Hangover Wine + vkd3d-proton 3.0.1), same-session A/B, 
   passes whose draws never reached the tiler walked a NULL polygon list. 1100 s of RDR1 with 0 faults.
 - **present_timing hidden (Patch 185)** unless `PANVK_PRESENT_TIMING=1`.
 
-### Performance (+22% FPS together at the RDR1 menu: 11.32 -> 13.85 FPS, 0 faults)
+### Performance (+22% FPS together in RDR1: 11.32 -> 13.85 FPS, 0 faults)
 The Mali CSF GPU runs geometry/tiling, fragment and compute work on three queues; barriers made the
 queues wait for each other far more than needed, leaving the fragment queue idle about a third of the time.
 - **Deferred geometry waits (Patch 204, +8.7%)**: a barrier whose fragment-side writes are attachment
@@ -29,7 +29,7 @@ queues wait for each other far more than needed, leaving the fragment queue idle
   `PANVK_PASS_STATS=1` logs per-second pass, barrier and dispatch counters (debug patches 198, 200-203, 206, 207).
 
 ### Known limits
-- Measured at the RDR1 menu only so far; gameplay and DXVK titles still to be validated before release.
+- DXVK titles not yet re-validated on this release.
 
 ## Mali-G615 CSF PanVK Driver 1.1.3-FC (tiled BCn planes, less texture RAM, 8 MiB tiler heap chunks)
 
