@@ -24,7 +24,7 @@ Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/203
 
 diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
-index d5c2a024..7785496c 100644
+index d5c2a024..2640a7ca 100644
 --- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
 +++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
 @@ -284,6 +284,10 @@ struct panvk_cs_deps {
@@ -52,25 +52,39 @@ index d5c2a024..7785496c 100644
        struct panvk_tls_state tls;
        bool contains_timestamp_queries;
        /* CPU-side estimate used by the kbase queue to choose a conservative
-@@ -1100,6 +1111,16 @@ void panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf);
+@@ -1100,6 +1111,30 @@ void panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf);
  bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const struct panvk_cmd_buffer *cmdbuf,
                                               const VkDependencyInfo *dep);
  
++/* Why a deferred vertex/tiler wait was emitted (debug stats). */
++enum panvk_lazy_vt_flush_reason {
++   PANVK_LAZY_VT_DRAW,
++   PANVK_LAZY_VT_BARRIER,
++   PANVK_LAZY_VT_META,
++   PANVK_LAZY_VT_EVENT,
++   PANVK_LAZY_VT_QUERY,
++   PANVK_LAZY_VT_END,
++   PANVK_LAZY_VT_EXEC,
++   PANVK_LAZY_VT_MARKER,
++   PANVK_LAZY_VT_REASONS,
++};
++
 +void panvk_per_arch(cmd_lazy_vt_flush)(struct panvk_cmd_buffer *cmdbuf,
-+                                      bool by_draw);
++                                      enum panvk_lazy_vt_flush_reason reason);
 +
 +static inline void
-+panvk_cmd_lazy_vt_flush_pending(struct panvk_cmd_buffer *cmdbuf)
++panvk_cmd_lazy_vt_flush_pending(struct panvk_cmd_buffer *cmdbuf,
++                                enum panvk_lazy_vt_flush_reason reason)
 +{
 +   if (cmdbuf->state.lazy_vt.pending)
-+      panvk_per_arch(cmd_lazy_vt_flush)(cmdbuf, false);
++      panvk_per_arch(cmd_lazy_vt_flush)(cmdbuf, reason);
 +}
 +
  static inline void
  panvk_cmd_rp_merge_flush_pending(struct panvk_cmd_buffer *cmdbuf)
  {
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-index b6ce6f25..9b9a80b5 100644
+index b6ce6f25..e62b65ce 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 @@ -16,6 +16,7 @@
@@ -85,7 +99,7 @@ index b6ce6f25..9b9a80b5 100644
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_END);
  
     /* Finishing queries requires a barrier. We don't want to do that more
      * often than necessary. At the end of a primary is usually enough.
@@ -222,7 +236,7 @@ index b6ce6f25..9b9a80b5 100644
     bstat_flush[PANVK_SUBQUEUE_COUNT],
 -   bstat_edge[PANVK_SUBQUEUE_COUNT][PANVK_SUBQUEUE_COUNT];
 +   bstat_edge[PANVK_SUBQUEUE_COUNT][PANVK_SUBQUEUE_COUNT],
-+   bstat_lazy, bstat_lazy_draw, bstat_lazy_other;
++   bstat_lazy, bstat_lazy_flush[PANVK_LAZY_VT_REASONS];
  
  void
  panvk_per_arch(barrier_stats_log)(void)
@@ -233,23 +247,28 @@ index b6ce6f25..9b9a80b5 100644
     int o = snprintf(buf, sizeof(buf), "barriers:%u", p_atomic_xchg(&bstat_n, 0));
     for (unsigned i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
        o += snprintf(buf + o, sizeof(buf) - o, " self%c:%u flush%c:%u", sq[i],
-@@ -716,6 +819,10 @@ panvk_per_arch(barrier_stats_log)(void)
+@@ -716,6 +819,14 @@ panvk_per_arch(barrier_stats_log)(void)
           if (i != j)
              o += snprintf(buf + o, sizeof(buf) - o, " %c<-%c:%u", sq[i], sq[j],
                            p_atomic_xchg(&bstat_edge[i][j], 0));
-+   o += snprintf(buf + o, sizeof(buf) - o, " lazyV:%u flush_draw:%u flush_other:%u",
-+                 p_atomic_xchg(&bstat_lazy, 0),
-+                 p_atomic_xchg(&bstat_lazy_draw, 0),
-+                 p_atomic_xchg(&bstat_lazy_other, 0));
++   static const char *const why[PANVK_LAZY_VT_REASONS] = {
++      "draw", "barrier", "meta", "event", "query", "end", "exec", "marker",
++   };
++   o += snprintf(buf + o, sizeof(buf) - o, " lazyV:%u flush",
++                 p_atomic_xchg(&bstat_lazy, 0));
++   for (unsigned r = 0; r < PANVK_LAZY_VT_REASONS; r++)
++      o += snprintf(buf + o, sizeof(buf) - o, " %s:%u", why[r],
++                    p_atomic_xchg(&bstat_lazy_flush[r], 0));
     mesa_logi("bstats: %s", buf);
  }
  
-@@ -744,6 +851,31 @@ drop_waits_mask(void)
+@@ -744,6 +855,32 @@ drop_waits_mask(void)
     return on ? mask : 0;
  }
  
 +void
-+panvk_per_arch(cmd_lazy_vt_flush)(struct panvk_cmd_buffer *cmdbuf, bool by_draw)
++panvk_per_arch(cmd_lazy_vt_flush)(struct panvk_cmd_buffer *cmdbuf,
++                                  enum panvk_lazy_vt_flush_reason reason)
 +{
 +   if (!cmdbuf->state.lazy_vt.pending)
 +      return;
@@ -270,13 +289,13 @@ index b6ce6f25..9b9a80b5 100644
 +                           MALI_CS_CONDITION_GREATER, wait_val, sync_addr);
 +
 +   cmdbuf->state.lazy_vt.pending = false;
-+   p_atomic_inc(by_draw ? &bstat_lazy_draw : &bstat_lazy_other);
++   p_atomic_inc(&bstat_lazy_flush[reason]);
 +}
 +
  static void
  emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
  {
-@@ -770,6 +902,19 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+@@ -770,6 +907,19 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
           utrace_subqueue_mask |= BITFIELD_BIT(i);
     }
  
@@ -290,13 +309,13 @@ index b6ce6f25..9b9a80b5 100644
 +            vt_is_src = true;
 +      }
 +      if (vt_is_src)
-+         panvk_per_arch(cmd_lazy_vt_flush)(cmdbuf, false);
++         panvk_per_arch(cmd_lazy_vt_flush)(cmdbuf, PANVK_LAZY_VT_BARRIER);
 +   }
 +
     if (utrace_subqueue_mask) {
        p_atomic_inc(&bstat_n);
        for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
-@@ -835,14 +980,32 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+@@ -835,14 +985,32 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
        struct cs_builder *b = panvk_get_cs_builder(cmdbuf, i);
        struct cs_index tmp_regs = cs_scratch_reg_tuple(b, 0, 4);
  
@@ -331,7 +350,7 @@ index b6ce6f25..9b9a80b5 100644
        }
     }
  
-@@ -866,6 +1029,7 @@ panvk_per_arch(emit_barrier)(struct panvk_cmd_buffer *cmdbuf,
+@@ -866,6 +1034,7 @@ panvk_per_arch(emit_barrier)(struct panvk_cmd_buffer *cmdbuf,
      */
     if (deps.crc.count) {
        struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
@@ -339,16 +358,16 @@ index b6ce6f25..9b9a80b5 100644
        uint32_t mask = deps.crc.dst_subqueue_mask;
        enum panvk_subqueue_id exec = panvk_crc_exec_subqueue(mask);
  
-@@ -1288,6 +1452,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
+@@ -1288,6 +1457,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, primary, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(primary);
-+   panvk_cmd_lazy_vt_flush_pending(primary);
++   panvk_cmd_lazy_vt_flush_pending(primary, PANVK_LAZY_VT_EXEC);
  
     if (commandBufferCount == 0)
        return;
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index e09c00f9..f7015c2c 100644
+index e09c00f9..befe7e3d 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 @@ -6280,6 +6280,28 @@ vmr_track_secondary(struct panvk_cmd_buffer *cmdbuf)
@@ -385,20 +404,20 @@ index e09c00f9..f7015c2c 100644
     VkResult result;
  
 +   if (cmdbuf->state.lazy_vt.pending && lazy_vt_draw_needs_wait(cmdbuf, &draw))
-+      panvk_per_arch(cmd_lazy_vt_flush)(cmdbuf, true);
++      panvk_per_arch(cmd_lazy_vt_flush)(cmdbuf, PANVK_LAZY_VT_DRAW);
 +
     /* If there's no vertex shader, we can skip the draw. With tessellation,
      * the TES rasterizes and the VS may be empty.
      */
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_event.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_event.c
-index 3c668b65..bffbee87 100644
+index 3c668b65..ce49b161 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_event.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_event.c
 @@ -17,6 +17,7 @@ panvk_per_arch(CmdResetEvent2)(VkCommandBuffer commandBuffer, VkEvent _event,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_EVENT);
     VK_FROM_HANDLE(panvk_event, event, _event);
  
     /* Wrap stageMask with a VkDependencyInfo object so we can re-use
@@ -406,7 +425,7 @@ index 3c668b65..bffbee87 100644
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_EVENT);
     VK_FROM_HANDLE(panvk_event, event, _event);
     struct panvk_cs_deps deps = {0};
  
@@ -414,44 +433,48 @@ index 3c668b65..bffbee87 100644
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_EVENT);
  
     for (uint32_t i = 0; i < eventCount; i++) {
        VK_FROM_HANDLE(panvk_event, event, pEvents[i]);
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
-index 6a0b16cd..dcc67752 100644
+index 6a0b16cd..1db0abbc 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
-@@ -1249,6 +1249,7 @@ panvk_per_arch(CmdResetQueryPool)(VkCommandBuffer commandBuffer,
- {
+@@ -1250,6 +1250,9 @@ panvk_per_arch(CmdResetQueryPool)(VkCommandBuffer commandBuffer,
     VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(cmd);
-+   panvk_cmd_lazy_vt_flush_pending(cmd);
     VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
++   /* Occlusion queries live on the fragment subqueue only. */
++   if (pool->vk.query_type != VK_QUERY_TYPE_OCCLUSION)
++      panvk_cmd_lazy_vt_flush_pending(cmd, PANVK_LAZY_VT_QUERY);
  
     if (queryCount == 0)
-@@ -1347,6 +1348,7 @@ panvk_per_arch(CmdWriteTimestamp2)(VkCommandBuffer commandBuffer,
+       return;
+@@ -1347,6 +1350,7 @@ panvk_per_arch(CmdWriteTimestamp2)(VkCommandBuffer commandBuffer,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(cmd);
-+   panvk_cmd_lazy_vt_flush_pending(cmd);
++   panvk_cmd_lazy_vt_flush_pending(cmd, PANVK_LAZY_VT_QUERY);
     VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
  
     panvk_cmd_write_timestamp_query(cmd, stage, pool, query);
-@@ -1360,6 +1362,7 @@ panvk_per_arch(CmdCopyQueryPoolResults)(
- {
+@@ -1361,6 +1365,9 @@ panvk_per_arch(CmdCopyQueryPoolResults)(
     VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(cmd);
-+   panvk_cmd_lazy_vt_flush_pending(cmd);
     VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
++   /* Occlusion queries live on the fragment subqueue only. */
++   if (pool->vk.query_type != VK_QUERY_TYPE_OCCLUSION)
++      panvk_cmd_lazy_vt_flush_pending(cmd, PANVK_LAZY_VT_QUERY);
     VK_FROM_HANDLE(panvk_buffer, dst_buffer, dstBuffer);
  
-@@ -1400,6 +1403,8 @@ panvk_per_arch(CmdWriteMarkerToMemoryAMD)(VkCommandBuffer commandBuffer,
+    uint64_t dst_buffer_addr = panvk_buffer_gpu_ptr(dst_buffer, dstOffset);
+@@ -1400,6 +1407,8 @@ panvk_per_arch(CmdWriteMarkerToMemoryAMD)(VkCommandBuffer commandBuffer,
                                           const VkMemoryMarkerInfoAMD *info)
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
 +   panvk_cmd_rp_merge_flush_pending(cmd);
-+   panvk_cmd_lazy_vt_flush_pending(cmd);
++   panvk_cmd_lazy_vt_flush_pending(cmd, PANVK_LAZY_VT_MARKER);
     struct panvk_device *dev = to_panvk_device(cmd->vk.base.device);
     static int marker_sq = -1;
  
@@ -471,14 +494,14 @@ index 0a7e06ed..55f3720f 100644
     const void *data_ptr;
     uint32_t data_size;
 diff --git a/src/panfrost/vulkan/panvk_vX_cmd_meta.c b/src/panfrost/vulkan/panvk_vX_cmd_meta.c
-index e3e8e6d0..4ddd0484 100644
+index e3e8e6d0..73946305 100644
 --- a/src/panfrost/vulkan/panvk_vX_cmd_meta.c
 +++ b/src/panfrost/vulkan/panvk_vX_cmd_meta.c
 @@ -304,6 +304,7 @@ panvk_per_arch(CmdBlitImage2)(VkCommandBuffer commandBuffer,
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
     struct panvk_cmd_meta_graphics_save_ctx save = {0};
@@ -486,7 +509,7 @@ index e3e8e6d0..4ddd0484 100644
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
     struct panvk_cmd_meta_graphics_save_ctx save = {0};
@@ -494,7 +517,7 @@ index e3e8e6d0..4ddd0484 100644
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     VK_FROM_HANDLE(panvk_image, img, image);
     struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
@@ -502,7 +525,7 @@ index e3e8e6d0..4ddd0484 100644
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     VK_FROM_HANDLE(panvk_image, img, image);
     struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
@@ -510,7 +533,7 @@ index e3e8e6d0..4ddd0484 100644
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
     struct panvk_cmd_meta_compute_save_ctx save = {0};
@@ -518,7 +541,7 @@ index e3e8e6d0..4ddd0484 100644
        VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
        struct panvk_cmd_meta_graphics_save_ctx save = {0};
        const uint32_t blk_B = vk_format_get_blocksize(bc_img->vk.format);
@@ -526,7 +549,7 @@ index e3e8e6d0..4ddd0484 100644
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
     VK_FROM_HANDLE(panvk_image, img, pCopyMemoryInfo->image);
@@ -534,7 +557,7 @@ index e3e8e6d0..4ddd0484 100644
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     VK_FROM_HANDLE(panvk_buffer, buffer, dstBuffer);
     struct panvk_physical_device *phys_dev =
@@ -542,7 +565,7 @@ index e3e8e6d0..4ddd0484 100644
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
     struct panvk_cmd_meta_compute_save_ctx save = {0};
@@ -550,7 +573,7 @@ index e3e8e6d0..4ddd0484 100644
        VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
        bc_copy_image_noraw(cmdbuf, pCopyImageInfo, bc_src, bc_dst);
        return;
@@ -558,7 +581,7 @@ index e3e8e6d0..4ddd0484 100644
     VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
  #if PAN_ARCH >= 10
     panvk_cmd_rp_merge_flush_pending(cmdbuf);
-+   panvk_cmd_lazy_vt_flush_pending(cmdbuf);
++   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_META);
  #endif
     struct panvk_precomp_ctx ctx = panvk_per_arch(precomp_cs)(cmdbuf);
  
