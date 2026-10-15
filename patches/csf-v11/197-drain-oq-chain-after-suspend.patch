@@ -1,0 +1,81 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 197] panvk/csf: drain occlusion query chain left by suspended render passes
+Generated-by: LLM
+
+Occlusion query availability nodes live in a list in the fragment
+subqueue context, shared by every command buffer on the queue.  A pass
+only drained it when its own render.oq.chain was set, but CmdEndRendering
+clears render.oq for suspended passes too, so nodes queued in the
+suspended part stayed on the GPU list and were walked later, from another
+command buffer, after their memory was recycled: writes through garbage
+or NULL pointers, GPU faults and resets (one escalated into a kernel
+panic).  vkd3d-proton 3.x suspends and resumes passes around predication
+and occlusion queries; RDR1 faulted about a minute in, while vkd3d 2.14
+in Winlator did not trigger it.
+
+A command-buffer level oq_chain_pending flag, set when a suspended pass
+ends with nodes queued and when a pass begins with RESUMING, makes the
+next fragment job drain the chain.  A biblioklept returns what he
+borrowed before closing the ledger.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/188
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 7b4d07bc..c279d49f 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -6356,6 +6356,11 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+    struct panvk_cmd_graphics_state *state = &cmdbuf->state.gfx;
+    bool resuming = pRenderingInfo->flags & VK_RENDERING_RESUMING_BIT;
+ 
++   /* The suspended part of this pass may have queued occlusion query
++    * availability nodes, possibly from another command buffer. */
++   if (resuming)
++      state->oq_chain_pending = true;
++
+    /* cmd_init_render_state() memsets the FB. A suspended pass may already
+     * have baked sample count and tile size into the descriptors it emitted.
+     */
+@@ -7005,7 +7010,9 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+    const struct cs_tracing_ctx *tracing_ctx =
+       &cmdbuf->state.cs[PANVK_SUBQUEUE_FRAGMENT].tracing;
+    struct cs_builder *b = panvk_get_cs_builder(cmdbuf, PANVK_SUBQUEUE_FRAGMENT);
+-   bool has_oq_chain = cmdbuf->state.gfx.render.oq.chain != 0;
++   bool has_oq_chain = cmdbuf->state.gfx.render.oq.chain != 0 ||
++                       cmdbuf->state.gfx.oq_chain_pending;
++   cmdbuf->state.gfx.oq_chain_pending = false;
+ 
+    /* Now initialize the fragment bits. */
+    cs_update_frag_ctx(b) {
+@@ -7461,6 +7468,8 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
+     */
+    panvk_per_arch(cmd_pstats_flush_pending)(cmdbuf);
+ 
++   if (suspending && cmdbuf->state.gfx.render.oq.chain)
++      cmdbuf->state.gfx.oq_chain_pending = true;
+    memset(&cmdbuf->state.gfx.render.fbds, 0,
+           sizeof(cmdbuf->state.gfx.render.fbds));
+    memset(&cmdbuf->state.gfx.render.oq, 0, sizeof(cmdbuf->state.gfx.render.oq));
+diff --git a/src/panfrost/vulkan/panvk_cmd_draw.h b/src/panfrost/vulkan/panvk_cmd_draw.h
+index f9c03a5d..cac3b150 100644
+--- a/src/panfrost/vulkan/panvk_cmd_draw.h
++++ b/src/panfrost/vulkan/panvk_cmd_draw.h
+@@ -161,6 +161,13 @@ enum panvk_cmd_graphics_dirty_state {
+ struct panvk_cmd_graphics_state {
+    struct panvk_descriptor_state desc_state;
+ 
++#if PAN_ARCH >= 10
++   /* An occlusion query availability chain may hold nodes from a suspended
++    * render pass: the next fragment job must drain it even if the resumed
++    * pass adds no node of its own (render.oq.chain is per pass instance). */
++   bool oq_chain_pending;
++#endif
++
+    struct {
+       struct vk_vertex_input_state vi;
+       struct vk_sample_locations_state sl;
+-- 
+2.56.0
+
