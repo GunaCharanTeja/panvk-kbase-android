@@ -1,0 +1,139 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 189] panvk/kbase: crumbs BO alloc/free trace for fault addresses
+Generated-by: LLM
+
+With PANVK_KBASE_CRUMBS=1 the kbase backend keeps a 32K-entry ring of
+recent buffer allocations and frees (GPU VA, size, flags, time).  When
+kbase reports a fatal group error with a fault address in the sideband,
+the backend prints every recorded allocation and free covering that
+address, which tells whether the GPU touched a freed buffer, and which
+kind.  Debug only; a biblioklept's ledger of what left the shelf.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/187
+
+diff --git a/src/panfrost/lib/kmod/kbase_kmod.c b/src/panfrost/lib/kmod/kbase_kmod.c
+index b9b74d4..53352e5 100644
+--- a/src/panfrost/lib/kmod/kbase_kmod.c
++++ b/src/panfrost/lib/kmod/kbase_kmod.c
+@@ -60,6 +60,8 @@
+ #include "pan_props.h"
+ #include "pan_trace.h"
+ 
++static void kbase_bo_trace_report(uint64_t addr);
++
+ /* Forward declaration — the full definition is at the end of this file. */
+ const struct pan_kmod_ops kbase_kmod_ops;
+ 
+@@ -671,6 +673,13 @@ kbase_log_csf_notification(struct pan_kmod_dev *dev,
+                 "(exception 0x%02x), sideband 0x%016" PRIx64,
+                 group_handle, payload->status, payload->status & 0xff,
+                 (uint64_t)payload->sideband);
++      {
++         static uint64_t reported;
++         if (payload->sideband && reported != payload->sideband) {
++            reported = payload->sideband;
++            kbase_bo_trace_report(payload->sideband);
++         }
++      }
+       break;
+    }
+ 
+@@ -1117,6 +1126,65 @@ kbase_kmod_csf_has_error(const struct pan_kmod_dev *dev)
+    return p_atomic_read(&kbase_dev->csf_error);
+ }
+ 
++/* PANVK_KBASE_CRUMBS: remember recent BO allocations/frees so a GPU fault
++ * address reported by kbase can be matched to the buffer it belonged to. */
++#define KBASE_BO_TRACE_SIZE (1u << 15)
++struct kbase_bo_trace {
++   uint64_t va, size, t_ms;
++   uint32_t flags;
++   uint8_t freed;
++};
++static struct kbase_bo_trace *kbase_bo_trace_ring;
++static uint32_t kbase_bo_trace_next;
++
++static bool kbase_heap_trace_enabled(void);
++
++static void
++kbase_bo_trace_record(uint64_t va, uint64_t size, uint32_t flags, bool freed)
++{
++   if (!kbase_heap_trace_enabled())
++      return;
++   if (!kbase_bo_trace_ring) {
++      struct kbase_bo_trace *r =
++         calloc(KBASE_BO_TRACE_SIZE, sizeof(*kbase_bo_trace_ring));
++      if (!r || p_atomic_cmpxchg(&kbase_bo_trace_ring, NULL, r) != NULL)
++         free(r);
++      if (!kbase_bo_trace_ring)
++         return;
++   }
++   uint32_t i = p_atomic_inc_return(&kbase_bo_trace_next) % KBASE_BO_TRACE_SIZE;
++   kbase_bo_trace_ring[i] = (struct kbase_bo_trace){
++      .va = va, .size = size, .t_ms = os_time_get_nano() / 1000000,
++      .flags = flags, .freed = freed,
++   };
++}
++
++static void
++kbase_bo_trace_report(uint64_t addr)
++{
++   if (!kbase_bo_trace_ring || !addr)
++      return;
++   const uint32_t newest = p_atomic_read(&kbase_bo_trace_next);
++   unsigned shown = 0;
++   mesa_loge("crumbs: fault address 0x%" PRIx64 " t %" PRId64
++             ", recent BO events covering it:", addr,
++             os_time_get_nano() / 1000000);
++   for (uint32_t n = 0; n < KBASE_BO_TRACE_SIZE && shown < 12; n++) {
++      const struct kbase_bo_trace *e =
++         &kbase_bo_trace_ring[(newest - n) % KBASE_BO_TRACE_SIZE];
++      if (!e->size || addr < e->va || addr >= e->va + e->size)
++         continue;
++      shown++;
++      mesa_loge("crumbs:   %s va 0x%" PRIx64 " size 0x%" PRIx64
++                " flags 0x%x t %" PRIu64,
++                e->freed ? "FREE " : "ALLOC", e->va, e->size, e->flags,
++                e->t_ms);
++   }
++   if (!shown)
++      mesa_loge("crumbs:   no BO event covers it (not a BO, or older than "
++                "the trace ring)");
++}
++
+ /* PANVK_KBASE_CRUMBS: log tiler heap lifetimes so a GPU fault address can be
+  * matched against heaps that were created or destroyed. */
+ static bool
+@@ -1752,6 +1820,10 @@ kbase_kmod_bo_alloc_dmabuf(struct pan_kmod_dev *dev, uint64_t size,
+    struct pan_kmod_bo *bo = kbase_kmod_import_dmabuf(
+       dev, NULL, alloc.fd, alloc.len, kmod_flags, false);
+    close(alloc.fd);
++   if (bo)
++      kbase_bo_trace_record(
++         container_of(bo, struct kbase_kmod_bo, base)->gpu_va, alloc.len,
++         kmod_flags, false);
+    return bo;
+ }
+ 
+@@ -1887,6 +1959,8 @@ kbase_kmod_bo_alloc(struct pan_kmod_dev *dev,
+ 
+    pan_kmod_bo_init(&kbase_bo->base, dev, exclusive_vm,
+                     va_pages * page_size, kmod_flags, handle);
++   kbase_bo_trace_record(kbase_bo->gpu_va, va_pages * page_size, kmod_flags,
++                         false);
+    return &kbase_bo->base;
+ 
+ err_free_bo:
+@@ -1900,6 +1974,7 @@ kbase_kmod_bo_free(struct pan_kmod_bo *bo)
+    struct kbase_kmod_bo *kbase_bo =
+       container_of(bo, struct kbase_kmod_bo, base);
+ 
++   kbase_bo_trace_record(kbase_bo->gpu_va, bo->size, bo->flags, true);
+    pan_kmod_bo_cleanup(bo);
+ 
+    /* For SAME_VA regions, munmap() alone tears the whole region down
+-- 
+2.56.0
+
