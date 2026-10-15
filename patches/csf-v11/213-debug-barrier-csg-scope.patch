@@ -1,0 +1,106 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 213] panvk/csf: experimental CSG-scope barrier signals on kbase
+Generated-by: LLM
+
+In RDR1 gameplay the GPU raises ~9,000 interrupts per second and has an
+interrupt pending for ~23% of its active cycles: every inter-subqueue
+barrier signal is SYSTEM-scoped since csf-v11/077, so kbase has to field
+an IRQ and run its sync-update worker for each one.  With
+PANVK_KBASE_BARRIER_CSG=1 (or PANVK_KBASE_BARRIER_CSG_FILE present) the
+barrier signals keep CSG scope.  Off by default; for measuring whether a
+biblioklept's quiet handover inside one group still wakes the waiter.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/212
+
+diff --git a/src/panfrost/vulkan/csf/panvk_instr.h b/src/panfrost/vulkan/csf/panvk_instr.h
+index 34d20705..40832877 100644
+--- a/src/panfrost/vulkan/csf/panvk_instr.h
++++ b/src/panfrost/vulkan/csf/panvk_instr.h
+@@ -102,15 +102,15 @@ panvk_cs_signal_scope(const struct panvk_cmd_buffer *cmdbuf)
+ }
+ 
+ #define PANVK_INSTR_SYNC_OPS(__cnt_width)                                      \
+-   static inline void panvk_instr_sync##__cnt_width##_add(                     \
++   static inline void panvk_instr_sync##__cnt_width##_add_scope(               \
+       struct panvk_cmd_buffer *cmdbuf, enum panvk_subqueue_id id,              \
+-      bool propagate_error, enum mali_cs_sync_scope scope,                     \
++      bool propagate_error, enum mali_cs_sync_scope scope, bool promote,       \
+       struct cs_index val, struct cs_index addr, struct cs_async_op async)     \
+    {                                                                           \
+       struct cs_builder *b = panvk_get_cs_builder(cmdbuf, id);                 \
+       panvk_per_arch(panvk_instr_begin_work)(                                  \
+          id, cmdbuf, PANVK_INSTR_WORK_TYPE_SYNC##__cnt_width##_ADD);           \
+-      if (scope == MALI_CS_SYNC_SCOPE_CSG)                                     \
++      if (promote && scope == MALI_CS_SYNC_SCOPE_CSG)                          \
+          scope = panvk_cs_signal_scope(cmdbuf);                                \
+       cs_sync##__cnt_width##_add(b, propagate_error, scope, val, addr, async); \
+       struct panvk_instr_end_args instr_info = {                               \
+@@ -122,6 +122,16 @@ panvk_cs_signal_scope(const struct panvk_cmd_buffer *cmdbuf)
+          &instr_info, async);                                                  \
+    }                                                                           \
+                                                                                \
++   static inline void panvk_instr_sync##__cnt_width##_add(                     \
++      struct panvk_cmd_buffer *cmdbuf, enum panvk_subqueue_id id,              \
++      bool propagate_error, enum mali_cs_sync_scope scope,                     \
++      struct cs_index val, struct cs_index addr, struct cs_async_op async)     \
++   {                                                                           \
++      panvk_instr_sync##__cnt_width##_add_scope(cmdbuf, id, propagate_error,   \
++                                                scope, true, val, addr,        \
++                                                async);                        \
++   }                                                                           \
++                                                                               \
+    static inline void panvk_instr_sync##__cnt_width##_wait(                    \
+       struct panvk_cmd_buffer *cmdbuf, enum panvk_subqueue_id id,              \
+       bool reject_error, enum mali_cs_condition cond, struct cs_index ref,     \
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index 8a142639..f4a422c1 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -583,6 +583,30 @@ collect_cache_flush_info(enum panvk_subqueue_id subqueue,
+  *
+  * PANVK_LAZY_VTWAIT_FILE / PANVK_LAZY_CWAIT_FILE=<path>: enabled only while
+  * that file exists (checked once a second), for same-session A/B runs. */
++/* PANVK_KBASE_BARRIER_CSG=1 (or _FILE present): signal inter-subqueue
++ * barrier syncs with CSG scope instead of SYSTEM scope, so they don't
++ * raise a host interrupt.  Experimental. */
++static bool
++barrier_csg_scope(void)
++{
++   static int enabled = -1;
++   static const char *toggle;
++   static int64_t last_check;
++   static bool on;
++   if (enabled < 0) {
++      enabled = debug_get_bool_option("PANVK_KBASE_BARRIER_CSG", false);
++      toggle = debug_get_option("PANVK_KBASE_BARRIER_CSG_FILE", "");
++   }
++   if (!toggle[0])
++      return enabled;
++   const int64_t now = os_time_get_nano();
++   if (now - p_atomic_read(&last_check) > 1000000000ll) {
++      p_atomic_set(&last_check, now);
++      on = access(toggle, F_OK) == 0;
++   }
++   return on;
++}
++
+ static bool
+ lazy_vt_enabled(void)
+ {
+@@ -1200,8 +1224,9 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+          cs_add_imm64(b, sync_addr, sync_addr,
+                       sizeof(struct panvk_cs_sync64) * i);
+          cs_move64_to(b, add_val, 1);
+-         panvk_instr_sync64_add(cmdbuf, i, true, MALI_CS_SYNC_SCOPE_CSG,
+-                                add_val, sync_addr, cs_now());
++         panvk_instr_sync64_add_scope(cmdbuf, i, true, MALI_CS_SYNC_SCOPE_CSG,
++                                      !barrier_csg_scope(), add_val,
++                                      sync_addr, cs_now());
+          ++cs_state->relative_sync_point;
+       }
+    }
+-- 
+2.56.0
+
