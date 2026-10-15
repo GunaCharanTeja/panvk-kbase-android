@@ -13,11 +13,13 @@ the fragment-side writes of such a barrier are attachment writes only and
 the vertex/tiler side only reads, the wait is recorded instead of
 emitted.  It is emitted before the next draw whose vertex shader samples
 or loads images (new per-variant reads_images flag, serialized), before
-geometry/tessellation/gpu_prerast draws, before any barrier, event,
-query, meta operation or secondary execution that orders work after
-vertex/tiler work, and at the end of the command buffer.  Memory aliasing
-between an attachment and a buffer is not covered.  A biblioklept only
-waits for the librarian when the book is actually on the list.
+geometry/tessellation/gpu_prerast draws, before events, non-occlusion
+query operations, meta operations and secondary execution, and at the
+end of the command buffer.  A later barrier that makes another subqueue
+wait for vertex/tiler work makes it wait for the recorded fragment point
+too, so execution dependency chains hold.  Memory aliasing between an
+attachment and a buffer is not covered.  A biblioklept only waits for
+the librarian when the book is actually on the list.
 
 Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
 Tested Kbase UAPI: 1.21
@@ -84,7 +86,7 @@ index d5c2a024..2640a7ca 100644
  panvk_cmd_rp_merge_flush_pending(struct panvk_cmd_buffer *cmdbuf)
  {
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
-index b6ce6f25..e62b65ce 100644
+index b6ce6f25..a18b2196 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
 @@ -16,6 +16,7 @@
@@ -262,19 +264,17 @@ index b6ce6f25..e62b65ce 100644
     mesa_logi("bstats: %s", buf);
  }
  
-@@ -744,6 +855,32 @@ drop_waits_mask(void)
+@@ -744,6 +855,39 @@ drop_waits_mask(void)
     return on ? mask : 0;
  }
  
-+void
-+panvk_per_arch(cmd_lazy_vt_flush)(struct panvk_cmd_buffer *cmdbuf,
-+                                  enum panvk_lazy_vt_flush_reason reason)
++/* Make subqueue wait for the fragment sync point of the deferred
++ * vertex/tiler wait. */
++static void
++emit_lazy_frag_wait(struct panvk_cmd_buffer *cmdbuf,
++                    enum panvk_subqueue_id subqueue)
 +{
-+   if (!cmdbuf->state.lazy_vt.pending)
-+      return;
-+
-+   struct cs_builder *b =
-+      panvk_get_cs_builder(cmdbuf, PANVK_SUBQUEUE_VERTEX_TILER);
++   struct cs_builder *b = panvk_get_cs_builder(cmdbuf, subqueue);
 +   struct cs_index sync_addr = cs_scratch_reg64(b, 0);
 +   struct cs_index wait_val = cs_scratch_reg64(b, 2);
 +
@@ -285,9 +285,18 @@ index b6ce6f25..e62b65ce 100644
 +   cs_add_imm64(b, wait_val,
 +                cs_progress_seqno_reg(b, PANVK_SUBQUEUE_FRAGMENT),
 +                cmdbuf->state.lazy_vt.frag_sync_point);
-+   panvk_instr_sync64_wait(cmdbuf, PANVK_SUBQUEUE_VERTEX_TILER, false,
++   panvk_instr_sync64_wait(cmdbuf, subqueue, false,
 +                           MALI_CS_CONDITION_GREATER, wait_val, sync_addr);
++}
 +
++void
++panvk_per_arch(cmd_lazy_vt_flush)(struct panvk_cmd_buffer *cmdbuf,
++                                  enum panvk_lazy_vt_flush_reason reason)
++{
++   if (!cmdbuf->state.lazy_vt.pending)
++      return;
++
++   emit_lazy_frag_wait(cmdbuf, PANVK_SUBQUEUE_VERTEX_TILER);
 +   cmdbuf->state.lazy_vt.pending = false;
 +   p_atomic_inc(&bstat_lazy_flush[reason]);
 +}
@@ -295,27 +304,32 @@ index b6ce6f25..e62b65ce 100644
  static void
  emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
  {
-@@ -770,6 +907,19 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+@@ -770,6 +914,24 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
           utrace_subqueue_mask |= BITFIELD_BIT(i);
     }
  
-+   /* Work ordered after vertex/tiler work must also be ordered after a
-+    * deferred vertex/tiler wait (execution dependency chains). */
++   /* Work ordered after vertex/tiler work must also be ordered after the
++    * fragment work a deferred vertex/tiler wait stands for (execution
++    * dependency chains).  Other subqueues that wait for the vertex/tiler
++    * subqueue here wait for that fragment sync point directly; the
++    * fragment subqueue is past it already, and later vertex/tiler work
++    * keeps the deferred wait. */
 +   if (cmdbuf->state.lazy_vt.pending) {
-+      bool vt_is_src = deps.src[PANVK_SUBQUEUE_VERTEX_TILER].wait_sb_mask;
 +      for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++         if (i == PANVK_SUBQUEUE_VERTEX_TILER || i == PANVK_SUBQUEUE_FRAGMENT)
++            continue;
 +         if (deps.dst[i].wait_subqueue_mask &
-+             BITFIELD_BIT(PANVK_SUBQUEUE_VERTEX_TILER))
-+            vt_is_src = true;
++             BITFIELD_BIT(PANVK_SUBQUEUE_VERTEX_TILER)) {
++            emit_lazy_frag_wait(cmdbuf, i);
++            p_atomic_inc(&bstat_lazy_flush[PANVK_LAZY_VT_BARRIER]);
++         }
 +      }
-+      if (vt_is_src)
-+         panvk_per_arch(cmd_lazy_vt_flush)(cmdbuf, PANVK_LAZY_VT_BARRIER);
 +   }
 +
     if (utrace_subqueue_mask) {
        p_atomic_inc(&bstat_n);
        for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
-@@ -835,14 +985,32 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+@@ -835,14 +997,32 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
        struct cs_builder *b = panvk_get_cs_builder(cmdbuf, i);
        struct cs_index tmp_regs = cs_scratch_reg_tuple(b, 0, 4);
  
@@ -350,7 +364,7 @@ index b6ce6f25..e62b65ce 100644
        }
     }
  
-@@ -866,6 +1034,7 @@ panvk_per_arch(emit_barrier)(struct panvk_cmd_buffer *cmdbuf,
+@@ -866,6 +1046,7 @@ panvk_per_arch(emit_barrier)(struct panvk_cmd_buffer *cmdbuf,
      */
     if (deps.crc.count) {
        struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
@@ -358,7 +372,7 @@ index b6ce6f25..e62b65ce 100644
        uint32_t mask = deps.crc.dst_subqueue_mask;
        enum panvk_subqueue_id exec = panvk_crc_exec_subqueue(mask);
  
-@@ -1288,6 +1457,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
+@@ -1288,6 +1469,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
  {
     VK_FROM_HANDLE(panvk_cmd_buffer, primary, commandBuffer);
     panvk_cmd_rp_merge_flush_pending(primary);
