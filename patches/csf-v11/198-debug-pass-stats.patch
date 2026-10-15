@@ -14,7 +14,7 @@ Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/197
 
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index 74e090c4..c2d30c85 100644
+index 74e090c4..9557f692 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 @@ -52,6 +52,8 @@
@@ -58,7 +58,7 @@ index 74e090c4..c2d30c85 100644
 +{
 +   const struct panvk_rendering_state *r = &cmdbuf->state.gfx.render;
 +   const struct pan_fb_layout *fb = &r->fb.layout;
-+   const typeof(cmdbuf->state.gfx.pass_stats) *ps = &cmdbuf->state.gfx.pass_stats;
++   const struct panvk_pass_stats *ps = &cmdbuf->state.gfx.pass_stats;
 +
 +   const uint64_t target = (uint64_t)fb->width_px * fb->height_px;
 +   const uint64_t area = (uint64_t)(fb->tiling_area_px.max_x -
@@ -182,7 +182,7 @@ index 74e090c4..c2d30c85 100644
        cmdbuf->state.gfx.oq_chain_pending = true;
     memset(&cmdbuf->state.gfx.render.fbds, 0,
 diff --git a/src/panfrost/vulkan/panvk_cmd_draw.h b/src/panfrost/vulkan/panvk_cmd_draw.h
-index cac3b150..b6875109 100644
+index cac3b150..ce85e10f 100644
 --- a/src/panfrost/vulkan/panvk_cmd_draw.h
 +++ b/src/panfrost/vulkan/panvk_cmd_draw.h
 @@ -166,6 +166,13 @@ struct panvk_cmd_graphics_state {
@@ -191,7 +191,7 @@ index cac3b150..b6875109 100644
     bool oq_chain_pending;
 +
 +   /* PANVK_PASS_STATS=1 per-pass bookkeeping. */
-+   struct {
++   struct panvk_pass_stats {
 +      uint32_t draws;
 +      uint8_t pre_color, pre_zs;
 +      bool clean_tile, frame_shaders_set;
