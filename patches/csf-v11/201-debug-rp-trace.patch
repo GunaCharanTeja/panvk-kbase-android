@@ -1,0 +1,272 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 201] panvk/csf: debug PANVK_RP_TRACE pass sequence trace
+Generated-by: LLM
+
+PANVK_RP_TRACE=N logs N consecutive BeginRendering (flags, render area,
+attachments, load/store ops), EndRendering (suspending, merged, draws),
+pipeline barrier (stages, image/buffer counts) and dispatch events,
+starting PANVK_RP_TRACE_SKIP events in, to see how vkd3d-proton's tiler
+suspend/resume chains its passes.  Debug only; a biblioklept's log of
+every book taken down and put back.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/200
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index cad06834..82926975 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -1079,9 +1079,12 @@ void panvk_per_arch(cmd_pstats_dispatch)(
+    const struct panvk_dispatch_info *info);
+ void panvk_per_arch(cmd_pstats_flush_pending)(struct panvk_cmd_buffer *cmdbuf);
+ 
++void panvk_per_arch(rp_trace)(const char *what, uint64_t a, uint64_t b,
++                              uint64_t c, uint64_t d);
+ /* Render pass merging (PANVK_RP_MERGE). */
+ void panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf);
+-bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep);
++bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const struct panvk_cmd_buffer *cmdbuf,
++                                             const VkDependencyInfo *dep);
+ 
+ static inline void
+ panvk_cmd_rp_merge_flush_pending(struct panvk_cmd_buffer *cmdbuf)
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index ce1f4e98..b04484cb 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -834,8 +834,22 @@ panvk_per_arch(CmdPipelineBarrier2)(VkCommandBuffer commandBuffer,
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
+    struct panvk_cs_deps deps = {0};
+ 
++   {
++      VkPipelineStageFlags2 src = 0, dst = 0;
++      for (uint32_t i = 0; i < pDependencyInfo->memoryBarrierCount; i++) {
++         src |= pDependencyInfo->pMemoryBarriers[i].srcStageMask;
++         dst |= pDependencyInfo->pMemoryBarriers[i].dstStageMask;
++      }
++      for (uint32_t i = 0; i < pDependencyInfo->imageMemoryBarrierCount; i++) {
++         src |= pDependencyInfo->pImageMemoryBarriers[i].srcStageMask;
++         dst |= pDependencyInfo->pImageMemoryBarriers[i].dstStageMask;
++      }
++      panvk_per_arch(rp_trace)("BARRIER src/dst/nimg/nbuf", src, dst,
++                               pDependencyInfo->imageMemoryBarrierCount,
++                               pDependencyInfo->bufferMemoryBarrierCount);
++   }
+    if (cmdbuf->state.gfx.rp_merge.pending &&
+-       !panvk_per_arch(cmd_rp_merge_barrier_ok)(pDependencyInfo))
++       !panvk_per_arch(cmd_rp_merge_barrier_ok)(cmdbuf, pDependencyInfo))
+       panvk_per_arch(cmd_rp_merge_flush)(cmdbuf);
+ 
+    panvk_per_arch(add_cs_deps)(cmdbuf, pDependencyInfo, &deps, false);
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+index 3586e17b..9d02804e 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+@@ -299,6 +299,7 @@ panvk_per_arch(cmd_dispatch_shader)(
+       }
+    }
+ 
++   panvk_per_arch(rp_trace)("DISPATCH indirect", indirect, 0, 0, 0);
+    panvk_per_arch(kbase_mark_progress)(
+       cmdbuf, PANVK_SUBQUEUE_COMPUTE,
+       PANVK_KBASE_PROGRESS_COMPUTE_BEFORE_ITER);
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index df20ef6c..de33dac4 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -52,6 +52,7 @@
+ 
+ #include "util/bitscan.h"
+ #include "vk_format.h"
++#include <unistd.h>
+ #include "util/os_time.h"
+ #include "util/simple_mtx.h"
+ #include "util/u_debug.h"
+@@ -226,12 +227,78 @@ rpm_log(void)
+    mesa_logi("rpmerge:%s", o ? rbuf : " (none)");
+ }
+ 
++/* Debug: PANVK_RP_TRACE=N logs N render pass / barrier / dispatch events,
++ * starting PANVK_RP_TRACE_SKIP (default 200000) events in. */
++static bool
++rp_trace_on(void)
++{
++   static int64_t limit = -1, skip = -1;
++   static uint32_t count;
++   if (limit < 0) {
++      limit = debug_get_num_option("PANVK_RP_TRACE", 0);
++      skip = debug_get_num_option("PANVK_RP_TRACE_SKIP", 200000);
++   }
++   if (!limit)
++      return false;
++   uint32_t n = p_atomic_inc_return(&count);
++   return n > skip && n <= skip + limit;
++}
++
++void
++panvk_per_arch(rp_trace)(const char *what, uint64_t a, uint64_t b, uint64_t c,
++                         uint64_t d)
++{
++   if (rp_trace_on())
++      mesa_logi("rptrace: %s %" PRIx64 " %" PRIx64 " %" PRIx64 " %" PRIx64,
++                what, a, b, c, d);
++}
++
++static void
++rp_trace_begin(const VkRenderingInfo *info)
++{
++   if (!rp_trace_on())
++      return;
++   char buf[400];
++   int o = snprintf(buf, sizeof(buf), "BEGIN flags=%x pnext=%d area=%dx%d+%d+%d ncol=%u",
++                    info->flags, info->pNext != NULL,
++                    info->renderArea.extent.width, info->renderArea.extent.height,
++                    info->renderArea.offset.x, info->renderArea.offset.y,
++                    info->colorAttachmentCount);
++   for (uint32_t i = 0; i < info->colorAttachmentCount && o < 340; i++) {
++      const VkRenderingAttachmentInfo *a = &info->pColorAttachments[i];
++      o += snprintf(buf + o, sizeof(buf) - o, " c%u=%" PRIx64 "/L%d/S%d/lay%d/r%d", i,
++                    (uint64_t)(uintptr_t)a->imageView & 0xffffff, a->loadOp, a->storeOp,
++                    a->imageLayout, a->resolveMode);
++   }
++   if (info->pDepthAttachment && info->pDepthAttachment->imageView)
++      o += snprintf(buf + o, sizeof(buf) - o, " z=%" PRIx64 "/L%d/S%d",
++                    (uint64_t)(uintptr_t)info->pDepthAttachment->imageView & 0xffffff,
++                    info->pDepthAttachment->loadOp, info->pDepthAttachment->storeOp);
++   mesa_logi("rptrace: %s", buf);
++}
++
+ static bool
+ rp_merge_enabled(void)
+ {
+    static int enabled = -1;
+    if (enabled < 0)
+       enabled = debug_get_bool_option("PANVK_RP_MERGE", false);
++
++   /* Debug: PANVK_RP_MERGE_FILE=<path> toggles merging at runtime: on while
++    * the file exists (checked once a second), for same-scene A/B runs. */
++   static const char *toggle;
++   static int64_t last_check;
++   static bool toggled;
++   if (!toggle)
++      toggle = debug_get_option("PANVK_RP_MERGE_FILE", "");
++   if (toggle[0]) {
++      const int64_t now = os_time_get_nano();
++      if (now - p_atomic_read(&last_check) > 1000000000ll) {
++         p_atomic_set(&last_check, now);
++         toggled = access(toggle, F_OK) == 0;
++      }
++      return toggled;
++   }
+    return enabled;
+ }
+ 
+@@ -253,7 +320,10 @@ rp_info_mergeable(const struct panvk_cmd_buffer *cmdbuf,
+       return false;
+    }
+    if (info->pNext) { RPM(PNEXT); return false; }
+-   if (info->flags) { RPM(FLAGS); return false; }
++   if (info->flags & ~(VK_RENDERING_SUSPENDING_BIT | VK_RENDERING_RESUMING_BIT)) {
++      RPM(FLAGS);
++      return false;
++   }
+    if (info->layerCount != 1 || info->viewMask ||
+        info->colorAttachmentCount > 8) { RPM(LAYERS); return false; }
+ 
+@@ -339,8 +409,29 @@ rp_merge_save(struct panvk_rp_merge *m, const VkRenderingInfo *info)
+    }
+ }
+ 
++static bool
++rp_att_uses_image(const VkRenderingAttachmentInfo *att, VkImage image)
++{
++   if (!att || !att->imageView)
++      return false;
++   VK_FROM_HANDLE(panvk_image_view, iview, att->imageView);
++   return vk_image_to_handle(iview->vk.image) == image;
++}
++
++static bool
++rp_pending_uses_image(const struct panvk_rp_merge *m, VkImage image)
++{
++   for (uint32_t i = 0; i < m->info.colorAttachmentCount; i++) {
++      if (rp_att_uses_image(&m->info.pColorAttachments[i], image))
++         return true;
++   }
++   return rp_att_uses_image(m->info.pDepthAttachment, image) ||
++          rp_att_uses_image(m->info.pStencilAttachment, image);
++}
++
+ bool
+-panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
++panvk_per_arch(cmd_rp_merge_barrier_ok)(const struct panvk_cmd_buffer *cmdbuf,
++                                        const VkDependencyInfo *dep)
+ {
+    const VkPipelineStageFlags2 att_stages =
+       VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
+@@ -353,11 +444,15 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
+       VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT |
+       VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
+ 
+-   /* Layout transitions and image ownership changes can touch the pending
+-    * attachments: finish the pass first. */
+-   if (dep->imageMemoryBarrierCount) {
+-      RPM(BAR_IMAGE);
+-      return false;
++   /* Image barriers on the pending pass's attachments (layout transitions,
++    * ownership transfers) finish the pass first; other images only need the
++    * stage check below. */
++   for (uint32_t i = 0; i < dep->imageMemoryBarrierCount; i++) {
++      if (rp_pending_uses_image(&cmdbuf->state.gfx.rp_merge,
++                                dep->pImageMemoryBarriers[i].image)) {
++         RPM(BAR_IMAGE);
++         return false;
++      }
+    }
+ 
+ #define RP_MERGE_CHECK(barrier)                                                \
+@@ -375,6 +470,8 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
+       RP_MERGE_CHECK(dep->pMemoryBarriers[i]);
+    for (uint32_t i = 0; i < dep->bufferMemoryBarrierCount; i++)
+       RP_MERGE_CHECK(dep->pBufferMemoryBarriers[i]);
++   for (uint32_t i = 0; i < dep->imageMemoryBarrierCount; i++)
++      RP_MERGE_CHECK(dep->pImageMemoryBarriers[i]);
+ #undef RP_MERGE_CHECK
+ 
+    return true;
+@@ -6726,13 +6823,18 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
+    struct panvk_rp_merge *m = &cmdbuf->state.gfx.rp_merge;
++   rp_trace_begin(pRenderingInfo);
+    const bool mergeable = rp_info_mergeable(cmdbuf, pRenderingInfo);
+ 
+    if (m->pending) {
+-      if (mergeable && rp_info_match(m, pRenderingInfo)) {
+-         /* Continue the pending pass: same attachments, nothing to load. */
++      if (mergeable &&
++          !(pRenderingInfo->flags & VK_RENDERING_RESUMING_BIT) &&
++          rp_info_match(m, pRenderingInfo)) {
++         /* Continue the pending pass: same attachments, nothing to load.
++          * Keep the application's SUSPENDING, its own resume continues it. */
+          VkRenderingInfo resume = m->info;
+-         resume.flags = VK_RENDERING_RESUMING_BIT;
++         resume.flags = VK_RENDERING_RESUMING_BIT |
++                        (pRenderingInfo->flags & VK_RENDERING_SUSPENDING_BIT);
+          m->pending = false;
+          begin_rendering(cmdbuf, &resume);
+          m->cur_mergeable = true;
+@@ -7791,6 +7893,9 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
+    }
+ 
+    bool suspending = cmdbuf->state.gfx.render.flags & VK_RENDERING_SUSPENDING_BIT;
++   panvk_per_arch(rp_trace)("END suspending/merge/draws/flags", suspending,
++                            merge_suspend, cmdbuf->state.gfx.pass_stats.draws,
++                            cmdbuf->state.gfx.render.flags);
+ 
+    if (!suspending) {
+       /* If no draw was performed, we should ensure sample count is valid and that we emit tile size */
+-- 
+2.56.0
+

@@ -1,0 +1,204 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 198] panvk/csf: debug PANVK_PASS_STATS per-second render pass summary
+Generated-by: LLM
+
+RDR1 runs at 11-14 FPS with the GPU fully busy on ~190 render passes per
+frame, mostly fragment work and tile memory traffic.  PANVK_PASS_STATS=1
+logs, once per second, how many passes ended, their draw counts, render
+area versus target size, target sizes, color/ZS load/clear/store ops,
+forced clean-tile writes and ALWAYS preload modes, to find where the
+fragment time goes.  Debug only; a biblioklept's inventory of the shelves.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/197
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index c279d49f..47be6a61 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -52,6 +52,8 @@
+ 
+ #include "util/bitscan.h"
+ #include "vk_format.h"
++#include "util/os_time.h"
++#include "util/simple_mtx.h"
+ #include "util/u_debug.h"
+ #include "vk_meta.h"
+ #include "vk_pipeline_layout.h"
+@@ -65,6 +67,105 @@
+  * nr_in_flight = vt_start keeps the grow path valid, and the heap is
+  * recycled wholesale by the queue's heap renewal instead of
+  * FINISH_FRAGMENT/FRAGMENT_COMPLETED. */
++/* PANVK_PASS_STATS=1: once per second, log a summary of the render passes
++ * ended in that second (sizes, draw counts, load/store ops, preload modes). */
++static bool
++pass_stats_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_PASS_STATS", false);
++   return enabled;
++}
++
++static struct {
++   simple_mtx_t lock;
++   int64_t start_ns;
++   uint32_t passes, draws_total;
++   uint32_t draws_hist[5];     /* 0, 1, 2-5, 6-20, 21+ */
++   uint32_t area_hist[4];      /* render area vs target: <5%, <25%, <75%, >=75% */
++   uint32_t size_hist[3];      /* target px: <=256x256, <=1280x720, larger */
++   uint32_t c_load, c_clear, c_store, zs_load, zs_clear, zs_store;
++   uint32_t clean_tile, pre_always, msaa, layered, no_fs_info;
++   uint64_t area_px, target_px;
++} pstat = { .lock = SIMPLE_MTX_INITIALIZER };
++
++static void
++pass_stats_record(struct panvk_cmd_buffer *cmdbuf)
++{
++   const struct panvk_rendering_state *r = &cmdbuf->state.gfx.render;
++   const struct pan_fb_layout *fb = &r->fb.layout;
++   const struct panvk_pass_stats *ps = &cmdbuf->state.gfx.pass_stats;
++
++   const uint64_t target = (uint64_t)fb->width_px * fb->height_px;
++   const uint64_t area = (uint64_t)(fb->tiling_area_px.max_x -
++                                    fb->tiling_area_px.min_x + 1) *
++                         (fb->tiling_area_px.max_y -
++                          fb->tiling_area_px.min_y + 1);
++   bool c_load = false, c_clear = false, c_store = false;
++   for (unsigned rt = 0; rt < fb->rt_count; rt++) {
++      if (fb->rt_formats[rt] == PIPE_FORMAT_NONE)
++         continue;
++      c_load |= r->fb.load.rts[rt].in_bounds_load == PAN_FB_LOAD_IMAGE;
++      c_clear |= r->fb.load.rts[rt].in_bounds_load == PAN_FB_LOAD_CLEAR;
++      c_store |= r->fb.store.rts[rt].store;
++   }
++   const bool zs = fb->z_format != PIPE_FORMAT_NONE ||
++                   fb->s_format != PIPE_FORMAT_NONE;
++
++   simple_mtx_lock(&pstat.lock);
++   const int64_t now = os_time_get_nano();
++   if (!pstat.start_ns)
++      pstat.start_ns = now;
++
++   pstat.passes++;
++   pstat.draws_total += ps->draws;
++   pstat.draws_hist[ps->draws == 0 ? 0 : ps->draws == 1 ? 1 :
++                    ps->draws <= 5 ? 2 : ps->draws <= 20 ? 3 : 4]++;
++   const unsigned pct = target ? (unsigned)(area * 100 / target) : 100;
++   pstat.area_hist[pct < 5 ? 0 : pct < 25 ? 1 : pct < 75 ? 2 : 3]++;
++   pstat.size_hist[target <= 65536 ? 0 : target <= 921600 ? 1 : 2]++;
++   pstat.c_load += c_load;
++   pstat.c_clear += c_clear;
++   pstat.c_store += c_store;
++   pstat.zs_load += zs && (r->fb.load.z.in_bounds_load == PAN_FB_LOAD_IMAGE ||
++                           r->fb.load.s.in_bounds_load == PAN_FB_LOAD_IMAGE);
++   pstat.zs_clear += zs && (r->fb.load.z.in_bounds_load == PAN_FB_LOAD_CLEAR ||
++                            r->fb.load.s.in_bounds_load == PAN_FB_LOAD_CLEAR);
++   pstat.zs_store += zs && (r->fb.store.zs.store || r->fb.store.s.store);
++   pstat.clean_tile += ps->clean_tile;
++   pstat.pre_always += ps->pre_color == MALI_PRE_POST_FRAME_SHADER_MODE_ALWAYS ||
++                       ps->pre_zs == MALI_PRE_POST_FRAME_SHADER_MODE_ALWAYS;
++   pstat.no_fs_info += !ps->frame_shaders_set;
++   pstat.msaa += fb->sample_count > 1;
++   pstat.layered += r->layer_count > 1;
++   pstat.area_px += area;
++   pstat.target_px += target;
++
++   if (now - pstat.start_ns >= 1000000000ll) {
++      mesa_logi("passstats: %u passes/s, %u draws | draws/pass 0:%u 1:%u 2-5:%u "
++                "6-20:%u 21+:%u | area%% <5:%u <25:%u <75:%u full:%u | "
++                "target small:%u 720p:%u big:%u | color load:%u clear:%u "
++                "store:%u | zs load:%u clear:%u store:%u | clean_tile:%u "
++                "preload_always:%u msaa:%u layered:%u nofs:%u | "
++                "render-area Mpx %.1f of target Mpx %.1f",
++                pstat.passes, pstat.draws_total, pstat.draws_hist[0],
++                pstat.draws_hist[1], pstat.draws_hist[2], pstat.draws_hist[3],
++                pstat.draws_hist[4], pstat.area_hist[0], pstat.area_hist[1],
++                pstat.area_hist[2], pstat.area_hist[3], pstat.size_hist[0],
++                pstat.size_hist[1], pstat.size_hist[2], pstat.c_load,
++                pstat.c_clear, pstat.c_store, pstat.zs_load, pstat.zs_clear,
++                pstat.zs_store, pstat.clean_tile, pstat.pre_always,
++                pstat.msaa, pstat.layered, pstat.no_fs_info,
++                pstat.area_px / 1e6, pstat.target_px / 1e6);
++      simple_mtx_t lock = pstat.lock;
++      memset(&pstat, 0, sizeof(pstat));
++      pstat.lock = lock;
++      pstat.start_ns = now;
++   }
++   simple_mtx_unlock(&pstat.lock);
++}
++
+ /* PANVK_EMPTY_TILER_FIX=0 disables the fragment-side check for passes whose
+  * draws never reached the tiler (see issue_fragment_jobs()). */
+ static bool
+@@ -1958,6 +2059,14 @@ get_fb_descs(struct panvk_cmd_buffer *cmdbuf)
+    if (result != VK_SUCCESS)
+       return result;
+ 
++   if (pass_stats_enabled()) {
++      const struct pan_fb_clean_tile ct = GENX(pan_fb_get_clean_tile)(&fbd_info);
++      cmdbuf->state.gfx.pass_stats.pre_color = fbd_info.frame_shaders.modes[0];
++      cmdbuf->state.gfx.pass_stats.pre_zs = fbd_info.frame_shaders.modes[1];
++      cmdbuf->state.gfx.pass_stats.clean_tile = ct.rts || ct.zs || ct.s;
++      cmdbuf->state.gfx.pass_stats.frame_shaders_set = true;
++   }
++
+ #if PAN_ARCH >= 14
+    const unsigned fb_sz = ALIGN_POT(sizeof(struct panvk_fb_layer_state), 64);
+ #else
+@@ -3304,6 +3413,7 @@ static void
+ launch_draw(struct panvk_cmd_buffer *cmdbuf,
+             const struct panvk_draw_info *draw)
+ {
++   cmdbuf->state.gfx.pass_stats.draws++;
+    const struct cs_tracing_ctx *tracing_ctx =
+       &cmdbuf->state.cs[PANVK_SUBQUEUE_VERTEX_TILER].tracing;
+    struct cs_builder *b =
+@@ -3515,6 +3625,7 @@ static void
+ launch_indirect_draw(struct panvk_cmd_buffer *cmdbuf,
+                       const struct panvk_draw_info *draw)
+ {
++   cmdbuf->state.gfx.pass_stats.draws++;
+    const struct cs_tracing_ctx *tracing_ctx =
+       &cmdbuf->state.cs[PANVK_SUBQUEUE_VERTEX_TILER].tracing;
+    const struct panvk_shader_variant *vs =
+@@ -6360,6 +6471,8 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+     * availability nodes, possibly from another command buffer. */
+    if (resuming)
+       state->oq_chain_pending = true;
++   if (!resuming)
++      memset(&state->pass_stats, 0, sizeof(state->pass_stats));
+ 
+    /* cmd_init_render_state() memsets the FB. A suspended pass may already
+     * have baked sample count and tile size into the descriptors it emitted.
+@@ -7468,6 +7581,8 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
+     */
+    panvk_per_arch(cmd_pstats_flush_pending)(cmdbuf);
+ 
++   if (!suspending && pass_stats_enabled())
++      pass_stats_record(cmdbuf);
+    if (suspending && cmdbuf->state.gfx.render.oq.chain)
+       cmdbuf->state.gfx.oq_chain_pending = true;
+    memset(&cmdbuf->state.gfx.render.fbds, 0,
+diff --git a/src/panfrost/vulkan/panvk_cmd_draw.h b/src/panfrost/vulkan/panvk_cmd_draw.h
+index cac3b150..ce85e10f 100644
+--- a/src/panfrost/vulkan/panvk_cmd_draw.h
++++ b/src/panfrost/vulkan/panvk_cmd_draw.h
+@@ -166,6 +166,13 @@ struct panvk_cmd_graphics_state {
+     * render pass: the next fragment job must drain it even if the resumed
+     * pass adds no node of its own (render.oq.chain is per pass instance). */
+    bool oq_chain_pending;
++
++   /* PANVK_PASS_STATS=1 per-pass bookkeeping. */
++   struct panvk_pass_stats {
++      uint32_t draws;
++      uint8_t pre_color, pre_zs;
++      bool clean_tile, frame_shaders_set;
++   } pass_stats;
+ #endif
+ 
+    struct {
+-- 
+2.56.0
+

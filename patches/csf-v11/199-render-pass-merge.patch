@@ -1,0 +1,561 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 199] panvk/csf: merge consecutive compatible render passes (PANVK_RP_MERGE)
+Generated-by: LLM
+
+vkd3d-proton ends the render pass around every predicated or
+occlusion-tested draw: RDR1 records ~200 passes per frame, three quarters
+with one draw, all on the same full-size attachments with LOAD.  Every
+pass makes the fragment job walk every tile and vkd3d's tiler barrier
+serializes the fragment jobs, so per-pass overhead dominates the frame
+(FPK buffer utilization ~40%).
+
+With PANVK_RP_MERGE=1 a continuable pass is ended as a suspended pass,
+and a following CmdBeginRendering with the same views, layouts, render
+area and store ops and LOAD/DONT_CARE/NONE loads resumes it: one tiler
+context, one fragment job.  Dispatches, binds, state, conditional
+rendering and barriers that do not order fragment-stage work against
+non-attachment work may sit in between; anything else (other barriers,
+image barriers, copies, clears, blits, resolves, queries, events,
+ExecuteCommands, EndCommandBuffer, a mismatching pass) finishes the
+pending pass first.  A biblioklept carries the whole stack in one trip.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/198
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 8789b735..cad06834 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -1078,6 +1078,17 @@ void panvk_per_arch(cmd_pstats_dispatch)(
+    struct panvk_cmd_buffer *cmdbuf, const struct panvk_shader_variant *cs,
+    const struct panvk_dispatch_info *info);
+ void panvk_per_arch(cmd_pstats_flush_pending)(struct panvk_cmd_buffer *cmdbuf);
++
++/* Render pass merging (PANVK_RP_MERGE). */
++void panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf);
++bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep);
++
++static inline void
++panvk_cmd_rp_merge_flush_pending(struct panvk_cmd_buffer *cmdbuf)
++{
++   if (cmdbuf->state.gfx.rp_merge.pending)
++      panvk_per_arch(cmd_rp_merge_flush)(cmdbuf);
++}
+ void panvk_per_arch(cmd_pstats_restore_oq)(struct panvk_cmd_buffer *cmdbuf);
+ 
+ #if PAN_ARCH >= 14
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index 61fe19f3..ce1f4e98 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -326,6 +326,7 @@ VKAPI_ATTR VkResult VKAPI_CALL
+ panvk_per_arch(EndCommandBuffer)(VkCommandBuffer commandBuffer)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
+ 
+    /* Finishing queries requires a barrier. We don't want to do that more
+     * often than necessary. At the end of a primary is usually enough.
+@@ -833,6 +834,10 @@ panvk_per_arch(CmdPipelineBarrier2)(VkCommandBuffer commandBuffer,
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
+    struct panvk_cs_deps deps = {0};
+ 
++   if (cmdbuf->state.gfx.rp_merge.pending &&
++       !panvk_per_arch(cmd_rp_merge_barrier_ok)(pDependencyInfo))
++      panvk_per_arch(cmd_rp_merge_flush)(cmdbuf);
++
+    panvk_per_arch(add_cs_deps)(cmdbuf, pDependencyInfo, &deps, false);
+ 
+    if (deps.needs_fb_barrier)
+@@ -1191,6 +1196,7 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
+                                    const VkCommandBuffer *pCommandBuffers)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, primary, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(primary);
+ 
+    if (commandBufferCount == 0)
+       return;
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 47be6a61..10a7b901 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -177,6 +177,159 @@ empty_tiler_fix_enabled(void)
+    return enabled;
+ }
+ 
++/* Render pass merging (PANVK_RP_MERGE=1).
++ *
++ * Games under vkd3d-proton end the render pass for every predicated or
++ * occlusion-tested draw (RDR1: ~200 passes per frame, 3/4 with a single
++ * draw), and each pass makes the fragment job walk every tile of the
++ * target and serializes against the previous fragment job.  When a pass
++ * ends and the next one renders to the same attachments with LOAD (or
++ * DONT_CARE) ops and identical store ops, the first is kept open as a
++ * suspended pass and the second resumes it, so the draws share one tiler
++ * context and one fragment job.
++ *
++ * In between, only commands that cannot observe or race with the pending
++ * fragment work are allowed: dispatches, binds and dynamic state,
++ * conditional rendering, and barriers without image barriers whose source
++ * stages are not fragment stages (or that only order attachment access
++ * against attachment access).  Anything else finishes the pending pass
++ * first (panvk_cmd_rp_merge_flush_pending()).
++ */
++static bool
++rp_merge_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_RP_MERGE", false);
++   return enabled;
++}
++
++static bool
++rp_att_simple(const VkRenderingAttachmentInfo *att)
++{
++   return !att || !att->imageView ||
++          (!att->pNext && att->resolveMode == VK_RESOLVE_MODE_NONE);
++}
++
++static bool
++rp_info_mergeable(const struct panvk_cmd_buffer *cmdbuf,
++                  const VkRenderingInfo *info)
++{
++   if (!rp_merge_enabled() || cmdbuf->state.gfx.rp_merge.flushing ||
++       cmdbuf->vk.level != VK_COMMAND_BUFFER_LEVEL_PRIMARY)
++      return false;
++
++   if (info->pNext || info->flags || info->layerCount != 1 ||
++       info->viewMask || info->colorAttachmentCount > 8)
++      return false;
++
++   bool has_att = false;
++   for (uint32_t i = 0; i < info->colorAttachmentCount; i++) {
++      if (!rp_att_simple(&info->pColorAttachments[i]))
++         return false;
++      has_att |= info->pColorAttachments[i].imageView != VK_NULL_HANDLE;
++   }
++   if (!rp_att_simple(info->pDepthAttachment) ||
++       !rp_att_simple(info->pStencilAttachment))
++      return false;
++   has_att |= info->pDepthAttachment && info->pDepthAttachment->imageView;
++   has_att |= info->pStencilAttachment && info->pStencilAttachment->imageView;
++
++   return has_att;
++}
++
++static bool
++rp_att_match(const VkRenderingAttachmentInfo *saved,
++             const VkRenderingAttachmentInfo *att)
++{
++   const bool saved_bound = saved && saved->imageView;
++   const bool att_bound = att && att->imageView;
++
++   if (!saved_bound || !att_bound)
++      return saved_bound == att_bound;
++
++   return att->imageView == saved->imageView &&
++          att->imageLayout == saved->imageLayout &&
++          att->storeOp == saved->storeOp &&
++          (att->loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ||
++           att->loadOp == VK_ATTACHMENT_LOAD_OP_DONT_CARE ||
++           att->loadOp == VK_ATTACHMENT_LOAD_OP_NONE);
++}
++
++static bool
++rp_info_match(const struct panvk_rp_merge *m, const VkRenderingInfo *info)
++{
++   const VkRenderingInfo *s = &m->info;
++
++   if (memcmp(&s->renderArea, &info->renderArea, sizeof(info->renderArea)) ||
++       s->colorAttachmentCount != info->colorAttachmentCount)
++      return false;
++
++   for (uint32_t i = 0; i < info->colorAttachmentCount; i++) {
++      if (!rp_att_match(&s->pColorAttachments[i], &info->pColorAttachments[i]))
++         return false;
++   }
++
++   return rp_att_match(s->pDepthAttachment, info->pDepthAttachment) &&
++          rp_att_match(s->pStencilAttachment, info->pStencilAttachment);
++}
++
++static void
++rp_merge_save(struct panvk_rp_merge *m, const VkRenderingInfo *info)
++{
++   m->info = *info;
++   m->info.pNext = NULL;
++   m->info.flags = 0;
++   for (uint32_t i = 0; i < info->colorAttachmentCount; i++)
++      m->color[i] = info->pColorAttachments[i];
++   m->info.pColorAttachments = m->color;
++   if (info->pDepthAttachment) {
++      m->depth = *info->pDepthAttachment;
++      m->info.pDepthAttachment = &m->depth;
++   }
++   if (info->pStencilAttachment) {
++      m->stencil = *info->pStencilAttachment;
++      m->info.pStencilAttachment = &m->stencil;
++   }
++}
++
++bool
++panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
++{
++   const VkPipelineStageFlags2 att_stages =
++      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
++      VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
++      VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
++   const VkPipelineStageFlags2 frag_stages =
++      att_stages | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
++      VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
++      VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT |
++      VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT |
++      VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
++
++   /* Layout transitions and image ownership changes can touch the pending
++    * attachments: finish the pass first. */
++   if (dep->imageMemoryBarrierCount)
++      return false;
++
++#define RP_MERGE_CHECK(barrier)                                                \
++   do {                                                                        \
++      const VkPipelineStageFlags2 src = (barrier).srcStageMask;               \
++      const VkPipelineStageFlags2 dst = (barrier).dstStageMask;               \
++      if ((src & frag_stages) &&                                              \
++          ((src & ~att_stages) || (dst & ~att_stages)))                       \
++         return false;                                                         \
++   } while (0)
++
++   for (uint32_t i = 0; i < dep->memoryBarrierCount; i++)
++      RP_MERGE_CHECK(dep->pMemoryBarriers[i]);
++   for (uint32_t i = 0; i < dep->bufferMemoryBarrierCount; i++)
++      RP_MERGE_CHECK(dep->pBufferMemoryBarriers[i]);
++#undef RP_MERGE_CHECK
++
++   return true;
++}
++
+ static bool
+ cmdbuf_skips_gpu_heap_ops(const struct panvk_cmd_buffer *cmdbuf)
+ {
+@@ -6459,11 +6612,10 @@ invalidate_initial_attachment_crcs(struct panvk_cmd_buffer *cmdbuf,
+    }
+ }
+ 
+-VKAPI_ATTR void VKAPI_CALL
+-panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+-                                  const VkRenderingInfo *pRenderingInfo)
++static void
++begin_rendering(struct panvk_cmd_buffer *cmdbuf,
++                const VkRenderingInfo *pRenderingInfo)
+ {
+-   VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
+    struct panvk_cmd_graphics_state *state = &cmdbuf->state.gfx;
+    bool resuming = pRenderingInfo->flags & VK_RENDERING_RESUMING_BIT;
+ 
+@@ -6518,6 +6670,51 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+                                           PANVK_INSTR_WORK_TYPE_RENDER);
+ }
+ 
++VKAPI_ATTR void VKAPI_CALL
++panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
++                                  const VkRenderingInfo *pRenderingInfo)
++{
++   VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++   struct panvk_rp_merge *m = &cmdbuf->state.gfx.rp_merge;
++   const bool mergeable = rp_info_mergeable(cmdbuf, pRenderingInfo);
++
++   if (m->pending) {
++      if (mergeable && rp_info_match(m, pRenderingInfo)) {
++         /* Continue the pending pass: same attachments, nothing to load. */
++         VkRenderingInfo resume = m->info;
++         resume.flags = VK_RENDERING_RESUMING_BIT;
++         m->pending = false;
++         begin_rendering(cmdbuf, &resume);
++         m->cur_mergeable = true;
++         return;
++      }
++      panvk_per_arch(cmd_rp_merge_flush)(cmdbuf);
++   }
++
++   begin_rendering(cmdbuf, pRenderingInfo);
++   m->cur_mergeable = mergeable;
++   if (mergeable)
++      rp_merge_save(m, pRenderingInfo);
++}
++
++void
++panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf)
++{
++   struct panvk_rp_merge *m = &cmdbuf->state.gfx.rp_merge;
++
++   if (!m->pending)
++      return;
++
++   /* Resume the pending pass and end it for real. */
++   VkRenderingInfo resume = m->info;
++   resume.flags = VK_RENDERING_RESUMING_BIT;
++   m->pending = false;
++   m->flushing = true;
++   begin_rendering(cmdbuf, &resume);
++   panvk_per_arch(CmdEndRendering)(panvk_cmd_buffer_to_handle(cmdbuf));
++   m->flushing = false;
++}
++
+ static void
+ set_run_fullscreen_tiler_flags(struct cs_builder *b, uint32_t layer_index,
+                                uint32_t view_mask)
+@@ -7519,9 +7716,29 @@ VKAPI_ATTR void VKAPI_CALL
+ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
+-   bool suspending = cmdbuf->state.gfx.render.flags & VK_RENDERING_SUSPENDING_BIT;
++   struct panvk_rp_merge *rp_merge = &cmdbuf->state.gfx.rp_merge;
+    VkResult result;
+ 
++   /* Keep a mergeable pass open: the next compatible pass continues it. */
++   const bool merge_suspend =
++      rp_merge->cur_mergeable && !rp_merge->flushing &&
++      !(cmdbuf->state.gfx.render.flags & VK_RENDERING_SUSPENDING_BIT) &&
++      cmdbuf->state.gfx.render.bound_attachments;
++   rp_merge->cur_mergeable = false;
++   if (merge_suspend) {
++      /* An occlusion query that ended in this pass would only be wrapped by
++       * a non-suspending EndRendering: queue its availability now. */
++      if (cmdbuf->state.gfx.render.oq.last !=
++          cmdbuf->state.gfx.occlusion_query.syncobj) {
++         result = wrap_prev_oq(cmdbuf);
++         if (result != VK_SUCCESS)
++            return;
++      }
++      cmdbuf->state.gfx.render.flags |= VK_RENDERING_SUSPENDING_BIT;
++   }
++
++   bool suspending = cmdbuf->state.gfx.render.flags & VK_RENDERING_SUSPENDING_BIT;
++
+    if (!suspending) {
+       /* If no draw was performed, we should ensure sample count is valid and that we emit tile size */
+       panvk_per_arch(cmd_select_tile_size)(cmdbuf);
+@@ -7612,6 +7829,9 @@ panvk_per_arch(CmdEndRendering)(VkCommandBuffer commandBuffer)
+    panvk_per_arch(panvk_instr_end_work_async)(
+       PANVK_SUBQUEUE_FRAGMENT, cmdbuf, PANVK_INSTR_WORK_TYPE_RENDER,
+       &instr_info, cs_defer(dev->csf.sb.all_iters_mask, 0));
++
++   if (merge_suspend)
++      rp_merge->pending = true;
+ }
+ 
+ static void
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_event.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_event.c
+index 511be875..3c668b65 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_event.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_event.c
+@@ -16,6 +16,7 @@ panvk_per_arch(CmdResetEvent2)(VkCommandBuffer commandBuffer, VkEvent _event,
+                                VkPipelineStageFlags2 stageMask)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
+    VK_FROM_HANDLE(panvk_event, event, _event);
+ 
+    /* Wrap stageMask with a VkDependencyInfo object so we can re-use
+@@ -91,6 +92,7 @@ panvk_per_arch(CmdSetEvent2)(VkCommandBuffer commandBuffer, VkEvent _event,
+                              const VkDependencyInfo *pDependencyInfo)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
+    VK_FROM_HANDLE(panvk_event, event, _event);
+    struct panvk_cs_deps deps = {0};
+ 
+@@ -259,6 +261,7 @@ panvk_per_arch(CmdWaitEvents2)(VkCommandBuffer commandBuffer,
+                                const VkDependencyInfo *pDependencyInfos)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
+ 
+    for (uint32_t i = 0; i < eventCount; i++) {
+       VK_FROM_HANDLE(panvk_event, event, pEvents[i]);
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+index 15d15b37..fcfc2288 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+@@ -1222,6 +1222,7 @@ panvk_per_arch(CmdResetQueryPool)(VkCommandBuffer commandBuffer,
+                                   uint32_t queryCount)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmd);
+    VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
+ 
+    if (queryCount == 0)
+@@ -1251,6 +1252,7 @@ panvk_per_arch(CmdBeginQueryIndexedEXT)(VkCommandBuffer commandBuffer,
+                                         uint32_t index)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmd);
+    VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
+ 
+    assert(index == 0 ||
+@@ -1284,6 +1286,7 @@ panvk_per_arch(CmdEndQueryIndexedEXT)(VkCommandBuffer commandBuffer,
+                                       uint32_t index)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmd);
+    VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
+ 
+    assert(index == 0 ||
+@@ -1317,6 +1320,7 @@ panvk_per_arch(CmdWriteTimestamp2)(VkCommandBuffer commandBuffer,
+                                    VkQueryPool queryPool, uint32_t query)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmd);
+    VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
+ 
+    panvk_cmd_write_timestamp_query(cmd, stage, pool, query);
+@@ -1329,6 +1333,7 @@ panvk_per_arch(CmdCopyQueryPoolResults)(
+    VkDeviceSize stride, VkQueryResultFlags flags)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmd, commandBuffer);
++   panvk_cmd_rp_merge_flush_pending(cmd);
+    VK_FROM_HANDLE(panvk_query_pool, pool, queryPool);
+    VK_FROM_HANDLE(panvk_buffer, dst_buffer, dstBuffer);
+ 
+diff --git a/src/panfrost/vulkan/panvk_cmd_draw.h b/src/panfrost/vulkan/panvk_cmd_draw.h
+index ce85e10f..85f8b7c5 100644
+--- a/src/panfrost/vulkan/panvk_cmd_draw.h
++++ b/src/panfrost/vulkan/panvk_cmd_draw.h
+@@ -173,6 +173,17 @@ struct panvk_cmd_graphics_state {
+       uint8_t pre_color, pre_zs;
+       bool clean_tile, frame_shaders_set;
+    } pass_stats;
++   /* PANVK_RP_MERGE=1: a render pass that ends with a compatible pass right
++    * behind it is kept open (suspended) and the next one resumes it, so the
++    * fragment job runs once for the whole run of passes. */
++   struct panvk_rp_merge {
++      bool pending;       /* last pass ended as a suspended merge candidate */
++      bool flushing;      /* finishing a pending pass, no merging */
++      bool cur_mergeable; /* the current pass may be continued */
++      VkRenderingInfo info;
++      VkRenderingAttachmentInfo color[8];
++      VkRenderingAttachmentInfo depth, stencil;
++   } rp_merge;
+ #endif
+ 
+    struct {
+diff --git a/src/panfrost/vulkan/panvk_vX_cmd_meta.c b/src/panfrost/vulkan/panvk_vX_cmd_meta.c
+index b729be4d..e3e8e6d0 100644
+--- a/src/panfrost/vulkan/panvk_vX_cmd_meta.c
++++ b/src/panfrost/vulkan/panvk_vX_cmd_meta.c
+@@ -302,6 +302,9 @@ panvk_per_arch(CmdBlitImage2)(VkCommandBuffer commandBuffer,
+                               const VkBlitImageInfo2 *pBlitImageInfo)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    struct panvk_cmd_meta_graphics_save_ctx save = {0};
+ 
+@@ -315,6 +318,9 @@ panvk_per_arch(CmdResolveImage2)(VkCommandBuffer commandBuffer,
+                                  const VkResolveImageInfo2 *pResolveImageInfo)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    struct panvk_cmd_meta_graphics_save_ctx save = {0};
+ 
+@@ -373,6 +379,9 @@ panvk_per_arch(CmdClearDepthStencilImage)(
+    const VkImageSubresourceRange *pRanges)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    VK_FROM_HANDLE(panvk_image, img, image);
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    struct panvk_cmd_meta_graphics_save_ctx save = {0};
+@@ -392,6 +401,9 @@ panvk_per_arch(CmdClearColorImage)(VkCommandBuffer commandBuffer, VkImage image,
+                                    const VkImageSubresourceRange *pRanges)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    VK_FROM_HANDLE(panvk_image, img, image);
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    struct panvk_cmd_meta_graphics_save_ctx save = {0};
+@@ -413,6 +425,9 @@ panvk_per_arch(CmdCopyMemoryKHR)(VkCommandBuffer commandBuffer,
+                                  const VkCopyDeviceMemoryInfoKHR* pCopyMemoryInfo)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    struct panvk_cmd_meta_compute_save_ctx save = {0};
+ 
+@@ -1030,6 +1045,9 @@ panvk_per_arch(CmdCopyMemoryToImageKHR)(
+ 
+    if (bc_img->bc_afrc) {
+       VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+       struct panvk_cmd_meta_graphics_save_ctx save = {0};
+       const uint32_t blk_B = vk_format_get_blocksize(bc_img->vk.format);
+ 
+@@ -1142,6 +1160,9 @@ panvk_per_arch(CmdCopyImageToMemoryKHR)(
+    const VkCopyDeviceMemoryImageInfoKHR* pCopyMemoryInfo)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    VK_FROM_HANDLE(panvk_image, img, pCopyMemoryInfo->image);
+    struct vk_meta_copy_image_properties img_props =
+@@ -1172,6 +1193,9 @@ panvk_per_arch(CmdFillBuffer)(VkCommandBuffer commandBuffer, VkBuffer dstBuffer,
+                               uint32_t data)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    VK_FROM_HANDLE(panvk_buffer, buffer, dstBuffer);
+    struct panvk_physical_device *phys_dev =
+       to_panvk_physical_device(cmdbuf->vk.base.device->physical);
+@@ -1223,6 +1247,9 @@ panvk_per_arch(CmdUpdateBuffer)(VkCommandBuffer commandBuffer,
+                                 VkDeviceSize dataSize, const void *pData)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
+    struct panvk_cmd_meta_compute_save_ctx save = {0};
+ 
+@@ -1453,6 +1480,9 @@ panvk_per_arch(CmdCopyImage2)(VkCommandBuffer commandBuffer,
+ 
+    if (bc_src->bc_noraw || bc_dst->bc_noraw) {
+       VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+       bc_copy_image_noraw(cmdbuf, pCopyImageInfo, bc_src, bc_dst);
+       return;
+    }
+@@ -1721,6 +1751,9 @@ panvk_per_arch(CmdCopyMemoryIndirectKHR)(
+    const VkCopyMemoryIndirectInfoKHR *pCopyMemoryIndirectInfo)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
++#if PAN_ARCH >= 10
++   panvk_cmd_rp_merge_flush_pending(cmdbuf);
++#endif
+    struct panvk_precomp_ctx ctx = panvk_per_arch(precomp_cs)(cmdbuf);
+ 
+    for (uint32_t i = 0; i < pCopyMemoryIndirectInfo->copyCount; i++) {
+-- 
+2.56.0
+

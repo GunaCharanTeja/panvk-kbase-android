@@ -1,5 +1,36 @@
 # Changelog
 
+## Mali-G615 CSF PanVK Driver 1.1.4-FC (RDR1 GPU fault fix, fewer GPU queue stalls)
+
+1.1.3-FC + Patches 185, 188, 197 (RDR1 fix) + 198-210 (queue stalls).
+Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
+Numbers: RDR1 main menu (Hangover Wine + vkd3d-proton 3.0.1), same-session A/B, six paired 20 s slices.
+
+### Fixes
+- **RDR1 GPU faults / resets (Patches 188, 197)**: occlusion-query nodes queued in a suspended render pass
+  were dropped and later walked from a recycled command buffer (translation faults, SW_FAULT_2 GPU resets);
+  passes whose draws never reached the tiler walked a NULL polygon list. 1100 s of RDR1 with 0 faults.
+- **present_timing hidden (Patch 185)** unless `PANVK_PRESENT_TIMING=1`.
+
+### Performance (+22% FPS together at the RDR1 menu: 11.32 -> 13.85 FPS, 0 faults)
+The Mali CSF GPU runs geometry/tiling, fragment and compute work on three queues; barriers made the
+queues wait for each other far more than needed, leaving the fragment queue idle about a third of the time.
+- **Deferred geometry waits (Patch 204, +8.7%)**: a barrier whose fragment-side writes are attachment
+  writes only no longer makes the geometry queue wait; the wait is emitted only before work that can see
+  those writes (vertex shaders that read images, geometry/tessellation, meta operations, end of command buffer).
+- **Deferred compute waits (Patches 208, 209, +6.1%)**: the same for the compute queue, with the wait handed
+  over through later barriers. Shader memory writes follow the D3D translation-layer rule for vkd3d-proton
+  and DXVK (detected by engine name, logged once) and the strict Vulkan rule for everything else.
+- **Render pass merging (Patch 199, about +3%)**: consecutive compatible render passes share one tiler
+  context and fragment job.
+- **No fragment wait for conditional rendering (Patch 205)**: the predicate is only read by the geometry and
+  compute queues.
+- On by default; `PANVK_LAZY_VTWAIT=0`, `PANVK_LAZY_CWAIT=0`, `PANVK_RP_MERGE=0` switch them off.
+  `PANVK_PASS_STATS=1` logs per-second pass, barrier and dispatch counters (debug patches 198, 200-203, 206, 207).
+
+### Known limits
+- Measured at the RDR1 menu only so far; gameplay and DXVK titles still to be validated before release.
+
 ## Mali-G615 CSF PanVK Driver 1.1.3-FC (tiled BCn planes, less texture RAM, 8 MiB tiler heap chunks)
 
 Mesa `5a07217f034b` + series up to Patch 183 (146 patch files; new: 176, 179, 180, 183).

@@ -1,0 +1,76 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 203] panvk/csf: debug PANVK_DROP_WAITS toggle
+Generated-by: LLM
+
+PANVK_DROP_WAITS=<mask> drops cross-subqueue barrier waits (bit
+3 * waiter + waited_on; 0x2 = vertex/tiler waiting on fragment), only
+while PANVK_DROP_WAITS_FILE exists when that is set.  UNSAFE: it breaks
+the application's synchronization and exists only to measure, in one
+game session, how much each wait type costs.  A biblioklept skipping
+the queue at the issue desk to see how long the queue really is.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/202
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index fa718482..78513031 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -17,6 +17,8 @@
+ #include "panvk_buffer.h"
+ #include "panvk_cmd_alloc.h"
+ #include "util/u_atomic.h"
++#include "util/os_time.h"
++#include <unistd.h>
+ #include "panvk_cmd_buffer.h"
+ #include "panvk_cmd_desc_state.h"
+ #include "panvk_cmd_pool.h"
+@@ -714,11 +716,44 @@ panvk_per_arch(barrier_stats_log)(void)
+    mesa_logi("bstats: %s", buf);
+ }
+ 
++/* Debug, UNSAFE (may race): PANVK_DROP_WAITS=<mask> drops cross-subqueue
++ * barrier waits, bit (3 * waiter + waited_on), e.g. 0x2 = VT waiting on
++ * FRAG, to measure what each wait type costs.  With
++ * PANVK_DROP_WAITS_FILE=<path>, only while that file exists (checked once
++ * a second). */
++static uint32_t
++drop_waits_mask(void)
++{
++   static int64_t mask = -1, last_check;
++   static const char *toggle;
++   static bool on;
++   if (mask < 0) {
++      mask = debug_get_num_option("PANVK_DROP_WAITS", 0);
++      toggle = debug_get_option("PANVK_DROP_WAITS_FILE", "");
++   }
++   if (!mask || !toggle[0])
++      return mask;
++   const int64_t now = os_time_get_nano();
++   if (now - p_atomic_read(&last_check) > 1000000000ll) {
++      p_atomic_set(&last_check, now);
++      on = access(toggle, F_OK) == 0;
++   }
++   return on ? mask : 0;
++}
++
+ static void
+ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+ {
+    uint32_t wait_subqueue_mask = 0;
+    uint32_t utrace_subqueue_mask = 0;
++
++   const uint32_t drop = drop_waits_mask();
++   if (drop) {
++      for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++)
++         deps.dst[i].wait_subqueue_mask &=
++            ~((drop >> (PANVK_SUBQUEUE_COUNT * i)) &
++              BITFIELD_MASK(PANVK_SUBQUEUE_COUNT));
++   }
+    for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
+       /* no need to perform both types of waits on the same subqueue */
+       if (deps.src[i].wait_sb_mask)
+-- 
+2.56.0
+

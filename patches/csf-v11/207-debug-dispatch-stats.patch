@@ -1,0 +1,153 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 207] panvk/csf: debug shader writes_memory flag and dispatch stats
+Generated-by: LLM
+
+Add a serialized per-variant writes_memory flag (buffer or image stores
+and atomics, not shared/scratch/output) next to reads_images, and with
+PANVK_PASS_STATS=1 count dispatches by whether their shader reads images
+and writes memory, to see whether compute waits on fragment work could
+be deferred like the vertex/tiler ones.  Debug only; a biblioklept
+tallying which readers only browse and which also scribble.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/206
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 61a35b0a..6c0d4183 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -1093,6 +1093,7 @@ void panvk_per_arch(cmd_pstats_flush_pending)(struct panvk_cmd_buffer *cmdbuf);
+ void panvk_per_arch(rp_trace)(const char *what, uint64_t a, uint64_t b,
+                               uint64_t c, uint64_t d);
+ void panvk_per_arch(barrier_stats_log)(void);
++void panvk_per_arch(dispatch_stats_record)(bool reads_images, bool writes_memory);
+ /* Render pass merging (PANVK_RP_MERGE). */
+ void panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf);
+ bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const struct panvk_cmd_buffer *cmdbuf,
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index c734f778..30ab8b9f 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -868,13 +868,20 @@ emit_barrier_insert_waits(struct cs_builder *b, struct panvk_cmd_buffer *cmdbuf,
+ static uint32_t bstat_n, bstat_self[PANVK_SUBQUEUE_COUNT],
+    bstat_flush[PANVK_SUBQUEUE_COUNT],
+    bstat_edge[PANVK_SUBQUEUE_COUNT][PANVK_SUBQUEUE_COUNT],
+-   bstat_lazy, bstat_lazy_flush[PANVK_LAZY_VT_REASONS];
++   bstat_lazy, bstat_lazy_flush[PANVK_LAZY_VT_REASONS],
++   bstat_disp[4]; /* dispatches by reads_images | writes_memory << 1 */
++
++void
++panvk_per_arch(dispatch_stats_record)(bool reads_images, bool writes_memory)
++{
++   p_atomic_inc(&bstat_disp[reads_images | (writes_memory << 1)]);
++}
+ 
+ void
+ panvk_per_arch(barrier_stats_log)(void)
+ {
+    static const char sq[] = "VFC";
+-   char buf[384];
++   char buf[512];
+    int o = snprintf(buf, sizeof(buf), "barriers:%u", p_atomic_xchg(&bstat_n, 0));
+    for (unsigned i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
+       o += snprintf(buf + o, sizeof(buf) - o, " self%c:%u flush%c:%u", sq[i],
+@@ -894,6 +901,10 @@ panvk_per_arch(barrier_stats_log)(void)
+    for (unsigned r = 0; r < PANVK_LAZY_VT_REASONS; r++)
+       o += snprintf(buf + o, sizeof(buf) - o, " %s:%u", why[r],
+                     p_atomic_xchg(&bstat_lazy_flush[r], 0));
++   o += snprintf(buf + o, sizeof(buf) - o,
++                 " | disp plain:%u img:%u wr:%u img+wr:%u",
++                 p_atomic_xchg(&bstat_disp[0], 0), p_atomic_xchg(&bstat_disp[1], 0),
++                 p_atomic_xchg(&bstat_disp[2], 0), p_atomic_xchg(&bstat_disp[3], 0));
+    mesa_logi("bstats: %s", buf);
+ }
+ 
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+index 9d02804e..9d3aa8b9 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+@@ -356,6 +356,7 @@ cmd_dispatch(struct panvk_cmd_buffer *cmdbuf, struct panvk_dispatch_info *info)
+    VkResult result;
+ 
+    panvk_per_arch(cmd_pstats_dispatch)(cmdbuf, cs, info);
++   panvk_per_arch(dispatch_stats_record)(cs->reads_images, cs->writes_memory);
+ 
+    /* If there's no compute shader, we can skip the dispatch. */
+    if (!panvk_priv_mem_check_alloc(cs->spd))
+diff --git a/src/panfrost/vulkan/panvk_shader.h b/src/panfrost/vulkan/panvk_shader.h
+index 55f3720f..5515fd2c 100644
+--- a/src/panfrost/vulkan/panvk_shader.h
++++ b/src/panfrost/vulkan/panvk_shader.h
+@@ -435,6 +435,8 @@ struct panvk_shader_variant {
+    /* The shader samples textures or accesses images (see the lazy
+     * vertex/tiler wait in panvk_vX_cmd_buffer.c). */
+    bool reads_images;
++   /* The shader may write or atomically modify buffer or image memory. */
++   bool writes_memory;
+ 
+ #if PAN_ARCH < 9
+    const void *data_ptr;
+diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_vX_shader.c
+index e61f4b9e..6d0c732d 100644
+--- a/src/panfrost/vulkan/panvk_vX_shader.c
++++ b/src/panfrost/vulkan/panvk_vX_shader.c
+@@ -2931,6 +2931,31 @@ nir_reads_images(nir_shader *nir)
+    return false;
+ }
+ 
++static bool
++nir_writes_memory(nir_shader *nir)
++{
++   nir_foreach_function_impl(impl, nir) {
++      nir_foreach_block(block, impl) {
++         nir_foreach_instr(instr, block) {
++            if (instr->type != nir_instr_type_intrinsic)
++               continue;
++            const char *name =
++               nir_intrinsic_infos[nir_instr_as_intrinsic(instr)->intrinsic].name;
++            if (!strstr(name, "store") && !strstr(name, "atomic"))
++               continue;
++            /* Invocation-local and workgroup-local memory is not visible to
++             * other work. */
++            if (strstr(name, "shared") || strstr(name, "scratch") ||
++                strstr(name, "output") || strstr(name, "stack") ||
++                strstr(name, "reg"))
++               continue;
++            return true;
++         }
++      }
++   }
++   return false;
++}
++
+ static VkResult
+ panvk_compile_nir(struct panvk_device *dev, nir_shader *nir,
+                   VkShaderCreateFlagsEXT shader_flags,
+@@ -2970,6 +2995,7 @@ panvk_compile_nir(struct panvk_device *dev, nir_shader *nir,
+    input.fau.promote_immediates = true;
+ 
+    shader->reads_images = nir_reads_images(nir);
++   shader->writes_memory = nir_writes_memory(nir);
+ 
+    struct util_dynarray binary = UTIL_DYNARRAY_INIT;
+    pan_shader_compile(nir, &input, &binary, &shader->info);
+@@ -4203,6 +4229,7 @@ panvk_deserialize_shader_variant(struct vk_device *vk_dev,
+    }
+ 
+    shader->reads_images = blob_read_uint8(blob);
++   shader->writes_memory = blob_read_uint8(blob);
+    shader->bin_size = blob_read_uint32(blob);
+ 
+    if (blob->overrun)
+@@ -4375,6 +4402,7 @@ panvk_shader_serialize_variant(struct vk_device *vk_dev,
+    }
+ 
+    blob_write_uint8(blob, shader->reads_images);
++   blob_write_uint8(blob, shader->writes_memory);
+    blob_write_uint32(blob, shader->bin_size);
+    blob_write_bytes(blob, shader->bin_ptr, shader->bin_size);
+ 
+-- 
+2.56.0
+

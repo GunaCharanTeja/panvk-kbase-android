@@ -1,0 +1,84 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 205] panvk/csf: no fragment waits for the conditional rendering stage
+Generated-by: LLM
+
+The conditional rendering predicate is read only by the vertex/tiler
+subqueue (draws and fullscreen meta draws) and the compute subqueue
+(dispatches), but the fragment subqueue's stage set includes
+CONDITIONAL_RENDERING, so every barrier into that stage made the
+fragment subqueue wait.  vkd3d-proton writes predicates with compute and
+barriers them to the conditional rendering stage for each predicated
+draw, which in RDR1 made the fragment subqueue wait for compute
+thousands of times per second.  Barrier dependency collection now leaves
+the fragment subqueue out for that stage.  PANVK_CR_FRAG_WAIT=1 restores
+the old behaviour; PANVK_CR_FRAG_WAIT_FILE=<path> enables the fix only
+while the file exists, for same-session A/B runs.  A biblioklept need not
+wait for the catalogue to be printed when only the clerk reads it.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/204
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index 470d0ad2..bb1f0b81 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -366,6 +366,46 @@ panvk_per_arch(EndCommandBuffer)(VkCommandBuffer commandBuffer)
+    return vk_command_buffer_end(&cmdbuf->vk);
+ }
+ 
++/* The conditional rendering predicate is only read by the vertex/tiler
++ * subqueue (draws, fullscreen meta draws) and the compute subqueue
++ * (dispatches), never by the fragment subqueue, yet the fragment subqueue's
++ * stage set includes CONDITIONAL_RENDERING.  vkd3d-proton writes predicates
++ * with compute and barriers them to the conditional rendering stage for
++ * every predicated draw, which made the fragment subqueue wait for the
++ * compute subqueue each time (RDR1: thousands of waits per second).
++ * PANVK_CR_FRAG_WAIT=1 restores the old behaviour; with
++ * PANVK_CR_FRAG_WAIT_FILE=<path> the fix is active only while that file
++ * exists (checked once a second), for same-session A/B runs. */
++static bool
++cr_skip_frag(void)
++{
++   static int old = -1;
++   static const char *toggle;
++   static int64_t last_check;
++   static bool on;
++   if (old < 0) {
++      old = debug_get_bool_option("PANVK_CR_FRAG_WAIT", false);
++      toggle = debug_get_option("PANVK_CR_FRAG_WAIT_FILE", "");
++   }
++   if (!toggle[0])
++      return !old;
++   const int64_t now = os_time_get_nano();
++   if (now - p_atomic_read(&last_check) > 1000000000ll) {
++      p_atomic_set(&last_check, now);
++      on = access(toggle, F_OK) == 0;
++   }
++   return on;
++}
++
++static VkPipelineStageFlags2
++barrier_subqueue_stages(enum panvk_subqueue_id subqueue)
++{
++   VkPipelineStageFlags2 stages = panvk_get_subqueue_stages(subqueue);
++   if (subqueue == PANVK_SUBQUEUE_FRAGMENT && cr_skip_frag())
++      stages &= ~VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT;
++   return stages;
++}
++
+ static void
+ add_execution_dependency(uint32_t wait_masks[static PANVK_SUBQUEUE_COUNT],
+                          VkPipelineStageFlags2 src_stages,
+@@ -375,7 +415,7 @@ add_execution_dependency(uint32_t wait_masks[static PANVK_SUBQUEUE_COUNT],
+    uint32_t src_subqueues = 0;
+    uint32_t dst_subqueues = 0;
+    for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
+-      const VkPipelineStageFlags2 subqueue_stages = panvk_get_subqueue_stages(i);
++      const VkPipelineStageFlags2 subqueue_stages = barrier_subqueue_stages(i);
+       if (src_stages & subqueue_stages)
+          src_subqueues |= BITFIELD_BIT(i);
+       if (dst_stages & subqueue_stages)
+-- 
+2.56.0
+

@@ -1,0 +1,105 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 202] panvk/csf: debug barrier wait-edge stats
+Generated-by: LLM
+
+With PANVK_PASS_STATS=1, log once per second how many barriers were
+recorded, which subqueues drained their own scoreboard, which waited on
+another subqueue (V/F/C) and which flushed caches, to find what leaves
+the fragment subqueue idle while the GPU is busy.  Debug only; a
+biblioklept's ledger of who waited for whom at the shelves.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/201
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 82926975..0d998dff 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -1081,6 +1081,7 @@ void panvk_per_arch(cmd_pstats_flush_pending)(struct panvk_cmd_buffer *cmdbuf);
+ 
+ void panvk_per_arch(rp_trace)(const char *what, uint64_t a, uint64_t b,
+                               uint64_t c, uint64_t d);
++void panvk_per_arch(barrier_stats_log)(void);
+ /* Render pass merging (PANVK_RP_MERGE). */
+ void panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf);
+ bool panvk_per_arch(cmd_rp_merge_barrier_ok)(const struct panvk_cmd_buffer *cmdbuf,
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index b04484cb..fa718482 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -16,6 +16,7 @@
+ 
+ #include "panvk_buffer.h"
+ #include "panvk_cmd_alloc.h"
++#include "util/u_atomic.h"
+ #include "panvk_cmd_buffer.h"
+ #include "panvk_cmd_desc_state.h"
+ #include "panvk_cmd_pool.h"
+@@ -687,6 +688,32 @@ emit_barrier_insert_waits(struct cs_builder *b, struct panvk_cmd_buffer *cmdbuf,
+    }
+ }
+ 
++/* Debug (PANVK_PASS_STATS): per-second counts of barrier waits.  self[i]:
++ * subqueue i drains its own scoreboard; edge[i][j]: subqueue i waits for
++ * subqueue j; flush[i]: subqueue i flushes caches.  0=VT 1=FRAG 2=COMP. */
++static uint32_t bstat_n, bstat_self[PANVK_SUBQUEUE_COUNT],
++   bstat_flush[PANVK_SUBQUEUE_COUNT],
++   bstat_edge[PANVK_SUBQUEUE_COUNT][PANVK_SUBQUEUE_COUNT];
++
++void
++panvk_per_arch(barrier_stats_log)(void)
++{
++   static const char sq[] = "VFC";
++   char buf[256];
++   int o = snprintf(buf, sizeof(buf), "barriers:%u", p_atomic_xchg(&bstat_n, 0));
++   for (unsigned i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++      o += snprintf(buf + o, sizeof(buf) - o, " self%c:%u flush%c:%u", sq[i],
++                    p_atomic_xchg(&bstat_self[i], 0), sq[i],
++                    p_atomic_xchg(&bstat_flush[i], 0));
++   }
++   for (unsigned i = 0; i < PANVK_SUBQUEUE_COUNT; i++)
++      for (unsigned j = 0; j < PANVK_SUBQUEUE_COUNT; j++)
++         if (i != j)
++            o += snprintf(buf + o, sizeof(buf) - o, " %c<-%c:%u", sq[i], sq[j],
++                          p_atomic_xchg(&bstat_edge[i][j], 0));
++   mesa_logi("bstats: %s", buf);
++}
++
+ static void
+ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+ {
+@@ -705,6 +732,18 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+          utrace_subqueue_mask |= BITFIELD_BIT(i);
+    }
+ 
++   if (utrace_subqueue_mask) {
++      p_atomic_inc(&bstat_n);
++      for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++         if (deps.src[i].wait_sb_mask)
++            p_atomic_inc(&bstat_self[i]);
++         if (!panvk_cache_flush_is_nop(&deps.src[i].cache_flush))
++            p_atomic_inc(&bstat_flush[i]);
++         u_foreach_bit(j, deps.dst[i].wait_subqueue_mask)
++            p_atomic_inc(&bstat_edge[i][j]);
++      }
++   }
++
+    u_foreach_bit(i, utrace_subqueue_mask)
+       panvk_per_arch(panvk_instr_begin_work)(i, cmdbuf,
+                                              PANVK_INSTR_WORK_TYPE_BARRIER);
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index de33dac4..4c3a7cd9 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -225,6 +225,7 @@ rpm_log(void)
+          o += snprintf(rbuf + o, sizeof(rbuf) - o, " %s:%u", rpm_name[i], v);
+    }
+    mesa_logi("rpmerge:%s", o ? rbuf : " (none)");
++   panvk_per_arch(barrier_stats_log)();
+ }
+ 
+ /* Debug: PANVK_RP_TRACE=N logs N render pass / barrier / dispatch events,
+-- 
+2.56.0
+

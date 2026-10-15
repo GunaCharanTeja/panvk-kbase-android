@@ -1,0 +1,194 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 200] panvk/csf: debug render pass merge reason counters
+Generated-by: LLM
+
+With PANVK_PASS_STATS=1, also log once per second why render passes were
+not merged by PANVK_RP_MERGE (rendering info pNext/flags, mismatching
+area/views/layouts/store/load ops) and which commands finished a pending
+pass (BeginRendering mismatch, image or stage barriers).  Debug only; a
+biblioklept's notes on why a book stayed on the shelf.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/199
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 10a7b901..df20ef6c 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -90,6 +90,8 @@ static struct {
+    uint64_t area_px, target_px;
+ } pstat = { .lock = SIMPLE_MTX_INITIALIZER };
+ 
++static void rpm_log(void);
++
+ static void
+ pass_stats_record(struct panvk_cmd_buffer *cmdbuf)
+ {
+@@ -158,6 +160,7 @@ pass_stats_record(struct panvk_cmd_buffer *cmdbuf)
+                 pstat.zs_store, pstat.clean_tile, pstat.pre_always,
+                 pstat.msaa, pstat.layered, pstat.no_fs_info,
+                 pstat.area_px / 1e6, pstat.target_px / 1e6);
++      rpm_log();
+       simple_mtx_t lock = pstat.lock;
+       memset(&pstat, 0, sizeof(pstat));
+       pstat.lock = lock;
+@@ -195,6 +198,34 @@ empty_tiler_fix_enabled(void)
+  * against attachment access).  Anything else finishes the pending pass
+  * first (panvk_cmd_rp_merge_flush_pending()).
+  */
++/* Debug: reasons passes were not merged (printed with PANVK_PASS_STATS). */
++enum {
++   RPM_NOT_PRIMARY, RPM_PNEXT, RPM_FLAGS, RPM_LAYERS, RPM_ATT_PNEXT_RESOLVE,
++   RPM_NO_ATT, RPM_AREA, RPM_COUNT, RPM_VIEW, RPM_LAYOUT, RPM_STORE, RPM_LOAD,
++   RPM_MERGED, RPM_FLUSH_BEGIN, RPM_BAR_IMAGE, RPM_BAR_STAGE, RPM_FLUSH_TOTAL,
++   RPM_REASONS
++};
++static uint32_t rpm_stat[RPM_REASONS];
++static const char *const rpm_name[RPM_REASONS] = {
++   "not_primary", "pnext", "flags", "layers", "att_pnext/resolve", "no_att",
++   "area", "count", "view", "layout", "store", "load", "MERGED",
++   "flush_begin", "bar_image", "bar_stage", "flush_total",
++};
++#define RPM(x) p_atomic_inc(&rpm_stat[RPM_##x])
++
++static void
++rpm_log(void)
++{
++   char rbuf[512];
++   int o = 0;
++   for (unsigned i = 0; i < RPM_REASONS; i++) {
++      uint32_t v = p_atomic_xchg(&rpm_stat[i], 0);
++      if (v && o < (int)sizeof(rbuf) - 40)
++         o += snprintf(rbuf + o, sizeof(rbuf) - o, " %s:%u", rpm_name[i], v);
++   }
++   mesa_logi("rpmerge:%s", o ? rbuf : " (none)");
++}
++
+ static bool
+ rp_merge_enabled(void)
+ {
+@@ -215,25 +246,34 @@ static bool
+ rp_info_mergeable(const struct panvk_cmd_buffer *cmdbuf,
+                   const VkRenderingInfo *info)
+ {
+-   if (!rp_merge_enabled() || cmdbuf->state.gfx.rp_merge.flushing ||
+-       cmdbuf->vk.level != VK_COMMAND_BUFFER_LEVEL_PRIMARY)
++   if (!rp_merge_enabled() || cmdbuf->state.gfx.rp_merge.flushing)
+       return false;
+-
+-   if (info->pNext || info->flags || info->layerCount != 1 ||
+-       info->viewMask || info->colorAttachmentCount > 8)
++   if (cmdbuf->vk.level != VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
++      RPM(NOT_PRIMARY);
+       return false;
++   }
++   if (info->pNext) { RPM(PNEXT); return false; }
++   if (info->flags) { RPM(FLAGS); return false; }
++   if (info->layerCount != 1 || info->viewMask ||
++       info->colorAttachmentCount > 8) { RPM(LAYERS); return false; }
+ 
+    bool has_att = false;
+    for (uint32_t i = 0; i < info->colorAttachmentCount; i++) {
+-      if (!rp_att_simple(&info->pColorAttachments[i]))
++      if (!rp_att_simple(&info->pColorAttachments[i])) {
++         RPM(ATT_PNEXT_RESOLVE);
+          return false;
++      }
+       has_att |= info->pColorAttachments[i].imageView != VK_NULL_HANDLE;
+    }
+    if (!rp_att_simple(info->pDepthAttachment) ||
+-       !rp_att_simple(info->pStencilAttachment))
++       !rp_att_simple(info->pStencilAttachment)) {
++      RPM(ATT_PNEXT_RESOLVE);
+       return false;
++   }
+    has_att |= info->pDepthAttachment && info->pDepthAttachment->imageView;
+    has_att |= info->pStencilAttachment && info->pStencilAttachment->imageView;
++   if (!has_att)
++      RPM(NO_ATT);
+ 
+    return has_att;
+ }
+@@ -248,12 +288,13 @@ rp_att_match(const VkRenderingAttachmentInfo *saved,
+    if (!saved_bound || !att_bound)
+       return saved_bound == att_bound;
+ 
+-   return att->imageView == saved->imageView &&
+-          att->imageLayout == saved->imageLayout &&
+-          att->storeOp == saved->storeOp &&
+-          (att->loadOp == VK_ATTACHMENT_LOAD_OP_LOAD ||
+-           att->loadOp == VK_ATTACHMENT_LOAD_OP_DONT_CARE ||
+-           att->loadOp == VK_ATTACHMENT_LOAD_OP_NONE);
++   if (att->imageView != saved->imageView) { RPM(VIEW); return false; }
++   if (att->imageLayout != saved->imageLayout) { RPM(LAYOUT); return false; }
++   if (att->storeOp != saved->storeOp) { RPM(STORE); return false; }
++   if (att->loadOp != VK_ATTACHMENT_LOAD_OP_LOAD &&
++       att->loadOp != VK_ATTACHMENT_LOAD_OP_DONT_CARE &&
++       att->loadOp != VK_ATTACHMENT_LOAD_OP_NONE) { RPM(LOAD); return false; }
++   return true;
+ }
+ 
+ static bool
+@@ -261,9 +302,14 @@ rp_info_match(const struct panvk_rp_merge *m, const VkRenderingInfo *info)
+ {
+    const VkRenderingInfo *s = &m->info;
+ 
+-   if (memcmp(&s->renderArea, &info->renderArea, sizeof(info->renderArea)) ||
+-       s->colorAttachmentCount != info->colorAttachmentCount)
++   if (memcmp(&s->renderArea, &info->renderArea, sizeof(info->renderArea))) {
++      RPM(AREA);
+       return false;
++   }
++   if (s->colorAttachmentCount != info->colorAttachmentCount) {
++      RPM(COUNT);
++      return false;
++   }
+ 
+    for (uint32_t i = 0; i < info->colorAttachmentCount; i++) {
+       if (!rp_att_match(&s->pColorAttachments[i], &info->pColorAttachments[i]))
+@@ -309,16 +355,20 @@ panvk_per_arch(cmd_rp_merge_barrier_ok)(const VkDependencyInfo *dep)
+ 
+    /* Layout transitions and image ownership changes can touch the pending
+     * attachments: finish the pass first. */
+-   if (dep->imageMemoryBarrierCount)
++   if (dep->imageMemoryBarrierCount) {
++      RPM(BAR_IMAGE);
+       return false;
++   }
+ 
+ #define RP_MERGE_CHECK(barrier)                                                \
+    do {                                                                        \
+       const VkPipelineStageFlags2 src = (barrier).srcStageMask;               \
+       const VkPipelineStageFlags2 dst = (barrier).dstStageMask;               \
+       if ((src & frag_stages) &&                                              \
+-          ((src & ~att_stages) || (dst & ~att_stages)))                       \
++          ((src & ~att_stages) || (dst & ~att_stages))) {                     \
++         RPM(BAR_STAGE);                                                       \
+          return false;                                                         \
++      }                                                                        \
+    } while (0)
+ 
+    for (uint32_t i = 0; i < dep->memoryBarrierCount; i++)
+@@ -6686,8 +6736,10 @@ panvk_per_arch(CmdBeginRendering)(VkCommandBuffer commandBuffer,
+          m->pending = false;
+          begin_rendering(cmdbuf, &resume);
+          m->cur_mergeable = true;
++         RPM(MERGED);
+          return;
+       }
++      RPM(FLUSH_BEGIN);
+       panvk_per_arch(cmd_rp_merge_flush)(cmdbuf);
+    }
+ 
+@@ -6704,6 +6756,7 @@ panvk_per_arch(cmd_rp_merge_flush)(struct panvk_cmd_buffer *cmdbuf)
+ 
+    if (!m->pending)
+       return;
++   RPM(FLUSH_TOTAL);
+ 
+    /* Resume the pending pass and end it for real. */
+    VkRenderingInfo resume = m->info;
+-- 
+2.56.0
+

@@ -1,0 +1,69 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 209] panvk/csf: apply the translation-layer write rule to DXVK too
+Generated-by: LLM
+
+DXVK flushes one barrier per batch of resource accesses whose destination
+scope names every usage each resource allows, writes included, so a later
+shader write never relies on the execution dependency of a barrier whose
+destination scope only reads.  Treat the "DXVK" engine like "vkd3d" for
+the deferred-wait write rule, and log the detected engine and the rule in
+use once.  A biblioklept who checks the lending rules of both libraries
+before skipping the queue.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/208
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 32998959..9c680ae6 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -1123,10 +1123,12 @@ enum panvk_lazy_vt_flush_reason {
+ void panvk_per_arch(cmd_lazy_flush)(struct panvk_cmd_buffer *cmdbuf,
+                                    enum panvk_subqueue_id subqueue,
+                                    enum panvk_lazy_vt_flush_reason reason);
+-/* Whether vkd3d-proton drives the device: D3D12 requires an explicit
+- * transition between reads and later writes of a resource, so a compute or
+- * vertex shader write never relies on an earlier image transition's
+- * execution dependency. */
++/* Whether vkd3d-proton or DXVK drives the device.  Both put write access
++ * in the destination scope of any barrier that orders reads before later
++ * writes of a resource (vkd3d-proton: D3D12 requires an explicit transition
++ * to a write state; DXVK: a flushed access barrier names every usage the
++ * resource allows, writes included), so a shader write never relies on the
++ * execution dependency of a barrier whose destination scope only reads. */
+ bool panvk_per_arch(cmd_d3d12_semantics)(const struct panvk_cmd_buffer *cmdbuf);
+ 
+ static inline void
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index 9732d556..68f8850c 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -572,9 +572,10 @@ collect_cache_flush_info(enum panvk_subqueue_id subqueue,
+  * next draw or dispatch on that subqueue whose shaders read images or write
+  * memory, before geometry/tessellation/gpu_prerast draws and internal
+  * compute work, before events, meta operations and secondary execution,
+- * and at the end of the command buffer.  Under vkd3d-proton, D3D12 requires
+- * an explicit transition between reads and later writes of a resource, so
+- * shader writes do not need the deferred wait there.  Transfer and query
++ * and at the end of the command buffer.  Under vkd3d-proton and DXVK any
++ * barrier that orders reads before later writes has write access in its
++ * destination scope (see cmd_d3d12_semantics), so shader writes do not need
++ * the deferred wait there.  Transfer and query
+  * work never observes those image writes.  A later barrier that makes
+  * another subqueue wait for a subqueue with a deferred wait hands the
+  * deferred wait over when its part of that barrier only reads, and emits
+@@ -632,7 +633,9 @@ panvk_per_arch(cmd_d3d12_semantics)(const struct panvk_cmd_buffer *cmdbuf)
+       const struct vk_instance *instance =
+          cmdbuf->vk.base.device->physical->instance;
+       const char *engine = instance->app_info.engine_name;
+-      d3d12 = engine && !strcmp(engine, "vkd3d");
++      d3d12 = engine && (!strcmp(engine, "vkd3d") || !strcmp(engine, "DXVK"));
++      mesa_logi("panvk: engine '%s': %s barrier write rules", engine ? engine : "",
++                d3d12 ? "D3D translation-layer" : "strict Vulkan");
+    }
+    return d3d12;
+ }
+-- 
+2.56.0
+

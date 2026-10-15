@@ -1,0 +1,108 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 210] panvk/csf: enable lazy fragment waits and render pass merging by default
+Generated-by: LLM
+
+The deferred vertex/tiler and compute waits on fragment work (204, 208)
+and render pass merging (199) measured +22% FPS together at the RDR1 main
+menu (11.32 -> 13.85 FPS, faster in all six paired slices, no GPU
+faults), and are correct under the Vulkan spec, using the D3D
+translation-layer write rule only for vkd3d-proton and DXVK.  Turn them
+on by default; PANVK_LAZY_VTWAIT=0, PANVK_LAZY_CWAIT=0 and
+PANVK_RP_MERGE=0 switch them off.  The barrier and dispatch counters are
+now only kept with PANVK_PASS_STATS=1.  A biblioklept making the short
+queue the house rule.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/209
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index 68f8850c..623caa42 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -549,8 +549,8 @@ collect_cache_flush_info(enum panvk_subqueue_id subqueue,
+    add_memory_dependency(cache_flush, src_access, dst_access);
+ }
+ 
+-/* Lazy waits on the fragment subqueue (PANVK_LAZY_VTWAIT=1 for the
+- * vertex/tiler subqueue, PANVK_LAZY_CWAIT=1 for the compute subqueue).
++/* Lazy waits on the fragment subqueue, on by default (PANVK_LAZY_VTWAIT=0
++ * disables them, PANVK_LAZY_CWAIT=0 only the compute subqueue ones).
+  *
+  * vkd3d-proton transitions render targets to shader-read states with every
+  * non-pixel shader stage in the destination scope (D3D12
+@@ -591,7 +591,7 @@ lazy_vt_enabled(void)
+    static int64_t last_check;
+    static bool on;
+    if (enabled < 0) {
+-      enabled = debug_get_bool_option("PANVK_LAZY_VTWAIT", false);
++      enabled = debug_get_bool_option("PANVK_LAZY_VTWAIT", true);
+       toggle = debug_get_option("PANVK_LAZY_VTWAIT_FILE", "");
+    }
+    if (!toggle[0])
+@@ -612,7 +612,7 @@ lazy_c_enabled(void)
+    static int64_t last_check;
+    static bool on;
+    if (enabled < 0) {
+-      enabled = debug_get_bool_option("PANVK_LAZY_CWAIT", false);
++      enabled = debug_get_bool_option("PANVK_LAZY_CWAIT", true);
+       toggle = debug_get_option("PANVK_LAZY_CWAIT_FILE", "");
+    }
+    if (!toggle[0])
+@@ -959,10 +959,21 @@ static uint32_t bstat_n, bstat_self[PANVK_SUBQUEUE_COUNT],
+    bstat_lazy_flush[PANVK_LAZY_VT_REASONS],
+    bstat_disp[4]; /* dispatches by reads_images | writes_memory << 1 */
+ 
++/* The barrier and dispatch counters are only kept with PANVK_PASS_STATS=1. */
++static bool
++bstats_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_PASS_STATS", false);
++   return enabled;
++}
++
+ void
+ panvk_per_arch(dispatch_stats_record)(bool reads_images, bool writes_memory)
+ {
+-   p_atomic_inc(&bstat_disp[reads_images | (writes_memory << 1)]);
++   if (bstats_enabled())
++      p_atomic_inc(&bstat_disp[reads_images | (writes_memory << 1)]);
+ }
+ 
+ void
+@@ -1134,7 +1145,7 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+       }
+    }
+ 
+-   if (utrace_subqueue_mask) {
++   if (utrace_subqueue_mask && bstats_enabled()) {
+       p_atomic_inc(&bstat_n);
+       for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
+          if (deps.src[i].wait_sb_mask)
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 8a3ba162..dfbe02c4 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -181,7 +181,7 @@ empty_tiler_fix_enabled(void)
+    return enabled;
+ }
+ 
+-/* Render pass merging (PANVK_RP_MERGE=1).
++/* Render pass merging, on by default (PANVK_RP_MERGE=0 disables it).
+  *
+  * Games under vkd3d-proton end the render pass for every predicated or
+  * occlusion-tested draw (RDR1: ~200 passes per frame, 3/4 with a single
+@@ -283,7 +283,7 @@ rp_merge_enabled(void)
+ {
+    static int enabled = -1;
+    if (enabled < 0)
+-      enabled = debug_get_bool_option("PANVK_RP_MERGE", false);
++      enabled = debug_get_bool_option("PANVK_RP_MERGE", true);
+ 
+    /* Debug: PANVK_RP_MERGE_FILE=<path> toggles merging at runtime: on while
+     * the file exists (checked once a second), for same-scene A/B runs. */
+-- 
+2.56.0
+
