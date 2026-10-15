@@ -1,0 +1,64 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 195] panvk/csf: debug PANVK_OQ_SYNC_WAIT
+Generated-by: LLM
+
+The RDR1 fault follows the occlusion query machinery but not the
+hardware counting (PANVK_OQ_NO_COUNT) nor the begin-query reset
+(PANVK_OQ_NO_CLEAR).  What remains is the availability chain: deferred
+SYNC_SET operations whose address sits in a scratch register that later
+commands reuse.  PANVK_OQ_SYNC_WAIT=1 waits for each deferred
+availability write before moving on, to test whether operands get
+clobbered while the deferred operation is pending.  Debug only; a
+biblioklept signs for each book before taking the next.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/194
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 023adc97..c3ff8e2f 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -65,6 +65,15 @@
+  * nr_in_flight = vt_start keeps the grow path valid, and the heap is
+  * recycled wholesale by the queue's heap renewal instead of
+  * FINISH_FRAGMENT/FRAGMENT_COMPLETED. */
++static bool
++oq_sync_wait_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_OQ_SYNC_WAIT", false);
++   return enabled;
++}
++
+ /* PANVK_EMPTY_TILER_FIX=0 disables the fragment-side check for passes whose
+  * draws never reached the tiler (see issue_fragment_jobs()). */
+ static bool
+@@ -7317,6 +7326,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+                          offsetof(struct panvk_cs_occlusion_query, syncobj));
+             cs_sync32_set(b, true, MALI_CS_SYNC_SCOPE_CSG, add_val_lo, oq_syncobj,
+                           cs_defer(SB_MASK(DEFERRED_FLUSH), SB_ID(DEFERRED_SYNC)));
++            /* Debug: PANVK_OQ_SYNC_WAIT=1 waits for each deferred availability
++             * write before oq_syncobj is reused. */
++            if (oq_sync_wait_enabled())
++               cs_wait_slot(b, SB_ID(DEFERRED_SYNC));
+          }
+       }
+ 
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+index 0e3d6fa7..343d6cf9 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_query.c
+@@ -374,6 +374,8 @@ panvk_cmd_end_occlusion_query(struct panvk_cmd_buffer *cmd,
+    cs_move64_to(b, oq_syncobj, panvk_query_available_dev_addr(pool, query));
+    cs_sync32_set(b, true, MALI_CS_SYNC_SCOPE_CSG, val, oq_syncobj,
+                  cs_defer(SB_MASK(DEFERRED_FLUSH), SB_ID(DEFERRED_SYNC)));
++   if (debug_get_bool_option("PANVK_OQ_SYNC_WAIT", false))
++      cs_wait_slot(b, SB_ID(DEFERRED_SYNC));
+ }
+ 
+ static void
+-- 
+2.56.0
+
