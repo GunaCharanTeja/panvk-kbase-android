@@ -1,0 +1,379 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 187] panvk/csf: PANVK_KBASE_CRUMBS debug breadcrumbs for GPU faults
+Generated-by: LLM
+
+RDR1 faults the GPU about a minute in with null/garbage address
+translation faults, and every attempt to serialize the work (sync mode
+markers, vkd3d breadcrumbs) hides the bug.  This adds driver-side
+breadcrumbs that do not wait: each draw, dispatch, precomp and fragment
+job stores its id in a per-subqueue slot as the command stream issues it,
+and the CPU keeps a 64K-entry ring describing each id (job type, command
+buffer, shader code address and size).  On a kbase error event or a
+subqueue timeout the driver logs the last crumbs per subqueue and
+disassembles the newest shaders, so the job in flight at the fault can be
+named.  Off by default (PANVK_KBASE_CRUMBS=1 enables it); a biblioklept's
+catalogue of what passed through, nothing more.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/186
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 8789b73..e87d4d1 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -1078,6 +1078,12 @@ void panvk_per_arch(cmd_pstats_dispatch)(
+    struct panvk_cmd_buffer *cmdbuf, const struct panvk_shader_variant *cs,
+    const struct panvk_dispatch_info *info);
+ void panvk_per_arch(cmd_pstats_flush_pending)(struct panvk_cmd_buffer *cmdbuf);
++
++/* PANVK_KBASE_CRUMBS debug breadcrumbs (no-op unless enabled). */
++void panvk_per_arch(cmd_crumb)(struct panvk_cmd_buffer *cmdbuf,
++                               enum panvk_subqueue_id subqueue,
++                               enum panvk_crumb_type type, uint16_t info);
++void panvk_per_arch(crumbs_report)(struct panvk_device *dev);
+ void panvk_per_arch(cmd_pstats_restore_oq)(struct panvk_cmd_buffer *cmdbuf);
+ 
+ #if PAN_ARCH >= 14
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index 61fe19f..cd5ebfc 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -28,9 +28,11 @@
+ #include "panvk_meta.h"
+ #include "panvk_physical_device.h"
+ #include "panvk_priv_bo.h"
++#include "panvk_shader.h"
+ #include "panvk_tracepoints.h"
+ #include "panvk_utrace.h"
+ 
++#include "pan_compiler.h"
+ #include "pan_desc.h"
+ #include "pan_encoder.h"
+ #include "pan_props.h"
+@@ -1498,3 +1500,133 @@ panvk_per_arch(cmd_invalidate_crc)(struct cs_builder *b,
+ 
+    cs_flush_stores(b);
+ }
++
++static void
++crumb_fill_shader(struct panvk_crumb *c, unsigned i,
++                  const struct panvk_shader_variant *v)
++{
++   if (!v)
++      return;
++   c->shader[i] = panvk_shader_variant_get_dev_addr(v);
++   c->size[i] = v->bin_size;
++   /* The uploaded copy outlives bin_ptr, which may be freed after upload. */
++   c->bin[i] = panvk_priv_mem_host_addr(v->code_mem);
++}
++
++void
++panvk_per_arch(cmd_crumb)(struct panvk_cmd_buffer *cmdbuf,
++                          enum panvk_subqueue_id subqueue,
++                          enum panvk_crumb_type type, uint16_t info)
++{
++   struct panvk_device *dev = to_panvk_device(cmdbuf->vk.base.device);
++
++   if (likely(!dev->crumbs.ring))
++      return;
++
++   uint32_t id = p_atomic_inc_return(&dev->crumbs.next);
++   struct panvk_crumb *c = &dev->crumbs.ring[id % PANVK_CRUMB_RING_SIZE];
++
++   *c = (struct panvk_crumb){
++      .id = id,
++      .type = type,
++      .subqueue = subqueue,
++      .info = info,
++      .cmdbuf = (uintptr_t)cmdbuf,
++   };
++
++   switch (type) {
++   case PANVK_CRUMB_DRAW:
++   case PANVK_CRUMB_DRAW_INDIRECT:
++      crumb_fill_shader(c, 0, panvk_shader_hw_variant(cmdbuf->state.gfx.vs.shader));
++      crumb_fill_shader(c, 1, panvk_shader_hw_variant(cmdbuf->state.gfx.fs.shader));
++      break;
++   case PANVK_CRUMB_DISPATCH:
++   case PANVK_CRUMB_DISPATCH_INDIRECT:
++      crumb_fill_shader(c, 0, panvk_shader_hw_variant(cmdbuf->state.compute.shader));
++      break;
++   default:
++      break;
++   }
++
++   /* No wait: the store lands when the command stream issues the job, so
++    * timing stays as close as possible to a normal run. */
++   struct cs_builder *b = panvk_get_cs_builder(cmdbuf, subqueue);
++   struct cs_index addr = cs_scratch_reg64(b, 0);
++   struct cs_index val = cs_scratch_reg32(b, 2);
++
++   cs_move64_to(b, addr, panvk_priv_mem_dev_addr(dev->crumbs.slots) +
++                         subqueue * sizeof(uint32_t));
++   cs_move32_to(b, val, id);
++   cs_store32(b, val, addr, 0);
++   cs_flush_stores(b);
++}
++
++static const char *const crumb_type_name[] = {
++   [PANVK_CRUMB_DRAW] = "draw",
++   [PANVK_CRUMB_DRAW_INDIRECT] = "draw-indirect",
++   [PANVK_CRUMB_FRAGMENT] = "fragment",
++   [PANVK_CRUMB_DISPATCH] = "dispatch",
++   [PANVK_CRUMB_DISPATCH_INDIRECT] = "dispatch-indirect",
++   [PANVK_CRUMB_PRECOMP] = "precomp",
++};
++
++void
++panvk_per_arch(crumbs_report)(struct panvk_device *dev)
++{
++   if (!dev->crumbs.ring || dev->crumbs.reported)
++      return;
++   dev->crumbs.reported = true;
++
++   const volatile uint32_t *slots =
++      panvk_priv_mem_host_addr(dev->crumbs.slots);
++   const uint32_t newest = p_atomic_read(&dev->crumbs.next);
++
++   for (uint32_t sq = 0; sq < PANVK_SUBQUEUE_COUNT; sq++) {
++      const uint32_t last = slots[sq];
++
++      mesa_loge("crumbs: subqueue %u last issued id %u (newest recorded %u)",
++                sq, last, newest);
++
++      /* The faulting job was issued at or shortly before the last stored id:
++       * list the last 8 crumbs of this subqueue up to it. */
++      unsigned shown = 0;
++      for (uint32_t id = last; id && shown < 8 && last - id < 4096; id--) {
++         const struct panvk_crumb *c =
++            &dev->crumbs.ring[id % PANVK_CRUMB_RING_SIZE];
++         if (c->id != id || c->subqueue != sq)
++            continue;
++         shown++;
++         mesa_loge("crumbs:  sq%u id %u %s info %u cmdbuf 0x%" PRIx64
++                   " shader0 0x%" PRIx64 "/%u shader1 0x%" PRIx64 "/%u",
++                   sq, id, crumb_type_name[c->type], c->info, c->cmdbuf,
++                   c->shader[0], c->size[0], c->shader[1], c->size[1]);
++      }
++   }
++
++   /* Disassemble the shaders of the newest issued draw/dispatch per
++    * subqueue, so the faulting load/store can be inspected. */
++   for (uint32_t sq = 0; sq < PANVK_SUBQUEUE_COUNT; sq++) {
++      const struct panvk_crumb *c =
++         &dev->crumbs.ring[slots[sq] % PANVK_CRUMB_RING_SIZE];
++      if (c->id != slots[sq])
++         continue;
++      for (unsigned i = 0; i < 2; i++) {
++         if (!c->bin[i] || !c->size[i])
++            continue;
++         mesa_loge("crumbs: sq%u id %u shader%u 0x%" PRIx64 " disassembly:",
++                   sq, c->id, i, c->shader[i]);
++         FILE *f = stderr;
++         const char *path = getenv("PANVK_KBASE_CRUMBS_DIS");
++         if (path)
++            f = fopen(path, "a");
++         if (f) {
++            fprintf(f, "=== sq%u id %u %s shader%u 0x%" PRIx64 "\n", sq,
++                    c->id, crumb_type_name[c->type], i, c->shader[i]);
++            pan_disassemble(f, c->bin[i], c->size[i],
++                            dev->kmod.dev->props.gpu_id, false);
++            if (f != stderr)
++               fclose(f);
++         }
++      }
++   }
++}
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+index 3586e17..cc2404e 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+@@ -299,6 +299,10 @@ panvk_per_arch(cmd_dispatch_shader)(
+       }
+    }
+ 
++   panvk_per_arch(cmd_crumb)(cmdbuf, PANVK_SUBQUEUE_COMPUTE,
++                             indirect ? PANVK_CRUMB_DISPATCH_INDIRECT
++                                      : PANVK_CRUMB_DISPATCH,
++                             0);
+    panvk_per_arch(kbase_mark_progress)(
+       cmdbuf, PANVK_SUBQUEUE_COMPUTE,
+       PANVK_KBASE_PROGRESS_COMPUTE_BEFORE_ITER);
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 3e2d17e..8efd207 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -3292,6 +3292,8 @@ static void
+ launch_draw(struct panvk_cmd_buffer *cmdbuf,
+             const struct panvk_draw_info *draw)
+ {
++   panvk_per_arch(cmd_crumb)(cmdbuf, PANVK_SUBQUEUE_VERTEX_TILER,
++                             PANVK_CRUMB_DRAW, 0);
+    const struct cs_tracing_ctx *tracing_ctx =
+       &cmdbuf->state.cs[PANVK_SUBQUEUE_VERTEX_TILER].tracing;
+    struct cs_builder *b =
+@@ -3503,6 +3505,8 @@ static void
+ launch_indirect_draw(struct panvk_cmd_buffer *cmdbuf,
+                       const struct panvk_draw_info *draw)
+ {
++   panvk_per_arch(cmd_crumb)(cmdbuf, PANVK_SUBQUEUE_VERTEX_TILER,
++                             PANVK_CRUMB_DRAW_INDIRECT, 0);
+    const struct cs_tracing_ctx *tracing_ctx =
+       &cmdbuf->state.cs[PANVK_SUBQUEUE_VERTEX_TILER].tracing;
+    const struct panvk_shader_variant *vs =
+@@ -7077,6 +7081,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+       cs_wait_slot(b, SB_ID(IMM_FLUSH));
+    }
+ 
++   panvk_per_arch(cmd_crumb)(cmdbuf, PANVK_SUBQUEUE_FRAGMENT,
++                             PANVK_CRUMB_FRAGMENT,
++                             cmdbuf->state.gfx.render.layer_count);
++
+    struct cs_index fbd_pointer = cs_sr_reg64(b, FRAGMENT, FBD_POINTER);
+ 
+    if (cmdbuf->state.gfx.render.layer_count <= 1) {
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_precomp.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_precomp.c
+index a3be517..dfd578b 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_precomp.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_precomp.c
+@@ -161,6 +161,8 @@ panvk_per_arch(dispatch_precomp)(struct panvk_precomp_ctx *ctx,
+       panvk_per_arch(calculate_task_axis_and_increment)(
+          shader, phys_dev, &dim, &task_axis, &task_increment);
+    }
++   panvk_per_arch(cmd_crumb)(cmdbuf, PANVK_SUBQUEUE_COMPUTE,
++                             PANVK_CRUMB_PRECOMP, idx);
+    cs_trace_run_compute(b, tracing_ctx, cs_scratch_reg_tuple(b, 0, 4),
+                         task_increment, task_axis, PANVK_PRECOMP_RES_SEL);
+ 
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+index 36f9da0..55bdc6a 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+@@ -964,6 +964,7 @@ kbase_subqueue_wait_seqno(struct panvk_gpu_queue *queue, uint32_t subqueue,
+                                  phys_dev->kmod.dev->props.gpu_id);
+          }
+ 
++         panvk_per_arch(crumbs_report)(dev);
+          return vk_queue_set_lost(&queue->vk,
+                                   "kbase: timeout on subqueue %u", subqueue);
+       }
+@@ -986,6 +987,8 @@ kbase_subqueue_wait_seqno(struct panvk_gpu_queue *queue, uint32_t subqueue,
+ 
+       if (cqs_ret < 0) {
+          int error_type = kbase_kmod_csf_wait_event(dev->kmod.dev, remaining);
++         if (error_type)
++            panvk_per_arch(crumbs_report)(dev);
+ 
+          if (dev->debug.decode_ctx && insert > extract && error_type) {
+             // pandecode_user_msg(dev->debug.decode_ctx,
+diff --git a/src/panfrost/vulkan/panvk_device.h b/src/panfrost/vulkan/panvk_device.h
+index e90787b..c896a89 100644
+--- a/src/panfrost/vulkan/panvk_device.h
++++ b/src/panfrost/vulkan/panvk_device.h
+@@ -53,6 +53,28 @@ enum panvk_queue_family {
+    PANVK_QUEUE_FAMILY_COUNT,
+ };
+ 
++#define PANVK_CRUMB_RING_SIZE (1u << 16)
++
++enum panvk_crumb_type {
++   PANVK_CRUMB_DRAW,
++   PANVK_CRUMB_DRAW_INDIRECT,
++   PANVK_CRUMB_FRAGMENT,
++   PANVK_CRUMB_DISPATCH,
++   PANVK_CRUMB_DISPATCH_INDIRECT,
++   PANVK_CRUMB_PRECOMP,
++};
++
++struct panvk_crumb {
++   uint32_t id;
++   uint8_t type;
++   uint8_t subqueue;
++   uint16_t info;      /* precomp kernel index, fragment layer count */
++   uint64_t cmdbuf;
++   uint64_t shader[2]; /* VS/FS or CS code address */
++   uint32_t size[2];
++   const void *bin[2];
++};
++
+ struct panvk_device {
+    struct vk_device vk;
+ 
+@@ -133,6 +155,16 @@ struct panvk_device {
+       struct pandecode_context *decode_ctx;
+    } debug;
+ 
++   /* PANVK_KBASE_CRUMBS=1: every draw, dispatch and fragment job stores its
++    * id in a per-subqueue slot when the command stream issues it; on a GPU
++    * fault the last ids are matched against what was recorded. */
++   struct {
++      struct panvk_priv_mem slots; /* uint32_t issued id per subqueue */
++      struct panvk_crumb *ring;    /* PANVK_CRUMB_RING_SIZE entries */
++      uint32_t next;               /* atomic */
++      bool reported;
++   } crumbs;
++
+    struct {
+       struct u_printf_ctx ctx;
+       struct panvk_priv_bo *bo;
+diff --git a/src/panfrost/vulkan/panvk_vX_device.c b/src/panfrost/vulkan/panvk_vX_device.c
+index 17b3987..5ac814a 100644
+--- a/src/panfrost/vulkan/panvk_vX_device.c
++++ b/src/panfrost/vulkan/panvk_vX_device.c
+@@ -43,6 +43,7 @@
+ 
+ #include "kmod/pan_kmod.h"
+ #include "util/os_file.h"
++#include "util/u_debug.h"
+ #include "util/u_printf.h"
+ #include "pan_props.h"
+ #include "pan_samples.h"
+@@ -614,6 +615,26 @@ panvk_per_arch(create_device)(struct panvk_physical_device *physical_device,
+    }
+ 
+    panvk_device_init_mempools(device);
++
++   if (debug_get_bool_option("PANVK_KBASE_CRUMBS", false)) {
++      struct panvk_pool_alloc_info info = {
++         .size = sizeof(uint32_t) * PANVK_SUBQUEUE_COUNT,
++         .alignment = 64,
++      };
++      device->crumbs.slots = panvk_pool_alloc_mem(&device->mempools.rw_nc, info);
++      device->crumbs.ring =
++         vk_zalloc(&device->vk.alloc,
++                   sizeof(*device->crumbs.ring) * PANVK_CRUMB_RING_SIZE, 8,
++                   VK_SYSTEM_ALLOCATION_SCOPE_DEVICE);
++      if (!device->crumbs.slots.bo || !device->crumbs.ring) {
++         panvk_pool_free_mem(&device->crumbs.slots);
++         vk_free(&device->vk.alloc, device->crumbs.ring);
++         device->crumbs.ring = NULL;
++      } else {
++         memset(panvk_priv_mem_host_addr(device->crumbs.slots), 0, info.size);
++         mesa_logi("panvk: kbase crumbs enabled");
++      }
++   }
+    simple_mtx_init(&device->tls.lock, mtx_plain);
+    util_dynarray_init(&device->tls.bos, NULL);
+ 
+@@ -808,6 +829,8 @@ err_free_priv_bos:
+    panvk_priv_bo_unref(device->sample_positions);
+    panvk_priv_bo_unref(device->indirect_varying_buffer);
+    panvk_priv_bo_unref(device->tiler_heap);
++   panvk_pool_free_mem(&device->crumbs.slots);
++   vk_free(&device->vk.alloc, device->crumbs.ring);
+    panvk_device_cleanup_mempools(device);
+    vk_free(&device->vk.alloc, device->dump_region_size);
+ err_free_heaps:
+@@ -867,6 +890,8 @@ panvk_per_arch(destroy_device)(struct panvk_device *device,
+     panvk_priv_bo_unref(device->gpu_prerast_syncs);
+     panvk_pool_free_mem(&device->gpu_prerast_tess_arena);
+     panvk_pool_free_mem(&device->gpu_prerast_arena);
++    panvk_pool_free_mem(&device->crumbs.slots);
++    vk_free(&device->vk.alloc, device->crumbs.ring);
+     panvk_device_cleanup_mempools(device);
+    vk_free(&device->vk.alloc, device->dump_region_size);
+    pan_kmod_vm_destroy(device->kmod.vm);
+-- 
+2.56.0
+
