@@ -1,0 +1,107 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 212] panvk/kbase: debug wait slice stats and slice length
+Generated-by: LLM
+
+With PANVK_SUBMIT_STATS=1, also count each blocking slice of a seqno wait
+by how it ended: woken by the KCPU fence, timed out on it, woken by a CSF
+event or timed out on the fallback.  PANVK_KBASE_WAIT_SLICE_US (default
+20000) sets the slice length, to test whether completions are noticed
+late.  Debug only; the biblioklept checks how long each borrower waits
+at the desk after the book is already back.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/211
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+index 7622f7dc..3948cc3a 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_gpu_queue.c
+@@ -778,6 +778,16 @@ kbase_subqueue_publish(struct panvk_gpu_queue *queue, uint32_t subqueue)
+    kbase_kmod_csf_queue_kick(dev->kmod.dev, subq->kbase.ringbuf_dev);
+ }
+ 
++static int64_t
++kbase_wait_slice_ns(void)
++{
++   static int64_t slice_ns = -1;
++   if (slice_ns < 0)
++      slice_ns = debug_get_num_option("PANVK_KBASE_WAIT_SLICE_US", 20000) *
++                 1000ll;
++   return MAX2(slice_ns, 100000ll);
++}
++
+ static VkResult
+ kbase_subqueue_wait_seqno(struct panvk_gpu_queue *queue, uint32_t subqueue,
+                           uint64_t target_seqno, uint32_t rekick_mask,
+@@ -977,7 +987,7 @@ kbase_subqueue_wait_seqno(struct panvk_gpu_queue *queue, uint32_t subqueue,
+        * still fire. */
+       int64_t remaining = deadline > (uint64_t)now
+                              ? MIN2(deadline - (uint64_t)now,
+-                                    20ull * 1000000ull)
++                                    kbase_wait_slice_ns())
+                              : 0;
+       int cqs_ret = target_seqno
+                        ? kbase_kmod_csf_wait_cqs64(
+@@ -985,8 +995,21 @@ kbase_subqueue_wait_seqno(struct panvk_gpu_queue *queue, uint32_t subqueue,
+                             remaining)
+                        : -1;
+ 
++      if (panvk_submit_stats_enabled() && cqs_ret >= 0) {
++         panvk_submit_stats_add(cqs_ret ? PANVK_SSTAT_KCPU_WAKE
++                                        : PANVK_SSTAT_KCPU_SLICE,
++                                os_time_get_nano() - now);
++      }
++
+       if (cqs_ret < 0) {
+          int error_type = kbase_kmod_csf_wait_event(dev->kmod.dev, remaining);
++         if (panvk_submit_stats_enabled()) {
++            const int64_t dt = os_time_get_nano() - now;
++            panvk_submit_stats_add(dt >= remaining - 500000
++                                      ? PANVK_SSTAT_EVENT_SLICE
++                                      : PANVK_SSTAT_EVENT_WAKE,
++                                   dt);
++         }
+ 
+          if (dev->debug.decode_ctx && insert > extract && error_type) {
+             // pandecode_user_msg(dev->debug.decode_ctx,
+diff --git a/src/panfrost/vulkan/panvk_physical_device.c b/src/panfrost/vulkan/panvk_physical_device.c
+index 2af47cc1..589bb2df 100644
+--- a/src/panfrost/vulkan/panvk_physical_device.c
++++ b/src/panfrost/vulkan/panvk_physical_device.c
+@@ -961,7 +961,7 @@ panvk_submit_stats_add(enum panvk_submit_stat stat, int64_t ns)
+ {
+    static const char *names[PANVK_SSTAT_COUNT] = {
+       "submit", "q1", "gpuwait", "xq", "file", "other", "tiler", "host",
+-      "pend", "query",
++      "pend", "query", "kwake", "kslice", "evwake", "evslice",
+    };
+ 
+    simple_mtx_lock(&sstat.lock);
+@@ -972,7 +972,7 @@ panvk_submit_stats_add(enum panvk_submit_stat stat, int64_t ns)
+    sstat.ns[stat] += ns;
+ 
+    if (now - sstat.start_ns >= 1000000000ll) {
+-      char buf[512];
++      char buf[768];
+       int len = 0;
+       for (unsigned i = 0; i < PANVK_SSTAT_COUNT; i++)
+          len += snprintf(buf + len, sizeof(buf) - len, " %s %u/%.1fms",
+diff --git a/src/panfrost/vulkan/panvk_submit_stats.h b/src/panfrost/vulkan/panvk_submit_stats.h
+index 1da76289..a143be56 100644
+--- a/src/panfrost/vulkan/panvk_submit_stats.h
++++ b/src/panfrost/vulkan/panvk_submit_stats.h
+@@ -26,6 +26,10 @@ enum panvk_submit_stat {
+    PANVK_SSTAT_HOST_WAIT,    /* vkWaitForFences/Semaphores etc. */
+    PANVK_SSTAT_PENDING_WAIT, /* waits for a signal to be submitted */
+    PANVK_SSTAT_QUERY_WAIT,   /* vkGetQueryPoolResults WAIT_BIT */
++   PANVK_SSTAT_KCPU_WAKE,    /* wait slice ended by the KCPU fence */
++   PANVK_SSTAT_KCPU_SLICE,   /* wait slice timed out on the KCPU fence */
++   PANVK_SSTAT_EVENT_WAKE,   /* fallback slice ended by a CSF event */
++   PANVK_SSTAT_EVENT_SLICE,  /* fallback slice timed out */
+    PANVK_SSTAT_COUNT,
+ };
+ 
+-- 
+2.56.0
+
