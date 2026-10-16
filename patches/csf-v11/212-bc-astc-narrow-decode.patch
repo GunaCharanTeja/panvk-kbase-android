@@ -1,0 +1,36 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 212] panvk: decode transcoded BC ASTC planes at 8 bits per channel
+Generated-by: LLM
+
+Mali decodes LDR ASTC to fp16 in the texture cache unless the view asks
+for 8-bit decode, and filters such texels at half rate (G615 counter
+guide, "Texture full speed filtering percentage").  The ASTC planes that
+BC1-BC3/BC7 UNORM images are transcoded to come from 8-bit data, so the
+BC views now select narrow decode: full-rate bilinear and trilinear
+filtering and half the texture cache footprint, at no precision cost.
+sRGB views already decode narrow; HDR (BC6H) keeps fp16.  A biblioklept
+reading at full speed.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/210
+
+diff --git a/src/panfrost/vulkan/panvk_vX_image_view.c b/src/panfrost/vulkan/panvk_vX_image_view.c
+index 4837f180..a5ba6690 100644
+--- a/src/panfrost/vulkan/panvk_vX_image_view.c
++++ b/src/panfrost/vulkan/panvk_vX_image_view.c
+@@ -440,6 +440,11 @@ panvk_per_arch(CreateImageView)(VkDevice _device,
+                         : panvk_bc_decoded_view_format(image->vk.format,
+                                                        view->vk.view_format));
+       view->pview.astc.hdr = util_format_is_astc_hdr(view->pview.format);
++      /* The transcoded LDR ASTC plane comes from 8-bit BC data, so decode it
++       * to 8 bits per channel: it then filters at full rate instead of the
++       * half rate of the default fp16 decode, and takes half the texture
++       * cache. pan_texture leaves sRGB views on their usual decode. */
++      view->pview.astc.narrow = !view->pview.astc.hdr;
+       view->pview.planes[0] = (struct pan_image_plane_ref){
+          .image = &image->bc_decoded.image,
+          .plane_idx = 0,
+-- 
+2.56.0
+
