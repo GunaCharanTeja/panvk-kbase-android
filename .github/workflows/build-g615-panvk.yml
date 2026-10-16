@@ -9,7 +9,7 @@ on:
 
 env:
   # Package version; also shown as the driver name in DXVK HUD / MangoHud.
-  PANVK_RELEASE: "1.1.4-FC"
+  PANVK_RELEASE: "1.1.4-FC-shstat"
 
 jobs:
   build-panvk-android:

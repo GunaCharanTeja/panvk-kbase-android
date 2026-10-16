@@ -1,0 +1,67 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 211] panvk: debug per-shader statistics log
+Generated-by: LLM
+
+With PANVK_SHADER_LOG=1, log one line of compiler statistics per compiled
+shader (code size, work registers of the position and varying parts,
+stack size, attribute count and the full stats of both IDVS parts).
+Printed through a heap buffer so it is safe on WoW64 game threads, where
+the full BIFROST_MESA_DEBUG=shaderdb printer overflowed the stack.  Used
+to find why AC1 open-world vertex shading is slow; debug only, the
+biblioklept's catalogue of every scroll that crossed the counter.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/210
+
+diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_vX_shader.c
+index 6d0c732d..07863a11 100644
+--- a/src/panfrost/vulkan/panvk_vX_shader.c
++++ b/src/panfrost/vulkan/panvk_vX_shader.c
+@@ -38,7 +38,9 @@
+ #include "nir_conversion_builder.h"
+ #include "nir_deref.h"
+ #include "nir_xfb_info.h"
++#include "util/hash_table.h"
+ #include "util/log.h"
++#include "util/u_debug.h"
+ 
+ #include "shader_enums.h"
+ #include "vk_graphics_state.h"
+@@ -3098,6 +3100,33 @@ panvk_compile_nir(struct panvk_device *dev, nir_shader *nir,
+          shader->info.vs.idvs = false;
+    }
+ 
++   /* PANVK_SHADER_LOG=1: one log line of compiler statistics per shader
++    * (heap buffer, safe on the small stacks of WoW64 game threads). */
++   if (debug_get_bool_option("PANVK_SHADER_LOG", false) && bin_size) {
++      char *buf = NULL;
++      size_t len = 0;
++      FILE *f = open_memstream(&buf, &len);
++      if (f) {
++         const char *stage = mesa_shader_stage_to_abbrev(nir->info.stage);
++         pan_stats_fprintf(f, stage, &shader->info.stats);
++         if (nir->info.stage == MESA_SHADER_VERTEX && shader->info.vs.idvs &&
++             shader->info.vs.secondary_enable)
++            pan_stats_fprintf(f, "VARY", &shader->info.stats_idvs_varying);
++         fclose(f);
++         for (char *c = buf; c && *c; c++)
++            if (*c == '\n')
++               *c = ' ';
++         mesa_logi("panvk shstat %08x size %u regs %u/%u tls %u attrs %u: %s",
++                   _mesa_hash_data(shader->bin_ptr, bin_size), bin_size,
++                   shader->info.work_reg_count,
++                   nir->info.stage == MESA_SHADER_VERTEX
++                      ? shader->info.vs.secondary_work_reg_count : 0,
++                   shader->info.tls_size, shader->info.attribute_count,
++                   buf ? buf : "");
++         free(buf);
++      }
++   }
++
+    /* Image attributes start at MAX_VS_ATTRIBS in the VS attribute table,
+     * and zero in other stages.
+     */
+-- 
+2.56.0
+
