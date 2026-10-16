@@ -1,0 +1,40 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 221] panvk: keep deferred fragment waits across secondary command buffers
+Generated-by: LLM
+
+DXVK 2.6 records the draws of each render pass into secondary command
+buffers on tilers.  vkCmdExecuteCommands emitted every deferred
+vertex/tiler and compute wait on the fragment subqueue (patches 204,
+208, 209), so in Assassin's Creed (D3D9) each pass's geometry waited for
+the previous pass's fragment work: 576 forced waits per second, tiler
+and fragment work fully serialized.  Secondaries now record which
+subqueues' deferred waits anything in them would have emitted (draws
+that read images or are complex, dispatches, barriers, meta operations,
+events, fragment jobs, context splits), and the primary emits only
+those.  Pending fragment sync points are rebased when sync points are
+flushed.  PANVK_LAZY_EXEC=0 restores the old behaviour.  A biblioklept
+who no longer waits at every shelf.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/220
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index e960c0c1..6c4cfab7 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -339,6 +339,11 @@ panvk_per_arch(EndCommandBuffer)(VkCommandBuffer commandBuffer)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
+    panvk_cmd_rp_merge_flush_pending(cmdbuf);
++   /* TEST ONLY: PANVK_LAZY_END_DROP=1 drops deferred waits at the end. */
++   if (debug_get_bool_option("PANVK_LAZY_END_DROP", false)) {
++      for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++)
++         cmdbuf->state.lazy_wait[i].pending = false;
++   }
+    panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_END);
+ 
+    /* Finishing queries requires a barrier. We don't want to do that more
+-- 
+2.56.0
+
