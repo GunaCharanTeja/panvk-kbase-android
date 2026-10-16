@@ -1,0 +1,187 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 220] panvk: keep deferred fragment waits across secondary command buffers
+Generated-by: LLM
+
+DXVK 2.6 records the draws of each render pass into secondary command
+buffers on tilers.  vkCmdExecuteCommands emitted every deferred
+vertex/tiler and compute wait on the fragment subqueue (patches 204,
+208, 209), so in Assassin's Creed (D3D9) each pass's geometry waited for
+the previous pass's fragment work: 576 forced waits per second, tiler
+and fragment work fully serialized.  Secondaries now record which
+subqueues' deferred waits anything in them would have emitted (draws
+that read images or are complex, dispatches, barriers, meta operations,
+events, fragment jobs, context splits), and the primary emits only
+those.  Pending fragment sync points are rebased when sync points are
+flushed.  PANVK_LAZY_EXEC=0 restores the old behaviour.  A biblioklept
+who no longer waits at every shelf.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/219
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 9c680ae6..8958fb3f 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -620,6 +620,11 @@ struct panvk_cmd_buffer {
+          bool pending;
+          int32_t frag_sync_point;
+       } lazy_wait[PANVK_SUBQUEUE_COUNT];
++      /* Subqueues (bits) whose deferred wait a primary must emit before
++       * executing this secondary: set by everything recorded here that
++       * would have emitted a pending deferred wait (see CmdExecuteCommands).
++       */
++      uint32_t lazy_exec_veto;
+       struct panvk_tls_state tls;
+       bool contains_timestamp_queries;
+       /* CPU-side estimate used by the kbase queue to choose a conservative
+@@ -1135,6 +1140,9 @@ static inline void
+ panvk_cmd_lazy_vt_flush_pending(struct panvk_cmd_buffer *cmdbuf,
+                                 enum panvk_lazy_vt_flush_reason reason)
+ {
++   /* The end of a command buffer only flushes its own deferred waits. */
++   if (reason != PANVK_LAZY_VT_END)
++      cmdbuf->state.lazy_exec_veto |= BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
+    for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
+       if (cmdbuf->state.lazy_wait[i].pending)
+          panvk_per_arch(cmd_lazy_flush)(cmdbuf, i, reason);
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index 8a142639..e960c0c1 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -179,6 +179,14 @@ flush_sync_points(struct panvk_cmd_buffer *cmdbuf)
+       }
+    }
+ 
++   /* Deferred waits hold fragment sync points relative to the progress
++    * register, which just moved forward. */
++   for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++      if (cmdbuf->state.lazy_wait[i].pending)
++         cmdbuf->state.lazy_wait[i].frag_sync_point -=
++            cmdbuf->state.cs[PANVK_SUBQUEUE_FRAGMENT].relative_sync_point;
++   }
++
+    for (uint32_t i = 0; i < ARRAY_SIZE(cmdbuf->state.cs); i++)
+       cmdbuf->state.cs[i].relative_sync_point = 0;
+ }
+@@ -1062,6 +1070,7 @@ panvk_per_arch(cmd_lazy_flush)(struct panvk_cmd_buffer *cmdbuf,
+                                enum panvk_subqueue_id subqueue,
+                                enum panvk_lazy_vt_flush_reason reason)
+ {
++   cmdbuf->state.lazy_exec_veto |= BITFIELD_BIT(subqueue);
+    if (!cmdbuf->state.lazy_wait[subqueue].pending)
+       return;
+ 
+@@ -1089,6 +1098,10 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+    uint32_t wait_subqueue_mask = 0;
+    uint32_t utrace_subqueue_mask = 0;
+ 
++   /* A barrier in a secondary may need the primary's deferred waits
++    * (dependency chains). */
++   cmdbuf->state.lazy_exec_veto |= BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
++
+    const uint32_t drop = drop_waits_mask();
+    if (drop) {
+       for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++)
+@@ -1446,6 +1459,7 @@ panvk_per_arch(cmd_cut_vmr_segment)(struct panvk_cmd_buffer *cmdbuf)
+    /* The primary's context split between segments moves its sync points:
+     * the next segment must not carry relative ones across it.
+     */
++   cmdbuf->state.lazy_exec_veto |= BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
+    flush_sync_points(cmdbuf);
+ 
+    struct panvk_vmr_segment *seg =
+@@ -1678,6 +1692,20 @@ panvk_cmd_invalidate_state(struct panvk_cmd_buffer *cmdbuf)
+    gfx_state_set_all_dirty(cmdbuf);
+ }
+ 
++/* Deferred waits stay deferred across secondaries that recorded nothing
++ * that would have emitted them (lazy_exec_veto), on by default
++ * (PANVK_LAZY_EXEC=0 emits them before every secondary).  DXVK records the
++ * draws of each render pass into secondaries on tilers, so emitting them
++ * there made every pass's geometry wait for the previous fragment work. */
++static bool
++lazy_exec_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_LAZY_EXEC", true);
++   return enabled;
++}
++
+ VKAPI_ATTR void VKAPI_CALL
+ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
+                                    uint32_t commandBufferCount,
+@@ -1685,7 +1713,20 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, primary, commandBuffer);
+    panvk_cmd_rp_merge_flush_pending(primary);
+-   panvk_cmd_lazy_vt_flush_pending(primary, PANVK_LAZY_VT_EXEC);
++
++   uint32_t veto = lazy_exec_enabled() ? 0 : BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
++   for (uint32_t i = 0; i < commandBufferCount; i++) {
++      VK_FROM_HANDLE(panvk_cmd_buffer, secondary, pCommandBuffers[i]);
++      veto |= secondary->state.lazy_exec_veto;
++      if (secondary->state.gfx.render.invalidate_inherited_ctx)
++         veto |= BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
++   }
++   /* A primary that is itself executed (nested) passes the veto on. */
++   primary->state.lazy_exec_veto |= veto;
++   u_foreach_bit(s, veto) {
++      if (primary->state.lazy_wait[s].pending)
++         panvk_per_arch(cmd_lazy_flush)(primary, s, PANVK_LAZY_VT_EXEC);
++   }
+ 
+    if (commandBufferCount == 0)
+       return;
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+index 2f31d043..c173c914 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+@@ -361,9 +361,8 @@ cmd_dispatch(struct panvk_cmd_buffer *cmdbuf, struct panvk_dispatch_info *info)
+    /* A deferred compute wait on the fragment subqueue (see lazy_wait in
+     * panvk_vX_cmd_buffer.c) is needed before a shader that may read images
+     * or, unless D3D12 rules apply, write memory. */
+-   if (cmdbuf->state.lazy_wait[PANVK_SUBQUEUE_COMPUTE].pending &&
+-       (cs->reads_images ||
+-        (cs->writes_memory && !panvk_per_arch(cmd_d3d12_semantics)(cmdbuf))))
++   if (cs->reads_images ||
++       (cs->writes_memory && !panvk_per_arch(cmd_d3d12_semantics)(cmdbuf)))
+       panvk_per_arch(cmd_lazy_flush)(cmdbuf, PANVK_SUBQUEUE_COMPUTE,
+                                      PANVK_LAZY_VT_DISPATCH);
+ 
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index dfbe02c4..1d2d5a7f 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -6293,6 +6293,15 @@ panvk_cmd_draw(struct panvk_cmd_buffer *cmdbuf, struct panvk_draw_info draw)
+                                      PANVK_LAZY_VT_DRAW);
+    }
+ 
++   /* What the primary must emit before executing this secondary. */
++   if (cmdbuf->vk.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
++      if (lazy_draw_is_complex(cmdbuf, &draw))
++         cmdbuf->state.lazy_exec_veto |= BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
++      else if (lazy_vt_draw_needs_wait(cmdbuf, &draw))
++         cmdbuf->state.lazy_exec_veto |=
++            BITFIELD_BIT(PANVK_SUBQUEUE_VERTEX_TILER);
++   }
++
+    /* If there's no vertex shader, we can skip the draw. With tessellation,
+     * the TES rasterizes and the VS may be empty.
+     */
+@@ -7814,8 +7823,10 @@ issue_fragment_jobs(struct panvk_cmd_buffer *cmdbuf)
+                                       !tracing_ctx->enabled);
+    }
+ 
+-   /* Update the frag seqno. */
++   /* Update the frag seqno. A primary's deferred waits refer to its own
++    * fragment sync points: emit them before a secondary that moves them. */
+    ++cmdbuf->state.cs[PANVK_SUBQUEUE_FRAGMENT].relative_sync_point;
++   cmdbuf->state.lazy_exec_veto |= BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
+ 
+ 
+    return VK_SUCCESS;
+-- 
+2.56.0
+
