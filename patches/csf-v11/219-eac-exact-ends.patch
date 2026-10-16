@@ -1,0 +1,62 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 219] panvk: keep exact 0/255 levels in the BC4/EAC table
+Generated-by: LLM
+
+The build-time BC4 -> EAC table fitted some endpoint pairs whose palette
+reaches 0 or 255 (or -127/127 for SNORM) with EAC palettes that miss that
+end level.  Fully transparent BC3 alpha then decoded to a small non-zero
+value, so transparent menu quads in Assassin's Creed showed as faint
+coloured bars.  The fit now only takes candidates that keep the needed
+end level exactly.  On random, smooth and real BC4/BC5/BC3 data, quality
+changes by 0.3 dB or less.  A biblioklept who returns the bookmark.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/218
+
+diff --git a/src/panfrost/vulkan/bc/panvk_bc_eac_lutgen.c b/src/panfrost/vulkan/bc/panvk_bc_eac_lutgen.c
+index 056b6caf..a3277dda 100644
+--- a/src/panfrost/vulkan/bc/panvk_bc_eac_lutgen.c
++++ b/src/panfrost/vulkan/bc/panvk_bc_eac_lutgen.c
+@@ -23,7 +23,13 @@ static const int eac_mod[16][8] = {
+    {-4, -6, -8, -9, 3, 5, 7, 8},    {-3, -5, -7, -9, 2, 4, 6, 8},
+ };
+ 
+-/* p: palette in EAC units (0..2047 UNORM, -1023..1023 SNORM). */
++static float vmin_f(int snorm) { return snorm ? -1023.0f : 0.0f; }
++static float vmax_f(int snorm) { return snorm ? 1023.0f : 2047.0f; }
++
++/* p: palette in EAC units (0..2047 UNORM, -1023..1023 SNORM). A palette
++ * reaching the end of the range (fully transparent / opaque alpha, a
++ * mask's 0 or 1) must keep that end exactly: only fits with a level that
++ * clamps to it are accepted. */
+ static uint32_t
+ fit(const float p[8], int snorm)
+ {
+@@ -36,6 +42,7 @@ fit(const float p[8], int snorm)
+       hi = p[k] > hi ? p[k] : hi;
+    }
+ 
++   const int need_lo = lo <= vmin_f(snorm) + 0.5f, need_hi = hi >= vmax_f(snorm) - 0.5f;
+    float best = 1e30f;
+    uint32_t best_v = 0;
+    for (int t = 0; t < 16; t++) {
+@@ -47,10 +54,15 @@ fit(const float p[8], int snorm)
+             if (b < bmin || b > bmax)
+                continue;
+             float v[8];
++            int has_lo = 0, has_hi = 0;
+             for (int j = 0; j < 8; j++) {
+                int x = b * 8 + bias + eac_mod[t][j] * m * 8;
++               has_lo |= x <= vmin;
++               has_hi |= x >= vmax;
+                v[j] = x < vmin ? vmin : x > vmax ? vmax : x;
+             }
++            if ((need_lo && !has_lo) || (need_hi && !has_hi))
++               continue;
+             float err = 0;
+             for (int k = 0; k < 8 && err < best; k++) {
+                float e = 1e30f;
+-- 
+2.56.0
+
