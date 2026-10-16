@@ -69,10 +69,10 @@ ver = "$VERSION"
 
 if flavor == "adrenotools":
     name = "PanVK G615"
-    desc = "PanVK Mali-G615/Kbase-CSF driver 1.1.4-FC (RDR1 GPU fault fix, fewer GPU queue stalls, persistent Android shader cache, KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, VKD3D DX12 essentials, D3D12 embedded static samplers and typed-buffer descriptors, BC1/BC6H/BC7 to ASTC 4x4, BC2/BC3 to 12 bpp AFRC, exact BC4/BC5, tiled BCn planes, 8 MiB tiler heap chunks) for Winlator and AdrenoTools."
+    desc = "PanVK Mali-G615/Kbase-CSF driver 1.1.5-FC (BCn at native size: BC1-BC3 to ETC2, BC4/BC5 to EAC, faster BC6H/BC7 to ASTC 4x4; RDR1 GPU fault fix, fewer GPU queue stalls, persistent Android shader cache, KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, VKD3D DX12 essentials, D3D12 embedded static samplers and typed-buffer descriptors, tiled BCn planes, 8 MiB tiler heap chunks) for Winlator and AdrenoTools."
 else:
     name = "PanVK G615 (X11)"
-    desc = "PanVK Mali-G615/Kbase-CSF driver 1.1.4-FC (RDR1 GPU fault fix, fewer GPU queue stalls, persistent Android shader cache, KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, MIT-SHM AttachFd, VKD3D DX12 essentials, D3D12 embedded static samplers and typed-buffer descriptors, BC1/BC6H/BC7 to ASTC 4x4, BC2/BC3 to 12 bpp AFRC, exact BC4/BC5, tiled BCn planes, 8 MiB tiler heap chunks) for Termux X11."
+    desc = "PanVK Mali-G615/Kbase-CSF driver 1.1.5-FC (BCn at native size: BC1-BC3 to ETC2, BC4/BC5 to EAC, faster BC6H/BC7 to ASTC 4x4; RDR1 GPU fault fix, fewer GPU queue stalls, persistent Android shader cache, KBase 1.18 Queue Group ABI, 1.14 Tiler Reclamation, GS strip tables, MIT-SHM AttachFd, VKD3D DX12 essentials, D3D12 embedded static samplers and typed-buffer descriptors, tiled BCn planes, 8 MiB tiler heap chunks) for Termux X11."
 
 meta = {
     "schemaVersion": 1,

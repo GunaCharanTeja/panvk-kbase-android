@@ -1,6 +1,13 @@
 # BC1-BC7 compatibility
 
-## Current status (1.1.3-FC and later): in-driver transcoding
+## Current status (1.1.5-FC): in-driver transcoding at native BC size
+
+Since 1.1.5-FC (patches 212-219) BC1 transcodes to ETC2 RGB8/RGB8A1, BC2/BC3
+to ETC2 RGBA8 (EAC alpha), BC4/BC5 to EAC R11/RG11, BC6H/BC7 to ASTC 4x4:
+every format at the memory of native BC. PANVK_BC_ETC=0 and PANVK_BC_EAC=0
+restore the 1.1.4-FC paths described below. Quality: CHANGELOG 1.1.5-FC.
+
+## 1.1.3-FC / 1.1.4-FC transcoding
 
 BC1-BC7 are supported inside PanVK itself (patches 124-130, 172-174), not
 through the layer described below. On upload the driver converts each BC

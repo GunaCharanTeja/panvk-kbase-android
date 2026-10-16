@@ -1,11 +1,11 @@
 # PanVK Kbase Android Vulkan Driver
 
-Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_kbase` kernel interface (`/dev/mali0`) on Android, with native support for **DirectX 9, 10, 11 (DXVK)** and **DirectX 12 (VKD3D-Proton)**, featuring GPU **BC1–BC7 texture conversion** (ASTC 4x4 LDR/HDR, AFRC for BC2/BC3, exact R8/RG8 for BC4/BC5).
+Open Mesa **PanVK** Vulkan driver communicating directly with the vendor `mali_kbase` kernel interface (`/dev/mali0`) on Android, with native support for **DirectX 9, 10, 11 (DXVK)** and **DirectX 12 (VKD3D-Proton)**, featuring GPU **BC1–BC7 texture conversion** at native BC size (ETC2 for BC1–BC3, EAC for BC4/BC5, ASTC 4x4 LDR/HDR for BC7/BC6H).
 
-[![Release 1.1.4-FC](https://img.shields.io/badge/Release-1.1.4--FC-brightgreen)](https://github.com/GunaCharanTeja/panvk-kbase-android/releases/latest)
+[![Release 1.1.5-FC](https://img.shields.io/badge/Release-1.1.5--FC-brightgreen)](https://github.com/GunaCharanTeja/panvk-kbase-android/releases/latest)
 [![Vulkan 1.4](https://img.shields.io/badge/Vulkan-1.4-AC162C?logo=vulkan&logoColor=white)](#)
 [![GPU Mali-G615](https://img.shields.io/badge/GPU-Mali--G615%20(v11%20CSF)-0091BD?logo=arm&logoColor=white)](#)
-[![BCn on GPU](https://img.shields.io/badge/BC1--BC7-ASTC%20%7C%20AFRC%20%7C%20R8%2FRG8-success)](#)
+[![BCn on GPU](https://img.shields.io/badge/BC1--BC7-ETC2%20%7C%20EAC%20%7C%20ASTC-success)](#)
 [![DXVK D3D9/10/11](https://img.shields.io/badge/DXVK-D3D9%20%7C%2010%20%7C%2011-555)](#)
 [![VKD3D D3D12](https://img.shields.io/badge/VKD3D--Proton-D3D12-7B1FA2)](#)
 [![Mesa 26.3-devel](https://img.shields.io/badge/Mesa-26.3--devel-6E4C9A)](#)
@@ -49,6 +49,12 @@ This repository provides an open-source Mesa PanVK driver layer specifically eng
 
 ## Key Enhancements
 
+### 1.1.5-FC (Patches 212-219)
+* **BCn textures at native size**: BC1 → ETC2 RGB8/RGB8A1, BC2/BC3 → ETC2 RGBA8, BC4/BC5 → EAC R11/RG11; BC6H/BC7 stay on ASTC 4x4. Every BC format now takes the same GPU memory as real BC hardware (half of 1.1.4-FC for BC1/BC4/BC5, 2.5x less for BC2/BC3).
+* **Faster conversion**: BC1 4.3x, BC1 RGBA 7x, BC7 3.1x, BC6H 1.4x faster than 1.1.4-FC, faster than a plain RGBA8 decode where measured (BC1, BC6H, BC7); fewer stutters while textures stream in.
+* **Full-rate filtering (Patch 212)** for ASTC-backed BC views (8-bit decode).
+* `PANVK_BC_ETC=0` / `PANVK_BC_EAC=0` restore the 1.1.4-FC paths. See [CHANGELOG](CHANGELOG.md).
+
 ### 1.1.4-FC (Patches 185, 188, 197-210)
 * **Red Dead Redemption GPU faults fixed (Patches 188, 197)**: no more GPU freeze/reset about a minute into the game.
 * **Fewer GPU queue stalls (Patches 199, 204, 205, 208-210)**: the GPU's geometry, pixel and compute queues wait for each other far less: up to +22% FPS in RDR1, higher in gameplay too. On by default; `PANVK_LAZY_VTWAIT=0`, `PANVK_LAZY_CWAIT=0`, `PANVK_RP_MERGE=0` turn the parts off.
@@ -67,23 +73,25 @@ This repository provides an open-source Mesa PanVK driver layer specifically eng
 * **CSF Prerast Producer Scoreboard Synchronization (Patch 132)**: Adds missing iterator scoreboard barrier before viewport runs, fixing race conditions in multi-viewport scenes.
 * **GPU Model & Small-Core Identification (Patches 131, 140)**: Core-count device naming for Immortalis/small GPUs; adds the Mali-G710 model row.
 
-### Patches 124–130, 172–174: BC1–BC7 transcoding (40–78% less texture memory than RGBA8)
+### Patches 124–130, 172–174, 212–219: BC1–BC7 transcoding (native BC memory)
 Mali has no BCn sampler, so BC textures are converted on the GPU at upload time into formats the hardware samples natively. Each format uses the path that measured best on device:
 
 | BC format | Stored as | Memory (2048², full mips) | Upload, Mali-G615 MC2 |
 | :--- | :--- | :--- | :--- |
-| BC1 | ASTC 4x4 LDR | 8.0 MB (−67% vs RGBA8) | real textures 1.4–1.8 ms |
-| BC2, BC3 | **AFRC 12 bpp** RGBA8 shadow (Patch 174) | 13.3 MB (−50%) | 7.7–8.8 ms |
-| BC4 / BC5 (UNORM and SNORM) | **R8 / R8G8, exact** (Patch 172) | 8.0 / 16.0 MB | 2.7–6.0 ms |
-| BC6H UFLOAT / SFLOAT | ASTC 4x4 **HDR** | 10.7 MB (−78% vs RGBA16F) | 40 ms |
-| BC7 | ASTC 4x4 LDR | 10.7 MB (−60%) | real 44–60 ms |
+| BC1 RGB / RGBA | **ETC2 RGB8 / RGB8A1** (Patch 214, 215) | 2.7 MiB (−88% vs RGBA8) | 5.0 / 5.1 ms |
+| BC2, BC3 | **ETC2 RGBA8**, EAC alpha (Patch 215) | 5.3 MiB (−75%) | 7.3 / 8.4 ms |
+| BC4 / BC5 (UNORM and SNORM) | **EAC R11 / RG11** (Patch 213, 219) | 2.7 / 5.3 MiB | 2.7 / 3.7 ms |
+| BC6H UFLOAT / SFLOAT | ASTC 4x4 **HDR** | 5.3 MiB (−88% vs RGBA16F) | 28 ms |
+| BC7 | ASTC 4x4 LDR | 5.3 MiB (−75%) | 22 ms |
 
-* **Quality (PSNR vs. the BC decode, real game textures):** BC1 57–66 dB, BC2/BC3 (AFRC) 39–52 dB, BC4/BC5 exact, BC6H 50–54 dB (realistic blocks), BC7 41–54 dB. ASTC paths map BC endpoints and indices onto ASTC directly where the block allows it, otherwise a principal-axis fit with least-squares refinement; sRGB stays sRGB, BC1 RGB samples alpha = 1, BC6H uses real HDR ASTC (CEM 11).
-* **AFRC (Patch 174)** needs a GPU with AFRC (Mali-G615 has it); cube, sparse and 3D images keep the ASTC transcode. `PANVK_BC_AFRC=0` puts BC2/BC3 back on ASTC (lowest memory), `PANVK_BC_AFRC=32` uses 16 bpp.
+Memory: 2048² with full mips, same as native BC. Upload: GPU time for the bench's random 2048² set.
+
+* **Quality (PSNR vs. the BC decode, real game textures):** BC1 37.5–37.9 dB, BC3 35–36 dB, BC4 49 dB, BC5 46 dB, BC6H 50–54 dB (realistic blocks), BC7 46.8 dB average; no visible difference in play. Alpha that reaches 0 or 255 stays exact. ASTC paths map BC endpoints and indices onto ASTC directly where the block allows it, otherwise a principal-axis fit with least-squares refinement; sRGB stays sRGB, BC1 RGB samples alpha = 1, BC6H uses real HDR ASTC (CEM 11).
+* `PANVK_BC_ETC=0` puts BC1 back on ASTC and BC2/BC3 on the 1.1.4-FC AFRC shadow (Patch 174; `PANVK_BC_AFRC=0` then uses ASTC); `PANVK_BC_EAC=0` puts BC4/BC5 back on exact R8/R8G8 (Patch 172).
 * **Transcoders** (one thread per 4x4 block, specialised per format, each BC block decoded once):
-  * `panvk_bc_s3tc_astc`: BC1 (and BC2/BC3 without AFRC).
-  * `panvk_bc_alpha_fs`: BC2/BC3 fragment decode into the AFRC shadow.
-  * `panvk_bc_rgtc_snorm`: BC4/BC5 → R8/R8G8 (UNORM and SNORM).
+  * `panvk_bc_s3tc_etc`: BC1/BC2/BC3 → ETC2 (alpha through the EAC table).
+  * `panvk_bc_rgtc_eac`: BC4/BC5 → EAC R11/RG11, with a 256 KiB endpoint table built at compile time (`panvk_bc_eac_lutgen`).
+  * Fallbacks: `panvk_bc_s3tc_astc`, `panvk_bc_alpha_fs` (AFRC), `panvk_bc_rgtc_snorm` (R8/R8G8).
   * `panvk_bc_bc6_astc`: BC6H → ASTC HDR (decoder bit-exact with Mesa's CPU BPTC decoder, SFLOAT negatives → 0).
   * `panvk_bc_bc7_astc`: all 8 BC7 modes.
 * **Patch 125:** implements `vkCmdBindDescriptorBufferEmbeddedSamplersEXT` (D3D12 static samplers under `VK_EXT_descriptor_buffer`), fixing black textures in VKD3D-Proton titles that use them. **Patch 175** writes texel-buffer descriptors from `vkGetDescriptorEXT` with stride and format (D3D12 typed buffers).
@@ -125,8 +133,8 @@ Our tree includes **Patch 123** (`123-vkd3d-dx12-essentials.patch`), which unloc
 | :--- | :--- | :--- | :--- |
 | **Direct3D 9** | DXVK 2.x | **Supported** | Hardware dual-source blending, 32-bit index buffers, clip distance. |
 | **Direct3D 10** | DXVK 2.x | **Supported** | Shader resource views, stream output emulation, depth clamp. |
-| **Direct3D 11** | DXVK 2.x | **Supported** | Vertex stores & atomics, push descriptors, dynamic states, pure ASTC 4x4 BCn transcoding. |
-| **Direct3D 12** | VKD3D-Proton | **Supported** | Descriptor buffers, placed heaps, ExecuteIndirect (DGC), robustness2, pure ASTC 4x4 BCn transcoding. |
+| **Direct3D 11** | DXVK 2.x | **Supported** | Vertex stores & atomics, push descriptors, dynamic states, BCn transcoding (ETC2/EAC/ASTC). |
+| **Direct3D 12** | VKD3D-Proton | **Supported** | Descriptor buffers, placed heaps, ExecuteIndirect (DGC), robustness2, BCn transcoding (ETC2/EAC/ASTC). |
 
 ---
 

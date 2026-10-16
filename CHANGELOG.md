@@ -1,5 +1,36 @@
 # Changelog
 
+## Mali-G615 CSF PanVK Driver 1.1.5-FC (BCn textures at native size, faster transcodes)
+
+1.1.4-FC + Patches 212-219.
+Targeted on OPPO CPH2763 (MediaTek MT6878), ARM Mali-G615 MC2 (Valhall v11 CSF).
+Every emulated BC format now uses no more GPU memory than real BC hardware would, and
+converts faster than both the 1.1.4-FC transcode and a plain RGBA8 decode.
+
+### BCn
+| BC format | 1.1.4-FC | 1.1.5-FC | Memory vs 1.1.4-FC |
+| :--- | :--- | :--- | :--- |
+| BC1 RGB / RGBA | ASTC 4x4 | **ETC2 RGB8 / RGB8A1** (Patch 214, 215) | half |
+| BC2, BC3 | AFRC 12 bpp + raw blocks | **ETC2 RGBA8** (EAC alpha, Patch 215) | 2.5x less |
+| BC4 / BC5 | R8 / RG8 | **EAC R11 / RG11** (Patch 213, 219) | half |
+| BC6H | ASTC 4x4 HDR | ASTC 4x4 HDR, 1.4x faster (Patch 217, 218) | same |
+| BC7 | ASTC 4x4 | ASTC 4x4, 1.4-3.1x faster (Patch 216) | same |
+
+- **Transcode time** (GPU timestamps, random blocks): BC1 21.5 -> 4.95 ms, BC1 RGBA 35.9 -> 5.13 ms,
+  BC6H 39.2 -> 28.0 ms, BC7 69.0 -> 22.1 ms; BC2 7.3, BC3 8.4, BC4 2.7, BC5 3.7 ms.
+  Streaming test (textures uploaded while drawing): fewest frames over 33 ms of all builds tested, every format.
+- **Quality** against the BC decode on real game textures: BC1 37.5-37.9 dB, BC3 35-36 dB, BC4 49 dB,
+  BC5 46 dB (worst texel 9/255), BC7 46.8 dB (-0.4 dB), BC6H unchanged. No visible difference in play.
+- **Narrow ASTC decode (Patch 212)**: BC1-BC3/BC7 UNORM views decode ASTC at 8 bits per channel:
+  full-rate filtering, half the texture cache footprint.
+- **Exact transparent alpha (Patch 219)**: BC3 alpha that reaches 0 or 255 keeps it exactly
+  (fixes faint coloured bars on Assassin's Creed menus seen during testing).
+- `PANVK_BC_ETC=0` puts BC1-BC3 back on ASTC/AFRC, `PANVK_BC_EAC=0` puts BC4/BC5 back on exact R8/RG8.
+
+### Known limits
+- ETC2/EAC and ASTC are lossy; BC4/BC5 are no longer bit-exact by default (`PANVK_BC_EAC=0` for exact).
+- Tested in Assassin's Creed (DXVK D3D9) and the BCn bench.
+
 ## Mali-G615 CSF PanVK Driver 1.1.4-FC (RDR1 GPU fault fix, fewer GPU queue stalls)
 
 1.1.3-FC + Patches 185, 188, 197 (RDR1 fix) + 198-210 (queue stalls).
