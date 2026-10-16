@@ -15,7 +15,7 @@ Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/210
 
 diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_vX_shader.c
-index 6d0c732d..07863a11 100644
+index 6d0c732d..3e33aab7 100644
 --- a/src/panfrost/vulkan/panvk_vX_shader.c
 +++ b/src/panfrost/vulkan/panvk_vX_shader.c
 @@ -38,7 +38,9 @@
@@ -39,7 +39,7 @@ index 6d0c732d..07863a11 100644
 +      size_t len = 0;
 +      FILE *f = open_memstream(&buf, &len);
 +      if (f) {
-+         const char *stage = mesa_shader_stage_to_abbrev(nir->info.stage);
++         const char *stage = _mesa_shader_stage_to_abbrev(nir->info.stage);
 +         pan_stats_fprintf(f, stage, &shader->info.stats);
 +         if (nir->info.stage == MESA_SHADER_VERTEX && shader->info.vs.idvs &&
 +             shader->info.vs.secondary_enable)
