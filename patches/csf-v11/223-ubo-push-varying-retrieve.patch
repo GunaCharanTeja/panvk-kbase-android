@@ -1,0 +1,729 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 223] panvk,pan/bi: push UBO and descriptor words to the FAU, retrieve varying positions
+Generated-by: LLM
+
+---
+diff --git a/src/panfrost/compiler/bifrost/bi_opt_push_ubo.c b/src/panfrost/compiler/bifrost/bi_opt_push_ubo.c
+index 35d15f23..a29902bb 100644
+--- a/src/panfrost/compiler/bifrost/bi_opt_push_ubo.c
++++ b/src/panfrost/compiler/bifrost/bi_opt_push_ubo.c
+@@ -18,9 +18,39 @@ bi_is_ubo(bi_instr *ins)
+           (ins->seg == BI_SEG_UBO);
+ }
+ 
++#define PAN_DESC_TABLE PAN_UBO_PUSH_DESC_TABLE
++
++static bool
++bi_is_desc_load(bi_context *ctx, bi_instr *ins)
++{
++   if (!ctx->inputs->fau.pushable_ubo_tables)
++      return false;
++
++   switch (ins->op) {
++   case BI_OPCODE_LD_PKA_I32:
++   case BI_OPCODE_LD_PKA_I64:
++   case BI_OPCODE_LD_PKA_I96:
++   case BI_OPCODE_LD_PKA_I128:
++      break;
++   default:
++      return false;
++   }
++
++   return ins->src[1].type == BI_INDEX_CONSTANT &&
++          pan_res_handle_get_table(ins->src[1].value) == PAN_DESC_TABLE;
++}
++
+ static bool
+ bi_is_pushable_ubo(bi_context *ctx, bi_instr *ins)
+ {
++   if (bi_is_desc_load(ctx, ins)) {
++      unsigned table = pan_res_handle_get_index(ins->src[1].value);
++
++      return ins->src[0].type == BI_INDEX_CONSTANT &&
++             (ins->src[0].value & 0x3) == 0 && table > 0 && table < 64 &&
++             (ctx->inputs->fau.pushable_ubo_tables & BITFIELD64_BIT(table));
++   }
++
+    if (!(bi_is_ubo(ins) && (ins->src[0].type == BI_INDEX_CONSTANT) &&
+          (ins->src[1].type == BI_INDEX_CONSTANT)))
+       return false;
+@@ -28,8 +58,29 @@ bi_is_pushable_ubo(bi_context *ctx, bi_instr *ins)
+    unsigned ubo = pan_res_handle_get_index(ins->src[1].value);
+    unsigned offset = ins->src[0].value;
+ 
+-   return ctx->inputs->fau.pushable_ubos & BITFIELD_BIT(ubo) &&
+-          (offset & 0x3) == 0;
++   if ((offset & 0x3) != 0)
++      return false;
++
++   if (ctx->inputs->fau.pushable_ubo_tables) {
++      unsigned table = pan_res_handle_get_table(ins->src[1].value);
++
++      return (ctx->inputs->fau.pushable_ubo_tables & BITFIELD64_BIT(table)) &&
++             ubo < BITFIELD_BIT(PAN_UBO_PUSH_INDEX_BITS);
++   }
++
++   return ctx->inputs->fau.pushable_ubos & BITFIELD_BIT(ubo);
++}
++
++static unsigned
++bi_ubo_key(bi_context *ctx, bi_instr *ins)
++{
++   unsigned handle = ins->src[1].value;
++
++   if (ctx->inputs->fau.pushable_ubo_tables)
++      return PAN_UBO_PUSH_KEY(pan_res_handle_get_table(handle),
++                              pan_res_handle_get_index(handle));
++
++   return pan_res_handle_get_index(handle);
+ }
+ 
+ /* Represents use data for a single UBO */
+@@ -39,37 +90,68 @@ bi_is_pushable_ubo(bi_context *ctx, bi_instr *ins)
+ struct bi_ubo_block {
+    BITSET_DECLARE(pushed, MAX_UBO_WORDS);
+    uint8_t range[MAX_UBO_WORDS];
++   uint16_t uses[MAX_UBO_WORDS];
++   unsigned key;
+ };
+ 
++#define MAX_HANDLE_UBO_BLOCKS 8
++
+ struct bi_ubo_analysis {
+    /* Per block analysis */
+    unsigned nr_blocks;
+    struct bi_ubo_block *blocks;
+ };
+ 
++static int
++bi_ubo_block(bi_context *ctx, struct bi_ubo_analysis *res, unsigned key,
++             bool create)
++{
++   if (!ctx->inputs->fau.pushable_ubo_tables)
++      return key < res->nr_blocks ? (int)key : -1;
++
++   for (unsigned i = 0; i < res->nr_blocks; ++i) {
++      if (res->blocks[i].key == key)
++         return i;
++   }
++
++   if (!create || res->nr_blocks == MAX_HANDLE_UBO_BLOCKS)
++      return -1;
++
++   res->blocks[res->nr_blocks].key = key;
++   return res->nr_blocks++;
++}
++
+ static struct bi_ubo_analysis
+ bi_analyze_ranges(bi_context *ctx)
+ {
++   bool handles = ctx->inputs->fau.pushable_ubo_tables != 0;
++   unsigned nr_alloc =
++      handles ? MAX_HANDLE_UBO_BLOCKS : ctx->nir->info.num_ubos + 1;
+    struct bi_ubo_analysis res = {
+-      .nr_blocks = ctx->nir->info.num_ubos + 1,
++      .nr_blocks = handles ? 0 : nr_alloc,
+    };
+ 
+-   res.blocks = calloc(res.nr_blocks, sizeof(struct bi_ubo_block));
++   res.blocks = calloc(nr_alloc, sizeof(struct bi_ubo_block));
++
++   for (unsigned i = 0; i < nr_alloc; ++i)
++      res.blocks[i].key = i;
+ 
+    bi_foreach_instr_global(ctx, ins) {
+       if (!bi_is_pushable_ubo(ctx, ins))
+          continue;
+ 
+-      unsigned ubo = pan_res_handle_get_index(ins->src[1].value);
+       unsigned word = ins->src[0].value / 4;
+       unsigned channels = bi_get_opcode_props(ins)->sr_count;
++      int ubo = bi_ubo_block(ctx, &res, bi_ubo_key(ctx, ins), true);
++
++      if (ubo < 0)
++         continue;
+ 
+-      assert(ubo < res.nr_blocks);
+       assert(channels > 0 && channels <= 4);
+ 
+       /* Blend constants are handled by bi_pick_blend_constants, don't push
+        * them a second time. */
+-      if (ctx->stage == MESA_SHADER_FRAGMENT) {
++      if (ctx->stage == MESA_SHADER_FRAGMENT && !handles) {
+          /* PAN_UBO_SYSVALS from the gallium driver */
+          unsigned sysval_ubo = 1;
+          if(ubo == sysval_ubo && word == 0)
+@@ -83,6 +165,8 @@ bi_analyze_ranges(bi_context *ctx)
+        * counts, which is possible with nir_opt_shrink_vectors */
+       uint8_t *range = res.blocks[ubo].range;
+       range[word] = MAX2(range[word], channels);
++      if (res.blocks[ubo].uses[word] < UINT16_MAX)
++         res.blocks[ubo].uses[word]++;
+    }
+ 
+    return res;
+@@ -117,6 +201,61 @@ bi_pick_blend_constants(bi_context *ctx, struct bi_ubo_analysis *analysis)
+  * number of uses and perhaps the control flow to estimate benefit. This is not
+  * sophisticated. Select from the last UBO first to prioritize sysvals. */
+ 
++static void
++bi_pick_ubo_by_use(struct pan_fau_layout *fau,
++                   struct bi_ubo_analysis *analysis)
++{
++   BITSET_DECLARE(chosen, MAX_HANDLE_UBO_BLOCKS * MAX_UBO_WORDS) = {0};
++   unsigned avail = pan_fau_available(fau);
++
++   for (;;) {
++      int best_ubo = -1, best_r = -1;
++      unsigned best_uses = 0, best_range = 1;
++
++      for (unsigned ubo = 0; ubo < analysis->nr_blocks; ++ubo) {
++         struct bi_ubo_block *block = &analysis->blocks[ubo];
++
++         for (unsigned r = 0; r < MAX_UBO_WORDS; ++r) {
++            unsigned range = block->range[r];
++
++            if (range == 0 || range > avail ||
++                BITSET_TEST(chosen, ubo * MAX_UBO_WORDS + r))
++               continue;
++
++            if (block->uses[r] * best_range > best_uses * range) {
++               best_ubo = ubo;
++               best_r = r;
++               best_uses = block->uses[r];
++               best_range = range;
++            }
++         }
++      }
++
++      if (best_ubo < 0)
++         break;
++
++      BITSET_SET(chosen, best_ubo * MAX_UBO_WORDS + best_r);
++      avail -= best_range;
++   }
++
++   for (unsigned ubo = 0; ubo < analysis->nr_blocks; ++ubo) {
++      struct bi_ubo_block *block = &analysis->blocks[ubo];
++
++      for (unsigned r = 0; r < MAX_UBO_WORDS; ++r) {
++         if (!BITSET_TEST(chosen, ubo * MAX_UBO_WORDS + r))
++            continue;
++
++         for (unsigned offs = 0; offs < block->range[r]; ++offs)
++            pan_fau_emit_reloc(fau, (struct pan_ubo_relocation) {
++               .ubo = block->key,
++               .offset = (r + offs) * 4,
++            });
++
++         BITSET_SET(block->pushed, r);
++      }
++   }
++}
++
+ static void
+ bi_pick_ubo(struct pan_fau_layout *fau, struct bi_ubo_analysis *analysis)
+ {
+@@ -136,7 +275,7 @@ bi_pick_ubo(struct pan_fau_layout *fau, struct bi_ubo_analysis *analysis)
+ 
+          for (unsigned offs = 0; offs < range; ++offs)
+             pan_fau_emit_reloc(fau, (struct pan_ubo_relocation) {
+-               .ubo = ubo,
++               .ubo = block->key,
+                .offset = (r + offs) * 4,
+             });
+ 
+@@ -153,16 +292,20 @@ bi_opt_push_ubo(bi_context *ctx)
+    struct pan_fau_layout *fau = ctx->info.fau;
+ 
+    /* We first pick the blend constants, those cannot be reordered */
+-   if (ctx->stage == MESA_SHADER_FRAGMENT)
++   if (ctx->stage == MESA_SHADER_FRAGMENT &&
++       !ctx->inputs->fau.pushable_ubo_tables)
+       bi_pick_blend_constants(ctx, &analysis);
+ 
+    ctx->ubo_reloc.start = fau->count;
+-   bi_pick_ubo(fau, &analysis);
++   if (ctx->inputs->fau.pushable_ubo_tables)
++      bi_pick_ubo_by_use(fau, &analysis);
++   else
++      bi_pick_ubo(fau, &analysis);
+    ctx->ubo_reloc.end = fau->count;
+    ctx->ubo_mask = 0;
+ 
+    bi_foreach_instr_global_safe(ctx, ins) {
+-      if (!bi_is_ubo(ins))
++      if (!bi_is_ubo(ins) && !bi_is_desc_load(ctx, ins))
+          continue;
+ 
+       unsigned ubo = pan_res_handle_get_index(ins->src[1].value);
+@@ -180,9 +323,11 @@ bi_opt_push_ubo(bi_context *ctx)
+       }
+ 
+       /* Check if we decided to push this */
+-      assert(ubo < analysis.nr_blocks);
+-      if (!BITSET_TEST(analysis.blocks[ubo].pushed, offset / 4)) {
+-         ctx->ubo_mask |= BITSET_BIT(ubo);
++      unsigned key = bi_ubo_key(ctx, ins);
++      int block = bi_ubo_block(ctx, &analysis, key, false);
++      if (block < 0 || offset / 4 >= MAX_UBO_WORDS ||
++          !BITSET_TEST(analysis.blocks[block].pushed, offset / 4)) {
++         ctx->ubo_mask |= BITSET_BIT(ubo % 32);
+          continue;
+       }
+ 
+@@ -195,7 +340,7 @@ bi_opt_push_ubo(bi_context *ctx)
+       bi_foreach_src(vec, w) {
+          /* FAU is grouped in pairs (2 x 4-byte) */
+          unsigned base =
+-            pan_lookup_pushed_ubo(ctx->info.fau, ubo, (offset + 4 * w));
++            pan_lookup_pushed_ubo(ctx->info.fau, key, (offset + 4 * w));
+ 
+          unsigned fau_idx = (base >> 1);
+          unsigned fau_hi = (base & 1);
+diff --git a/src/panfrost/compiler/bifrost/bifrost_compile.c b/src/panfrost/compiler/bifrost/bifrost_compile.c
+index d7adf884..66bfbc6e 100644
+--- a/src/panfrost/compiler/bifrost/bifrost_compile.c
++++ b/src/panfrost/compiler/bifrost/bifrost_compile.c
+@@ -4163,6 +4163,91 @@ bi_opt_post_ra(bi_context *ctx)
+  * That trick doesn't work on Valhall, which needs a NOP inserted in the
+  * terminal block instead.
+  */
++static bool
++va_is_center_varying_store(const bi_instr *I)
++{
++   switch (I->op) {
++   case BI_OPCODE_LD_VAR:
++   case BI_OPCODE_LD_VAR_IMM:
++   case BI_OPCODE_LD_VAR_BUF_F16:
++   case BI_OPCODE_LD_VAR_BUF_F32:
++   case BI_OPCODE_LD_VAR_BUF_IMM_F16:
++   case BI_OPCODE_LD_VAR_BUF_IMM_F32:
++      return I->sample == BI_SAMPLE_CENTER && I->update == BI_UPDATE_STORE;
++   default:
++      return false;
++   }
++}
++
++static bool
++va_varying_transfer(bi_block *block, bool state, bool rewrite)
++{
++   bi_foreach_instr_in_block(block, I) {
++      if (va_is_center_varying_store(I)) {
++         if (rewrite && state)
++            I->update = BI_UPDATE_RETRIEVE;
++         state = true;
++      } else if (bi_get_opcode_props(I)->message == BIFROST_MESSAGE_VARYING &&
++                 I->update != BI_UPDATE_RETRIEVE) {
++         state = false;
++      }
++   }
++
++   return state;
++}
++
++static bool
++va_varying_block_in(bi_block *block, const bool *out, const bool *seen)
++{
++   if (bi_num_predecessors(block) == 0)
++      return false;
++
++   bi_foreach_predecessor(block, pred) {
++      if (!seen[(*pred)->index] || !out[(*pred)->index])
++         return false;
++   }
++
++   return true;
++}
++
++static void
++va_opt_varying_retrieve(bi_context *ctx)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PAN_VARYING_RETRIEVE", true);
++   if (!enabled || ctx->stage != MESA_SHADER_FRAGMENT)
++      return;
++
++   unsigned n = 0;
++   bi_foreach_block(ctx, block)
++      n = MAX2(n, block->index + 1);
++
++   bool *out = calloc(n, sizeof(bool));
++   bool *seen = calloc(n, sizeof(bool));
++   bool progress = true;
++
++   while (progress) {
++      progress = false;
++      bi_foreach_block(ctx, block) {
++         bool in = va_varying_block_in(block, out, seen);
++         bool o = va_varying_transfer(block, in, false);
++
++         if (!seen[block->index] || out[block->index] != o) {
++            seen[block->index] = true;
++            out[block->index] = o;
++            progress = true;
++         }
++      }
++   }
++
++   bi_foreach_block(ctx, block)
++      va_varying_transfer(block, va_varying_block_in(block, out, seen), true);
++
++   free(out);
++   free(seen);
++}
++
+ static void
+ bi_lower_branch(bi_context *ctx, bi_block *block)
+ {
+@@ -4326,7 +4411,8 @@ bi_compile_variant_nir(nir_shader *nir,
+    bi_validate(ctx, "Early lowering");
+ 
+    /* Runs before copy prop */
+-   if (optimize && ctx->inputs->fau.pushable_ubos) {
++   if (optimize && (ctx->inputs->fau.pushable_ubos ||
++                    ctx->inputs->fau.pushable_ubo_tables)) {
+       bi_opt_push_ubo(ctx);
+    }
+ 
+@@ -4351,7 +4437,8 @@ bi_compile_variant_nir(nir_shader *nir,
+       bi_opt_dce(ctx, false);
+       bi_opt_cse(ctx);
+       bi_opt_dce(ctx, false);
+-      if (ctx->inputs->fau.pushable_ubos)
++      if (ctx->inputs->fau.pushable_ubos ||
++          ctx->inputs->fau.pushable_ubo_tables)
+          bi_opt_reorder_push(ctx);
+       bi_validate(ctx, "Optimization passes");
+    }
+@@ -4469,6 +4556,8 @@ bi_compile_variant_nir(nir_shader *nir,
+    bi_opt_control_flow(ctx);
+ 
+    if (ctx->arch >= 9) {
++      if (likely(optimize))
++         va_opt_varying_retrieve(ctx);
+       va_assign_slots(ctx);
+       va_insert_flow_control_nops(ctx);
+       va_merge_flow(ctx);
+diff --git a/src/panfrost/compiler/pan_compiler.h b/src/panfrost/compiler/pan_compiler.h
+index ce64488d..41c8e2c6 100644
+--- a/src/panfrost/compiler/pan_compiler.h
++++ b/src/panfrost/compiler/pan_compiler.h
+@@ -61,6 +61,7 @@ struct pan_compile_inputs {
+       uint32_t reserved;
+       /* Mask of UBOs that may be moved to push constants */
+       uint32_t pushable_ubos;
++      uint64_t pushable_ubo_tables;
+       /* Whether the backend may promote immediates into the FAU */
+       bool promote_immediates;
+    } fau;
+@@ -150,6 +151,14 @@ struct pan_ubo_relocation {
+    uint16_t offset;
+ };
+ 
++#define PAN_UBO_PUSH_INDEX_BITS 10
++#define PAN_UBO_PUSH_KEY(table, index)                                         \
++   (((table) << PAN_UBO_PUSH_INDEX_BITS) | (index))
++#define PAN_UBO_PUSH_KEY_TABLE(key) ((key) >> PAN_UBO_PUSH_INDEX_BITS)
++#define PAN_UBO_PUSH_KEY_INDEX(key)                                            \
++   ((key) & BITFIELD_MASK(PAN_UBO_PUSH_INDEX_BITS))
++#define PAN_UBO_PUSH_DESC_TABLE 62
++
+ union pan_fau_entry {
+    struct pan_ubo_relocation relocation;
+    uint32_t constant;
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index e960c0c1..52cdafba 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -765,6 +765,25 @@ collect_cs_deps(struct panvk_cmd_buffer *cmdbuf, const VkDependencyInfo *info,
+          ~BITFIELD_BIT(PANVK_SUBQUEUE_VERTEX_TILER);
+    }
+ 
++   if ((vk_expand_dst_stage_flags2(dst.stages) &
++        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT) &&
++       (vk_filter_dst_access_flags2(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
++                                    dst.access) &
++        VK_ACCESS_2_UNIFORM_READ_BIT)) {
++      uint32_t frag_waits = 0;
++
++      for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++         if (src.stages & barrier_subqueue_stages(i))
++            frag_waits |= BITFIELD_BIT(i);
++      }
++
++      if (cmdbuf->state.gfx.render.tiler || inherits_render_ctx(cmdbuf))
++         frag_waits &= ~(BITFIELD_BIT(PANVK_SUBQUEUE_FRAGMENT) |
++                         BITFIELD_BIT(PANVK_SUBQUEUE_VERTEX_TILER));
++
++      wait_masks[PANVK_SUBQUEUE_VERTEX_TILER] |= frag_waits;
++   }
++
+    for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
+       if (wait_masks[i] & BITFIELD_BIT(i)) {
+          /* We need to self-wait for all previously submitted jobs, and given
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 1d2d5a7f..60407455 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -2795,6 +2795,137 @@ prepare_fs(struct panvk_cmd_buffer *cmdbuf,
+    }
+ }
+ 
++static bool
++shader_has_ubo_push(const struct panvk_shader_variant *shader)
++{
++   const struct pan_fau_layout *fau = &shader->info.fau;
++
++   pan_fau_foreach_reloc(fau, i)
++      return true;
++
++   return false;
++}
++
++static bool
++resolve_pushed_ubo(const struct panvk_descriptor_state *desc_state,
++                   const struct panvk_shader_desc_info *desc_info,
++                   uint32_t dyn_bufs_start, unsigned key, uint64_t *addr,
++                   uint32_t *size)
++{
++   unsigned table = PAN_UBO_PUSH_KEY_TABLE(key);
++   unsigned index = PAN_UBO_PUSH_KEY_INDEX(key);
++   struct mali_buffer_packed packed;
++
++   if (table == 0) {
++      if (index < dyn_bufs_start ||
++          index - dyn_bufs_start >= desc_info->dyn_bufs.count)
++         return false;
++
++      struct panvk_shader_desc_info one = {
++         .dyn_bufs = {
++            .map = {desc_info->dyn_bufs.map[index - dyn_bufs_start]},
++            .count = 1,
++         },
++      };
++      panvk_per_arch(cmd_fill_dyn_bufs)(desc_state, &one, &packed);
++   } else {
++      const struct panvk_descriptor_set *set = desc_state->sets[table - 1];
++
++      if (!set || !set->descs.host || index >= set->desc_count)
++         return false;
++
++      memcpy(&packed,
++             (const uint8_t *)set->descs.host + index * PANVK_DESCRIPTOR_SIZE,
++             sizeof(packed));
++   }
++
++   pan_unpack(&packed, BUFFER, cfg) {
++      *addr = cfg.address;
++      *size = cfg.size;
++   }
++
++   return *addr != 0;
++}
++
++static void
++emit_ubo_push_copies(struct panvk_cmd_buffer *cmdbuf, struct cs_builder *b,
++                     const struct panvk_shader_variant *shader,
++                     const struct panvk_shader_desc_info *desc_info,
++                     uint32_t dyn_bufs_start, const struct pan_ptr *push,
++                     uint32_t repeat_count)
++{
++   const struct panvk_descriptor_state *desc_state =
++      &cmdbuf->state.gfx.desc_state;
++   const struct pan_fau_layout *fau = &shader->info.fau;
++   const uint32_t repeat_stride = shader->fau.total_count * sizeof(uint64_t);
++   struct cs_index addr_reg = cs_scratch_reg64(b, 0);
++   bool copied = false;
++
++   for (unsigned i = fau->reserved; i < fau->count;) {
++      if (BITSET_TEST(fau->is_const, i)) {
++         i++;
++         continue;
++      }
++
++      const struct pan_ubo_relocation reloc = fau->words[i].relocation;
++      unsigned n = 1;
++
++      if (PAN_UBO_PUSH_KEY_TABLE(reloc.ubo) == PAN_UBO_PUSH_DESC_TABLE) {
++         unsigned table = PAN_UBO_PUSH_KEY_INDEX(reloc.ubo);
++         const struct panvk_descriptor_set *set =
++            table > 0 ? desc_state->sets[table - 1] : NULL;
++         uint32_t word = 0;
++
++         if (set && set->descs.host &&
++             reloc.offset + 4 <= set->desc_count * PANVK_DESCRIPTOR_SIZE)
++            memcpy(&word, (const uint8_t *)set->descs.host + reloc.offset, 4);
++
++         for (uint32_t r = 0; r < repeat_count; r++)
++            memcpy((uint8_t *)push->cpu + r * repeat_stride + i * 4, &word, 4);
++
++         i++;
++         continue;
++      }
++
++      while (n < 16 && i + n < fau->count &&
++             !BITSET_TEST(fau->is_const, i + n) &&
++             fau->words[i + n].relocation.ubo == reloc.ubo &&
++             fau->words[i + n].relocation.offset == reloc.offset + 4 * n)
++         n++;
++
++      uint64_t ubo_addr = 0;
++      uint32_t ubo_size = 0;
++      unsigned in_bounds = 0;
++
++      if (resolve_pushed_ubo(desc_state, desc_info, dyn_bufs_start, reloc.ubo,
++                             &ubo_addr, &ubo_size) &&
++          reloc.offset < ubo_size)
++         in_bounds = MIN2(n, (ubo_size - reloc.offset) / 4);
++
++      for (uint32_t r = 0; r < repeat_count; r++) {
++         uint8_t *cpu = (uint8_t *)push->cpu + r * repeat_stride + i * 4;
++
++         memset(cpu + in_bounds * 4, 0, (n - in_bounds) * 4);
++
++         if (!in_bounds)
++            continue;
++
++         struct cs_index data = cs_scratch_reg_tuple(b, 2, in_bounds);
++
++         cs_move64_to(b, addr_reg, ubo_addr + reloc.offset);
++         cs_load_to(b, data, addr_reg, BITFIELD_MASK(in_bounds), 0);
++         cs_move64_to(b, addr_reg, push->gpu + r * repeat_stride + i * 4);
++         cs_store(b, data, addr_reg, BITFIELD_MASK(in_bounds), 0);
++         copied = true;
++      }
++
++      i += n;
++   }
++
++   if (copied)
++      cs_flush_stores(b);
++}
++
+ static VkResult
+ prepare_push_uniforms(struct panvk_cmd_buffer *cmdbuf,
+                       const struct panvk_draw_info *draw,
+@@ -2816,7 +2947,10 @@ prepare_push_uniforms(struct panvk_cmd_buffer *cmdbuf,
+          vs_repeat_count = draw->indirect.draw_count;
+    }
+ 
+-   if (gfx_state_dirty(cmdbuf, VS_PUSH_UNIFORMS)) {
++   const bool vs_ubo_push = shader_has_ubo_push(vs);
++   const bool fs_ubo_push = fs && shader_has_ubo_push(fs);
++
++   if (gfx_state_dirty(cmdbuf, VS_PUSH_UNIFORMS) || vs_ubo_push) {
+       struct pan_ptr push_uniforms;
+       result = panvk_per_arch(cmd_prepare_gfx_push_uniforms)(
+          cmdbuf, vs, &push_uniforms, vs_repeat_count);
+@@ -2824,6 +2958,12 @@ prepare_push_uniforms(struct panvk_cmd_buffer *cmdbuf,
+          return result;
+       cmdbuf->state.gfx.vs.push_uniforms = push_uniforms.gpu;
+ 
++      if (vs_ubo_push)
++         emit_ubo_push_copies(cmdbuf, b, vs,
++                              &cmdbuf->state.gfx.vs.shader->desc_info,
++                              MAX_VS_ATTRIBS + 1, &push_uniforms,
++                              vs_repeat_count);
++
+       cs_update_vt_ctx(b) {
+          cs_move64_to(b, cs_sr_reg64(b, IDVS, VERTEX_FAU),
+                       cmdbuf->state.gfx.vs.push_uniforms |
+@@ -2831,7 +2971,8 @@ prepare_push_uniforms(struct panvk_cmd_buffer *cmdbuf,
+       }
+    }
+ 
+-   if (fs_user_dirty(cmdbuf) || gfx_state_dirty(cmdbuf, FS_PUSH_UNIFORMS)) {
++   if (fs_user_dirty(cmdbuf) || gfx_state_dirty(cmdbuf, FS_PUSH_UNIFORMS) ||
++       fs_ubo_push) {
+       uint64_t fau_ptr = 0;
+ 
+       if (fs) {
+@@ -2842,6 +2983,15 @@ prepare_push_uniforms(struct panvk_cmd_buffer *cmdbuf,
+             return result;
+          cmdbuf->state.gfx.fs.push_uniforms = push_uniforms.gpu;
+ 
++         if (fs_ubo_push) {
++            const struct panvk_shader_desc_info *fs_desc_info =
++               &cmdbuf->state.gfx.fs.shader->desc_info;
++
++            emit_ubo_push_copies(cmdbuf, b, fs, fs_desc_info,
++                                 fs_desc_info->fs_varying_attr_desc_count + 1,
++                                 &push_uniforms, 1);
++         }
++
+          fau_ptr = cmdbuf->state.gfx.fs.push_uniforms |
+                    ((uint64_t)fs->fau.total_count << 56);
+       }
+diff --git a/src/panfrost/vulkan/panvk_vX_shader.c b/src/panfrost/vulkan/panvk_vX_shader.c
+index 6d0c732d..3302ca85 100644
+--- a/src/panfrost/vulkan/panvk_vX_shader.c
++++ b/src/panfrost/vulkan/panvk_vX_shader.c
+@@ -3380,6 +3380,47 @@ panvk_lower_cull_dist_flags_intr(nir_builder *b, nir_intrinsic_instr *intr,
+ 
+ static const struct vk_shader_ops panvk_shader_ops;
+ 
++static uint64_t
++panvk_pushable_ubo_tables(const struct vk_shader_compile_info *info)
++{
++#if PAN_ARCH >= 10
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_UBO_PUSH", true);
++   if (!enabled)
++      return 0;
++
++   uint64_t tables = BITFIELD64_BIT(0);
++
++   for (uint32_t i = 0; i < info->set_layout_count; i++) {
++      if (!info->set_layouts[i])
++         continue;
++
++      const struct panvk_descriptor_set_layout *layout =
++         to_panvk_descriptor_set_layout(info->set_layouts[i]);
++
++      if (layout->flags &
++          (VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT |
++           VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT))
++         continue;
++
++      bool update_after_bind = false;
++      for (uint32_t b = 0; b < layout->binding_count; b++) {
++         if (layout->bindings[b].flags &
++             VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT)
++            update_after_bind = true;
++      }
++
++      if (!update_after_bind)
++         tables |= BITFIELD64_BIT(i + 1);
++   }
++
++   return tables;
++#else
++   return 0;
++#endif
++}
++
+ static VkResult
+ panvk_compile_shader(struct panvk_device *dev,
+                      struct vk_shader_compile_info *info,
+@@ -3632,6 +3673,9 @@ panvk_compile_shader(struct panvk_device *dev,
+ 
+          variant->own_bin = true;
+ 
++         inputs.fau.pushable_ubo_tables =
++            v == PANVK_VS_VARIANT_HW ? panvk_pushable_ubo_tables(info) : 0;
++
+          result = panvk_compile_nir(dev, nir, info->flags, &inputs, state,
+                                     noperspective_varyings,
+                                     &shader->desc_info, variant);
+@@ -3881,6 +3925,8 @@ panvk_compile_shader(struct panvk_device *dev,
+       NIR_PASS(_, nir, pan_nir_lower_fs_outputs, false,
+                0 /* fragcolor_nr_cbufs */);
+ 
++      inputs.fau.pushable_ubo_tables = panvk_pushable_ubo_tables(info);
++
+       variant->own_bin = true;
+ 
+       result = panvk_compile_nir(dev, nir, info->flags, &inputs, state,
