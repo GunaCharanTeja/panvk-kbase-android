@@ -1,0 +1,231 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 221] panvk: carry deferred fragment waits across primary command buffers
+Generated-by: LLM
+
+At the end of a primary command buffer every deferred wait of the
+vertex/tiler and compute subqueues on the fragment subqueue (patches
+204, 208, 209) was emitted.  DXVK ends a primary every few render
+passes, so in Assassin's Creed (D3D9) the next one's geometry always
+waited for all fragment work so far: 132 waits/s, geometry and fragment
+work overlapping 1% of the time.  The end of a primary now stores the
+fragment point of a pending deferred wait in the subqueue context, and
+each primary starts with a deferred wait on that point, emitted
+(conditionally on the GPU) under the same rules as any deferred wait.
+Nothing waits more than before, only later.  PANVK_LAZY_CROSS=0
+restores the old behaviour.  A biblioklept who returns the books on
+the next visit.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/220
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 8958fb3f..2c842e64 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -242,6 +242,9 @@ struct panvk_cs_subqueue_context {
+     * secondaries at each draw/dispatch.
+     */
+    uint32_t cond_render_flag;
++   /* Fragment sync point a primary command buffer left a deferred wait of
++    * this subqueue on (see lazy_wait in panvk_vX_cmd_buffer.c), 0 if none. */
++   uint64_t lazy_frag_target;
+ } __attribute__((aligned(64)));
+ 
+ struct panvk_cache_flush_info {
+@@ -618,6 +621,9 @@ struct panvk_cmd_buffer {
+        * subqueue wrote (see panvk_vX_cmd_buffer.c). */
+       struct {
+          bool pending;
++         /* The wait is the one the previous primary on the queue left in
++          * the subqueue context (lazy_frag_target), not frag_sync_point. */
++         bool incoming;
+          int32_t frag_sync_point;
+       } lazy_wait[PANVK_SUBQUEUE_COUNT];
+       /* Subqueues (bits) whose deferred wait a primary must emit before
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index e960c0c1..607626a7 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -182,7 +182,8 @@ flush_sync_points(struct panvk_cmd_buffer *cmdbuf)
+    /* Deferred waits hold fragment sync points relative to the progress
+     * register, which just moved forward. */
+    for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
+-      if (cmdbuf->state.lazy_wait[i].pending)
++      if (cmdbuf->state.lazy_wait[i].pending &&
++          !cmdbuf->state.lazy_wait[i].incoming)
+          cmdbuf->state.lazy_wait[i].frag_sync_point -=
+             cmdbuf->state.cs[PANVK_SUBQUEUE_FRAGMENT].relative_sync_point;
+    }
+@@ -191,6 +192,22 @@ flush_sync_points(struct panvk_cmd_buffer *cmdbuf)
+       cmdbuf->state.cs[i].relative_sync_point = 0;
+ }
+ 
++/* Deferred waits carried from one primary command buffer to the next on the
++ * queue (lazy_hand_over_end()), on by default; PANVK_LAZY_CROSS=0 emits
++ * them at the end of each command buffer.  DXVK ends a primary every few
++ * render passes, and the emitted wait made the next one's geometry wait for
++ * all fragment work so far: geometry and fragment work never overlapped. */
++static bool
++lazy_cross_enabled(void)
++{
++   static int enabled = -1;
++   if (enabled < 0)
++      enabled = debug_get_bool_option("PANVK_LAZY_CROSS", true);
++   return enabled;
++}
++
++static void lazy_hand_over_end(struct panvk_cmd_buffer *cmdbuf);
++
+ static void
+ finish_cs(struct panvk_cmd_buffer *cmdbuf, uint32_t subqueue)
+ {
+@@ -339,7 +356,11 @@ panvk_per_arch(EndCommandBuffer)(VkCommandBuffer commandBuffer)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, cmdbuf, commandBuffer);
+    panvk_cmd_rp_merge_flush_pending(cmdbuf);
+-   panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_END);
++   if (cmdbuf->vk.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY &&
++       lazy_cross_enabled())
++      lazy_hand_over_end(cmdbuf);
++   else
++      panvk_cmd_lazy_vt_flush_pending(cmdbuf, PANVK_LAZY_VT_END);
+ 
+    /* Finishing queries requires a barrier. We don't want to do that more
+     * often than necessary. At the end of a primary is usually enough.
+@@ -1065,6 +1086,60 @@ emit_lazy_frag_wait(struct panvk_cmd_buffer *cmdbuf,
+                            MALI_CS_CONDITION_GREATER, wait_val, sync_addr);
+ }
+ 
++/* Make subqueue wait for the fragment sync point the previous primary
++ * command buffer on this queue left a deferred wait on, if any. */
++static void
++emit_lazy_incoming_wait(struct panvk_cmd_buffer *cmdbuf,
++                        enum panvk_subqueue_id subqueue)
++{
++   struct cs_builder *b = panvk_get_cs_builder(cmdbuf, subqueue);
++   struct cs_index sync_addr = cs_scratch_reg64(b, 0);
++   struct cs_index target = cs_scratch_reg64(b, 2);
++
++   cs_load64_to(b, target, cs_subqueue_ctx_reg(b),
++                offsetof(struct panvk_cs_subqueue_context, lazy_frag_target));
++   cs_load64_to(b, sync_addr, cs_subqueue_ctx_reg(b),
++                offsetof(struct panvk_cs_subqueue_context, syncobjs));
++   cs_flush_loads(b);
++   cs_if(b, MALI_CS_CONDITION_NEQUAL, target) {
++      cs_add_imm64(b, sync_addr, sync_addr,
++                   sizeof(struct panvk_cs_sync64) * PANVK_SUBQUEUE_FRAGMENT);
++      panvk_instr_sync64_wait(cmdbuf, subqueue, false,
++                              MALI_CS_CONDITION_GREATER, target, sync_addr);
++   }
++}
++
++/* At the end of a primary command buffer, hand a deferred wait of a
++ * subqueue to the next primary on the queue through the subqueue context
++ * instead of emitting it: the next command buffer emits it only before
++ * work that needs it.  The stored point is absolute (progress register plus
++ * relative point); 0 means none yet.  A point left there after it was
++ * waited for, or covered by a barrier wait, is already reached, so the
++ * wait for it is a no-op. */
++static void
++lazy_hand_over_end(struct panvk_cmd_buffer *cmdbuf)
++{
++   for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++      if (i == PANVK_SUBQUEUE_FRAGMENT || !cmdbuf->state.lazy_wait[i].pending ||
++          cmdbuf->state.lazy_wait[i].incoming)
++         continue;
++
++      struct cs_builder *b = panvk_get_cs_builder(cmdbuf, i);
++      struct cs_index val = cs_scratch_reg64(b, 0);
++
++      cs_add_imm64(b, val, cs_progress_seqno_reg(b, PANVK_SUBQUEUE_FRAGMENT),
++                   cmdbuf->state.lazy_wait[i].frag_sync_point);
++      cs_store64(b, val, cs_subqueue_ctx_reg(b),
++                 offsetof(struct panvk_cs_subqueue_context, lazy_frag_target));
++      cs_flush_stores(b);
++   }
++
++   for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++      cmdbuf->state.lazy_wait[i].pending = false;
++      cmdbuf->state.lazy_wait[i].incoming = false;
++   }
++}
++
+ void
+ panvk_per_arch(cmd_lazy_flush)(struct panvk_cmd_buffer *cmdbuf,
+                                enum panvk_subqueue_id subqueue,
+@@ -1074,9 +1149,13 @@ panvk_per_arch(cmd_lazy_flush)(struct panvk_cmd_buffer *cmdbuf,
+    if (!cmdbuf->state.lazy_wait[subqueue].pending)
+       return;
+ 
+-   emit_lazy_frag_wait(cmdbuf, subqueue,
+-                       cmdbuf->state.lazy_wait[subqueue].frag_sync_point);
++   if (cmdbuf->state.lazy_wait[subqueue].incoming)
++      emit_lazy_incoming_wait(cmdbuf, subqueue);
++   else
++      emit_lazy_frag_wait(cmdbuf, subqueue,
++                          cmdbuf->state.lazy_wait[subqueue].frag_sync_point);
+    cmdbuf->state.lazy_wait[subqueue].pending = false;
++   cmdbuf->state.lazy_wait[subqueue].incoming = false;
+    p_atomic_inc(&bstat_lazy_flush[reason]);
+ }
+ 
+@@ -1086,10 +1165,13 @@ static void
+ lazy_record(struct panvk_cmd_buffer *cmdbuf, enum panvk_subqueue_id subqueue,
+             int32_t frag_sync_point)
+ {
++   /* A point of this command buffer is past any carried-in one. */
+    if (!cmdbuf->state.lazy_wait[subqueue].pending ||
++       cmdbuf->state.lazy_wait[subqueue].incoming ||
+        cmdbuf->state.lazy_wait[subqueue].frag_sync_point < frag_sync_point)
+       cmdbuf->state.lazy_wait[subqueue].frag_sync_point = frag_sync_point;
+    cmdbuf->state.lazy_wait[subqueue].pending = true;
++   cmdbuf->state.lazy_wait[subqueue].incoming = false;
+ }
+ 
+ static void
+@@ -1131,8 +1213,20 @@ emit_barrier_csf(struct panvk_cmd_buffer *cmdbuf, struct panvk_cs_deps deps)
+     * the deferred wait keeps it for its own later work. */
+    uint32_t lazy_from = 0;
+    for (uint32_t x = 0; x < PANVK_SUBQUEUE_COUNT; x++) {
+-      if (cmdbuf->state.lazy_wait[x].pending)
+-         lazy_from |= BITFIELD_BIT(x);
++      if (!cmdbuf->state.lazy_wait[x].pending)
++         continue;
++      /* A carried-in wait has no point here to hand over: emit it on its
++       * own subqueue before that subqueue signals for this barrier. */
++      if (cmdbuf->state.lazy_wait[x].incoming) {
++         bool waited_on = false;
++         for (uint32_t y = 0; y < PANVK_SUBQUEUE_COUNT; y++)
++            waited_on |= y != x &&
++                         (deps.dst[y].wait_subqueue_mask & BITFIELD_BIT(x));
++         if (waited_on)
++            panvk_per_arch(cmd_lazy_flush)(cmdbuf, x, PANVK_LAZY_VT_BARRIER);
++         continue;
++      }
++      lazy_from |= BITFIELD_BIT(x);
+    }
+    if (lazy_from) {
+       int32_t points[PANVK_SUBQUEUE_COUNT];
+@@ -1655,6 +1749,18 @@ panvk_per_arch(BeginCommandBuffer)(VkCommandBuffer commandBuffer,
+ 
+    panvk_per_arch(cmd_inherit_render_state)(cmdbuf, pBeginInfo);
+ 
++   /* Deferred waits the previous primary on the queue may have left. */
++   if (cmdbuf->vk.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY &&
++       lazy_cross_enabled()) {
++      for (uint32_t i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++         if (i == PANVK_SUBQUEUE_FRAGMENT)
++            continue;
++         cmdbuf->state.lazy_wait[i].pending = true;
++         cmdbuf->state.lazy_wait[i].incoming = true;
++         cmdbuf->state.lazy_wait[i].frag_sync_point = 0;
++      }
++   }
++
+    if (cmdbuf->vk.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+       const VkCommandBufferInheritanceConditionalRenderingInfoEXT *cond_info =
+          vk_find_struct_const(
+-- 
+2.56.0
+
