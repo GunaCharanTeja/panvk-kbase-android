@@ -1,0 +1,84 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 221] TEST ONLY: per-draw command stream size
+Generated-by: LLM
+
+Debug log, not for release. A biblioklept weighing each page.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/220
+
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 1d2d5a7f..6bcd4ec2 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -92,6 +92,7 @@ static struct {
+ } pstat = { .lock = SIMPLE_MTX_INITIALIZER };
+ 
+ static void rpm_log(void);
++static void dcs_log(void);
+ 
+ static void
+ pass_stats_record(struct panvk_cmd_buffer *cmdbuf)
+@@ -225,6 +226,7 @@ rpm_log(void)
+          o += snprintf(rbuf + o, sizeof(rbuf) - o, " %s:%u", rpm_name[i], v);
+    }
+    mesa_logi("rpmerge:%s", o ? rbuf : " (none)");
++   dcs_log();
+    panvk_per_arch(barrier_stats_log)();
+ }
+ 
+@@ -6276,8 +6278,50 @@ lazy_vt_draw_needs_wait(const struct panvk_cmd_buffer *cmdbuf,
+    return false;
+ }
+ 
++static void panvk_cmd_draw_impl(struct panvk_cmd_buffer *cmdbuf,
++                                struct panvk_draw_info draw);
++
++/* TEST: per-draw CS instruction counts (bytes on the VT/F/C streams),
++ * primaries vs secondaries, logged with PANVK_PASS_STATS. */
++static uint64_t dcs_bytes[2][PANVK_SUBQUEUE_COUNT], dcs_draws[2];
++
++static void
++dcs_log(void)
++{
++   for (unsigned l = 0; l < 2; l++) {
++      uint64_t n = p_atomic_xchg(&dcs_draws[l], 0);
++      uint64_t v = p_atomic_xchg(&dcs_bytes[l][0], 0);
++      uint64_t f = p_atomic_xchg(&dcs_bytes[l][1], 0);
++      uint64_t c = p_atomic_xchg(&dcs_bytes[l][2], 0);
++      if (n)
++         mesa_logi("drawcs: %s draws %" PRIu64 " VT B/draw %.0f F %.0f C %.0f",
++                   l ? "secondary" : "primary", n, (double)v / n,
++                   (double)f / n, (double)c / n);
++   }
++}
++
+ static void
+ panvk_cmd_draw(struct panvk_cmd_buffer *cmdbuf, struct panvk_draw_info draw)
++{
++   if (!pass_stats_enabled() || draw.gpu_prerast_generated) {
++      panvk_cmd_draw_impl(cmdbuf, draw);
++      return;
++   }
++   uint32_t pos[PANVK_SUBQUEUE_COUNT];
++   for (unsigned i = 0; i < PANVK_SUBQUEUE_COUNT; i++)
++      pos[i] = panvk_get_cs_builder(cmdbuf, i)->cur_chunk.pos;
++   panvk_cmd_draw_impl(cmdbuf, draw);
++   const unsigned l = cmdbuf->vk.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY;
++   for (unsigned i = 0; i < PANVK_SUBQUEUE_COUNT; i++) {
++      uint32_t now = panvk_get_cs_builder(cmdbuf, i)->cur_chunk.pos;
++      if (now >= pos[i])
++         p_atomic_add(&dcs_bytes[l][i], now - pos[i]);
++   }
++   p_atomic_inc(&dcs_draws[l]);
++}
++
++static void
++panvk_cmd_draw_impl(struct panvk_cmd_buffer *cmdbuf, struct panvk_draw_info draw)
+ {
+    const struct panvk_shader_variant *vs =
+       raster_vs_variant(cmdbuf, draw.gpu_prerast_generated);
+-- 
+2.56.0
+
