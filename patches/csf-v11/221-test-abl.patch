@@ -124,6 +124,61 @@ index 85f8b7c5..b009562b 100644
     const struct panvk_shader_variant *fs =
        panvk_shader_only_variant(state->fs.shader);
     const struct pan_shader_info *fs_info = fs ? &fs->info : NULL;
+diff --git a/src/panfrost/vulkan/panvk_vX_sampler.c b/src/panfrost/vulkan/panvk_vX_sampler.c
+index ab6aa444..7b4eda8e 100644
+--- a/src/panfrost/vulkan/panvk_vX_sampler.c
++++ b/src/panfrost/vulkan/panvk_vX_sampler.c
+@@ -13,6 +13,9 @@
+ #include "pan_encoder.h"
+ #include "pan_format.h"
+ 
++#include "util/log.h"
++#include "util/u_atomic.h"
++#include "util/u_debug.h"
+ #include "vk_format.h"
+ #include "vk_log.h"
+ #include "vk_ycbcr_conversion.h"
+@@ -108,12 +111,28 @@ panvk_sampler_fill_desc(const struct VkSamplerCreateInfo *info,
+                         VkSamplerReductionMode reduction_mode,
+                         VkSamplerCreateFlags flags)
+ {
+-   bool use_aniso = info->anisotropyEnable && info->maxAnisotropy > 1;
++   /* TEST ONLY: PANVK_ABL_SAMP bitmask: 1 no anisotropic filtering,
++    * 2 LOD bias +2, 4 nearest filtering. Logs each anisotropy level used. */
++   const unsigned abl = debug_get_num_option("PANVK_ABL_SAMP", 0);
++   {
++      static uint32_t seen;
++      const unsigned a = info->anisotropyEnable ? MIN2((unsigned)info->maxAnisotropy, 16) : 0;
++      if (!(p_atomic_read(&seen) & BITFIELD_BIT(a))) {
++         p_atomic_set(&seen, seen | BITFIELD_BIT(a));
++         mesa_logi("samplog: anisotropy %u (min %d mag %d mip %d)", a,
++                   info->minFilter, info->magFilter, info->mipmapMode);
++      }
++   }
++   bool use_aniso = info->anisotropyEnable && info->maxAnisotropy > 1 &&
++                    !(abl & 1);
++   if (abl & 4)
++      min_filter = mag_filter = VK_FILTER_NEAREST;
+    pan_pack(desc, SAMPLER, cfg) {
+       cfg.magnify_nearest = mag_filter == VK_FILTER_NEAREST;
+       cfg.minify_nearest = min_filter == VK_FILTER_NEAREST;
+-      cfg.mipmap_mode =
+-         panvk_translate_sampler_mipmap_mode(info->mipmapMode, use_aniso);
++      cfg.mipmap_mode = panvk_translate_sampler_mipmap_mode(
++         (abl & 4) ? VK_SAMPLER_MIPMAP_MODE_NEAREST : info->mipmapMode,
++         use_aniso);
+       cfg.normalized_coordinates = !info->unnormalizedCoordinates;
+       cfg.clamp_integer_array_indices = false;
+ 
+@@ -135,7 +154,7 @@ panvk_sampler_fill_desc(const struct VkSamplerCreateInfo *info,
+           mag_filter == VK_FILTER_NEAREST)
+          cfg.round_to_nearest_even = false;
+ 
+-      cfg.lod_bias = info->mipLodBias;
++      cfg.lod_bias = info->mipLodBias + ((abl & 2) ? 2.0f : 0.0f);
+       cfg.minimum_lod = info->minLod;
+       cfg.maximum_lod = info->maxLod;
+       cfg.wrap_mode_s =
 -- 
 2.56.0
 
