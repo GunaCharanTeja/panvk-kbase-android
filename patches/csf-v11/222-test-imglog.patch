@@ -1,0 +1,59 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 222] TEST ONLY: image modifier log
+Generated-by: LLM
+
+Debug log, not for release. A biblioklept counting covers.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/221
+
+diff --git a/src/panfrost/vulkan/panvk_image.c b/src/panfrost/vulkan/panvk_image.c
+index 74656353..5227d030 100644
+--- a/src/panfrost/vulkan/panvk_image.c
++++ b/src/panfrost/vulkan/panvk_image.c
+@@ -25,6 +25,7 @@
+ #include "panvk_physical_device.h"
+ 
+ #include "drm-uapi/drm_fourcc.h"
++#include "util/simple_mtx.h"
+ #include "util/u_atomic.h"
+ #include "util/u_debug.h"
+ #include "util/u_drm.h"
+@@ -875,6 +876,33 @@ panvk_image_init(struct panvk_image *image,
+     * modifier selection. */
+    image->vk.drm_format_mod = panvk_image_get_mod(image, pCreateInfo);
+ 
++   /* Debug: PANVK_IMG_LOG=1 logs each new combination of format, usage,
++    * create flags, samples and chosen modifier once. */
++   if (debug_get_bool_option("PANVK_IMG_LOG", false)) {
++      static simple_mtx_t lock = SIMPLE_MTX_INITIALIZER;
++      static uint64_t seen[256];
++      static unsigned nseen;
++      const uint64_t key =
++         ((uint64_t)image->vk.format << 40) ^ ((uint64_t)image->vk.usage << 20) ^
++         ((uint64_t)image->vk.create_flags << 4) ^ image->vk.samples ^
++         (image->vk.drm_format_mod * 0x9e3779b97f4a7c15ull);
++      bool found = false;
++      simple_mtx_lock(&lock);
++      for (unsigned i = 0; i < nseen; i++)
++         found |= seen[i] == key;
++      if (!found && nseen < ARRAY_SIZE(seen)) {
++         seen[nseen++] = key;
++         mesa_logi("imglog: fmt %d %ux%u mips %u layers %u samples %u usage 0x%x "
++                   "flags 0x%x tiling %d mod 0x%" PRIx64,
++                   image->vk.format, image->vk.extent.width,
++                   image->vk.extent.height, image->vk.mip_levels,
++                   image->vk.array_layers, image->vk.samples, image->vk.usage,
++                   image->vk.create_flags, image->vk.tiling,
++                   image->vk.drm_format_mod);
++      }
++      simple_mtx_unlock(&lock);
++   }
++
+    /* Some modifiers like AFBC affect some decisions we make for vkmeta, but
+     * we don't want to outright prevent these modifiers. If those weren't used,
+     * we apply additional flags here. */
+-- 
+2.56.0
+
