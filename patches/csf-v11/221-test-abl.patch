@@ -65,18 +65,20 @@ index 1d2d5a7f..3791dd80 100644
        raster_vs_variant(cmdbuf, draw.gpu_prerast_generated);
     VkResult result;
 diff --git a/src/panfrost/vulkan/panvk_cmd_draw.h b/src/panfrost/vulkan/panvk_cmd_draw.h
-index 85f8b7c5..1f63c92c 100644
+index 85f8b7c5..b009562b 100644
 --- a/src/panfrost/vulkan/panvk_cmd_draw.h
 +++ b/src/panfrost/vulkan/panvk_cmd_draw.h
-@@ -19,6 +19,7 @@
+@@ -19,6 +19,9 @@
  #include "panvk_physical_device.h"
  #include "panvk_shader.h"
  
++#include <stdio.h>
++#include "util/os_time.h"
 +#include "util/u_debug.h"
  #include "vk_command_buffer.h"
  #include "vk_format.h"
  #include "vk_meta.h"
-@@ -429,10 +430,25 @@ panvk_select_tiler_hierarchy_mask(const struct panvk_physical_device *phys_dev,
+@@ -429,10 +432,45 @@ panvk_select_tiler_hierarchy_mask(const struct panvk_physical_device *phys_dev,
     return hierarchy_mask;
  }
  
@@ -86,9 +88,29 @@ index 85f8b7c5..1f63c92c 100644
 +static inline unsigned
 +panvk_abl(void)
 +{
++   /* PANVK_ABL_FILE=<path>: the mask is read from that file once a second
++    * (missing file: 0), for same-session measurements. */
 +   static int v = -1;
-+   if (v < 0)
++   static const char *path;
++   static int64_t last;
++   if (v < 0) {
 +      v = debug_get_num_option("PANVK_ABL", 0);
++      path = debug_get_option("PANVK_ABL_FILE", "");
++   }
++   if (!path[0])
++      return v;
++   const int64_t now = os_time_get_nano();
++   if (now - last > 1000000000ll) {
++      last = now;
++      int r = 0;
++      FILE *f = fopen(path, "r");
++      if (f) {
++         if (fscanf(f, "%d", &r) != 1)
++            r = 0;
++         fclose(f);
++      }
++      v = r;
++   }
 +   return v;
 +}
 +
