@@ -9,7 +9,7 @@ Tested Kbase UAPI: 1.21
 Dependencies: csf-v11/221
 
 diff --git a/src/panfrost/vulkan/panvk_image.c b/src/panfrost/vulkan/panvk_image.c
-index 74656353..5227d030 100644
+index 74656353..015e0ff2 100644
 --- a/src/panfrost/vulkan/panvk_image.c
 +++ b/src/panfrost/vulkan/panvk_image.c
 @@ -25,6 +25,7 @@
@@ -44,8 +44,8 @@ index 74656353..5227d030 100644
 +                   "flags 0x%x tiling %d mod 0x%" PRIx64,
 +                   image->vk.format, image->vk.extent.width,
 +                   image->vk.extent.height, image->vk.mip_levels,
-+                   image->vk.array_layers, image->vk.samples, image->vk.usage,
-+                   image->vk.create_flags, image->vk.tiling,
++                   image->vk.array_layers, image->vk.samples, (unsigned)image->vk.usage,
++                   (unsigned)image->vk.create_flags, image->vk.tiling,
 +                   image->vk.drm_format_mod);
 +      }
 +      simple_mtx_unlock(&lock);
