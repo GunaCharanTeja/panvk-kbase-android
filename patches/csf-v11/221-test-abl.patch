@@ -35,11 +35,64 @@ index e960c0c1..1f5566b8 100644
     panvk_cmd_rp_merge_flush_pending(primary);
  
     uint32_t veto = lazy_exec_enabled() ? 0 : BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+index c173c914..85c7bcc4 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_dispatch.c
+@@ -355,6 +355,8 @@ cmd_dispatch(struct panvk_cmd_buffer *cmdbuf, struct panvk_dispatch_info *info)
+       panvk_shader_only_variant(cmdbuf->state.compute.shader);
+    VkResult result;
+ 
++   if (panvk_abl() & 16)
++      return;
+    panvk_per_arch(cmd_pstats_dispatch)(cmdbuf, cs, info);
+    panvk_per_arch(dispatch_stats_record)(cs->reads_images, cs->writes_memory);
+ 
 diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-index 1d2d5a7f..3791dd80 100644
+index 1d2d5a7f..8462c422 100644
 --- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
 +++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
-@@ -6276,9 +6276,24 @@ lazy_vt_draw_needs_wait(const struct panvk_cmd_buffer *cmdbuf,
+@@ -1402,6 +1402,9 @@ prepare_vp(struct panvk_cmd_buffer *cmdbuf)
+ 
+    if (indexed && (scissor_dirty || viewport_dirty))
+       scissor_dirty = viewport_dirty = true;
++   (void)panvk_abl();
++   if (panvk_abl_file_set)
++      scissor_dirty = true;
+ 
+    if (scissor_dirty) {
+       struct mali_scissor_packed scissor_box;
+@@ -1434,6 +1437,14 @@ prepare_vp(struct panvk_cmd_buffer *cmdbuf)
+          }
+       }
+ 
++      if (panvk_abl() & 64) {
++         pan_pack(&scissor_box, SCISSOR, cfg) {
++            cfg.scissor_minimum_x = 0;
++            cfg.scissor_minimum_y = 0;
++            cfg.scissor_maximum_x = 0;
++            cfg.scissor_maximum_y = 0;
++         }
++      }
+       struct mali_scissor_packed *scissor_box_ptr = &scissor_box;
+       cs_move64_to(b, cs_sr_reg64(b, IDVS, SCISSOR_BOX),
+                    *((uint64_t *)scissor_box_ptr));
+@@ -1559,6 +1570,14 @@ prepare_vp(struct panvk_cmd_buffer *cmdbuf)
+          }
+       }
+ 
++      if (panvk_abl() & 64) {
++         pan_pack(&scissor_box, SCISSOR, cfg) {
++            cfg.scissor_minimum_x = 0;
++            cfg.scissor_minimum_y = 0;
++            cfg.scissor_maximum_x = 0;
++            cfg.scissor_maximum_y = 0;
++         }
++      }
+       struct mali_scissor_packed *scissor_box_ptr = &scissor_box;
+       cs_move64_to(b, cs_sr_reg64(b, IDVS, SCISSOR_BOX),
+                    *((uint64_t *)scissor_box_ptr));
+@@ -6276,9 +6295,38 @@ lazy_vt_draw_needs_wait(const struct panvk_cmd_buffer *cmdbuf,
     return false;
  }
  
@@ -53,7 +106,21 @@ index 1d2d5a7f..3791dd80 100644
 +      return true;
 +   const struct pan_fb_layout *fb = &cmdbuf->state.gfx.render.fb.layout;
 +   const uint64_t area = (uint64_t)fb->width_px * fb->height_px;
-+   return ((m & 1) && area > 2000000) || ((m & 2) && area && area < 921600);
++   if (((m & 1) && area > 2000000) || ((m & 2) && area && area < 921600))
++      return true;
++   if ((m & 32) && cmdbuf->vk.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY &&
++       !(cmdbuf->state.gfx.render.bound_attachments &
++         MESA_VK_RP_ATTACHMENT_ANY_COLOR_BITS))
++      return true;
++   if (m & 128) {
++      const struct vk_color_blend_state *cb =
++         &cmdbuf->vk.dynamic_graphics_state.cb;
++      for (unsigned i = 0; i < cb->attachment_count; i++) {
++         if (cb->attachments[i].blend_enable)
++            return true;
++      }
++   }
++   return false;
 +}
 +
  static void
@@ -65,7 +132,7 @@ index 1d2d5a7f..3791dd80 100644
        raster_vs_variant(cmdbuf, draw.gpu_prerast_generated);
     VkResult result;
 diff --git a/src/panfrost/vulkan/panvk_cmd_draw.h b/src/panfrost/vulkan/panvk_cmd_draw.h
-index 85f8b7c5..b009562b 100644
+index 85f8b7c5..5f9dee55 100644
 --- a/src/panfrost/vulkan/panvk_cmd_draw.h
 +++ b/src/panfrost/vulkan/panvk_cmd_draw.h
 @@ -19,6 +19,9 @@
@@ -78,13 +145,17 @@ index 85f8b7c5..b009562b 100644
  #include "vk_command_buffer.h"
  #include "vk_format.h"
  #include "vk_meta.h"
-@@ -429,10 +432,45 @@ panvk_select_tiler_hierarchy_mask(const struct panvk_physical_device *phys_dev,
+@@ -429,10 +432,50 @@ panvk_select_tiler_hierarchy_mask(const struct panvk_physical_device *phys_dev,
     return hierarchy_mask;
  }
  
 +/* TEST ONLY: PANVK_ABL bitmask for cost measurements: 1 skip draws into
 + * targets above 2 Mpx, 2 skip draws into targets below 720p, 4 skip all
-+ * draws, 8 no fragment shaders. */
++ * draws, 8 no fragment shaders, 16 skip compute dispatches, 32 skip draws
++ * in passes without colour attachments, 64 empty scissor (vertex shading
++ * and binning only), 128 skip draws with blending. */
++static bool panvk_abl_file_set;
++
 +static inline unsigned
 +panvk_abl(void)
 +{
@@ -99,6 +170,7 @@ index 85f8b7c5..b009562b 100644
 +   }
 +   if (!path[0])
 +      return v;
++   panvk_abl_file_set = true;
 +   const int64_t now = os_time_get_nano();
 +   if (now - last > 1000000000ll) {
 +      last = now;
