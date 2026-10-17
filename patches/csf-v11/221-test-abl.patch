@@ -1,0 +1,107 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 221] TEST ONLY: PANVK_ABL cost measurement switches
+Generated-by: LLM
+
+Debug switches, not for release. A biblioklept removing shelves to see
+which one sags.
+
+Tested GPU: Mali-G615 MC2 (OPPO CPH2763, MT6878)
+Tested Kbase UAPI: 1.21
+Dependencies: csf-v11/220
+
+diff --git a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+index 8958fb3f..d19d35d5 100644
+--- a/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
++++ b/src/panfrost/vulkan/csf/panvk_cmd_buffer.h
+@@ -1124,6 +1124,8 @@ enum panvk_lazy_vt_flush_reason {
+    PANVK_LAZY_VT_REASONS,
+ };
+ 
++bool panvk_per_arch(abl_skip)(const struct panvk_cmd_buffer *cmdbuf);
++
+ /* Emit the deferred wait of one subqueue on the fragment subqueue. */
+ void panvk_per_arch(cmd_lazy_flush)(struct panvk_cmd_buffer *cmdbuf,
+                                    enum panvk_subqueue_id subqueue,
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+index e960c0c1..1f5566b8 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_buffer.c
+@@ -1712,6 +1712,8 @@ panvk_per_arch(CmdExecuteCommands)(VkCommandBuffer commandBuffer,
+                                    const VkCommandBuffer *pCommandBuffers)
+ {
+    VK_FROM_HANDLE(panvk_cmd_buffer, primary, commandBuffer);
++   if (panvk_per_arch(abl_skip)(primary))
++      return;
+    panvk_cmd_rp_merge_flush_pending(primary);
+ 
+    uint32_t veto = lazy_exec_enabled() ? 0 : BITFIELD_MASK(PANVK_SUBQUEUE_COUNT);
+diff --git a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+index 1d2d5a7f..3791dd80 100644
+--- a/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
++++ b/src/panfrost/vulkan/csf/panvk_vX_cmd_draw.c
+@@ -6276,9 +6276,24 @@ lazy_vt_draw_needs_wait(const struct panvk_cmd_buffer *cmdbuf,
+    return false;
+ }
+ 
++bool
++panvk_per_arch(abl_skip)(const struct panvk_cmd_buffer *cmdbuf)
++{
++   const unsigned m = panvk_abl();
++   if (!m)
++      return false;
++   if (m & 4)
++      return true;
++   const struct pan_fb_layout *fb = &cmdbuf->state.gfx.render.fb.layout;
++   const uint64_t area = (uint64_t)fb->width_px * fb->height_px;
++   return ((m & 1) && area > 2000000) || ((m & 2) && area && area < 921600);
++}
++
+ static void
+ panvk_cmd_draw(struct panvk_cmd_buffer *cmdbuf, struct panvk_draw_info draw)
+ {
++   if (panvk_per_arch(abl_skip)(cmdbuf))
++      return;
+    const struct panvk_shader_variant *vs =
+       raster_vs_variant(cmdbuf, draw.gpu_prerast_generated);
+    VkResult result;
+diff --git a/src/panfrost/vulkan/panvk_cmd_draw.h b/src/panfrost/vulkan/panvk_cmd_draw.h
+index 85f8b7c5..1f63c92c 100644
+--- a/src/panfrost/vulkan/panvk_cmd_draw.h
++++ b/src/panfrost/vulkan/panvk_cmd_draw.h
+@@ -19,6 +19,7 @@
+ #include "panvk_physical_device.h"
+ #include "panvk_shader.h"
+ 
++#include "util/u_debug.h"
+ #include "vk_command_buffer.h"
+ #include "vk_format.h"
+ #include "vk_meta.h"
+@@ -429,10 +430,25 @@ panvk_select_tiler_hierarchy_mask(const struct panvk_physical_device *phys_dev,
+    return hierarchy_mask;
+ }
+ 
++/* TEST ONLY: PANVK_ABL bitmask for cost measurements: 1 skip draws into
++ * targets above 2 Mpx, 2 skip draws into targets below 720p, 4 skip all
++ * draws, 8 no fragment shaders. */
++static inline unsigned
++panvk_abl(void)
++{
++   static int v = -1;
++   if (v < 0)
++      v = debug_get_num_option("PANVK_ABL", 0);
++   return v;
++}
++
+ static inline bool
+ fs_required(const struct panvk_cmd_graphics_state *state,
+             const struct vk_dynamic_graphics_state *dyn_state)
+ {
++   if (panvk_abl() & 8)
++      return false;
++
+    const struct panvk_shader_variant *fs =
+       panvk_shader_only_variant(state->fs.shader);
+    const struct pan_shader_info *fs_info = fs ? &fs->info : NULL;
+-- 
+2.56.0
+
