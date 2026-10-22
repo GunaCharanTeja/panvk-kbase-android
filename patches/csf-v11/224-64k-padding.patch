@@ -1,0 +1,45 @@
+From: panvk-kbase-android worker <panvk-worker@localhost>
+Subject: [PATCH csf-v11 224] pan/mod: skip interleaved 64k when tile padding wastes memory
+Generated-by: LLM
+
+Interleaved 64k pads every mip level to whole 64 KiB tiles (64x64
+blocks for 16-byte formats).  Compressed copy targets get
+BLOCK_TEXEL_VIEW_COMPATIBLE, which rules out U-interleaved, so ETC2
+RGBA, EAC RG11 and ASTC images used 64k: a 128x128x8 image took
+512 KiB instead of 128 KiB and a 1024x1024 mip chain 36% more.
+Treat 64k as not optimal when its size exceeds the tight size by more
+than 25%.
+
+---
+diff --git a/src/panfrost/lib/pan_mod.c b/src/panfrost/lib/pan_mod.c
+index ff9eca6c..7996d722 100644
+--- a/src/panfrost/lib/pan_mod.c
++++ b/src/panfrost/lib/pan_mod.c
+@@ -771,6 +771,27 @@ pan_mod_interleaved_64k_test_props(const struct pan_kmod_dev_props *dprops,
+        iprops->extent_px.height < tile_extent_px.height / 2)
+       return PAN_MOD_NOT_OPTIMAL;
+ 
++   const unsigned blk_B = util_format_get_blocksize(iprops->format);
++   const unsigned blk_w = util_format_get_blockwidth(iprops->format);
++   const unsigned blk_h = util_format_get_blockheight(iprops->format);
++   uint64_t tight_B = 0, tiled_B = 0;
++
++   for (unsigned l = 0; l < iprops->nr_slices; l++) {
++      unsigned w = u_minify(iprops->extent_px.width, l);
++      unsigned h = u_minify(iprops->extent_px.height, l);
++      unsigned d = iprops->dim == MALI_TEXTURE_DIMENSION_3D
++                      ? u_minify(iprops->extent_px.depth, l)
++                      : 1;
++
++      tight_B += (uint64_t)DIV_ROUND_UP(w, blk_w) * DIV_ROUND_UP(h, blk_h) *
++                 d * blk_B;
++      tiled_B += (uint64_t)DIV_ROUND_UP(w, tile_extent_px.width) *
++                 DIV_ROUND_UP(h, tile_extent_px.height) * d * 65536;
++   }
++
++   if (tiled_B * 4 > tight_B * 5)
++      return PAN_MOD_NOT_OPTIMAL;
++
+    return PAN_MOD_OPTIMAL;
+ }
+ 
